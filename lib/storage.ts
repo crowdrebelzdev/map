@@ -4,15 +4,28 @@ import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
 const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
 
-const s3Bucket = process.env.AWS_S3_BUCKET;
-// Not named AWS_REGION on purpose: that name is reserved by the Lambda runtime
-// (which Amplify Hosting's SSR compute runs on) and can't be set via env vars there.
+// None of these are named with the AWS_ prefix on purpose: AWS Amplify Hosting
+// (and the Lambda runtime its SSR compute runs on) reserves that whole prefix
+// and won't let app-level env vars use it. Credentials are passed explicitly
+// below instead of relying on the SDK's default AWS_-env-var credential chain.
+const s3Bucket = process.env.S3_BUCKET_NAME;
 const s3Region = process.env.S3_UPLOAD_REGION;
-const s3Client = s3Bucket ? new S3Client({ region: s3Region }) : null;
+const s3AccessKeyId = process.env.S3_ACCESS_KEY_ID;
+const s3SecretAccessKey = process.env.S3_SECRET_ACCESS_KEY;
+
+const s3Client = s3Bucket
+  ? new S3Client({
+      region: s3Region,
+      credentials:
+        s3AccessKeyId && s3SecretAccessKey
+          ? { accessKeyId: s3AccessKeyId, secretAccessKey: s3SecretAccessKey }
+          : undefined,
+    })
+  : null;
 
 /**
  * Saves an uploaded map image and returns its public URL. Uses S3 when
- * AWS_S3_BUCKET (+ S3_UPLOAD_REGION) are configured — required for any deploy
+ * S3_BUCKET_NAME (+ S3_UPLOAD_REGION) are configured — required for any deploy
  * target without a persistent/shared filesystem — and falls back to the local
  * filesystem for zero-setup local development.
  */

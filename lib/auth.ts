@@ -12,8 +12,22 @@ const extraTrustedOrigins =
     .map((o) => o.trim())
     .filter(Boolean) ?? [];
 
+// TEMP DEBUG — remove once the Amplify env var issue is confirmed/fixed.
+console.log(
+  "[auth debug] BETTER_AUTH_SECRET present:",
+  Boolean(process.env.BETTER_AUTH_SECRET),
+  "| BETTER_AUTH_URL:",
+  process.env.BETTER_AUTH_URL,
+  "| DATABASE_URL present:",
+  Boolean(process.env.DATABASE_URL),
+  "| all env keys:",
+  Object.keys(process.env).sort().join(","),
+);
+
 export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "pg" }),
+  secret: process.env.BETTER_AUTH_SECRET,
+  baseURL: process.env.BETTER_AUTH_URL,
   emailAndPassword: {
     enabled: true,
   },

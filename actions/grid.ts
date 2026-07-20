@@ -13,11 +13,21 @@ export async function saveGridConfig(input: {
   columns: number;
   rows: number;
   labelOrientation: GridLabelOrientation;
+  lineColor: string;
+  lineWidth: number;
+  casingColor: string;
+  casingWidth: number;
 }) {
   await requireAdminSession();
 
   if (input.columns <= 0 || input.rows <= 0) {
     throw new Error("Rijen/kolommen moeten groter dan 0 zijn.");
+  }
+  if (!/^#[0-9a-fA-F]{6}$/.test(input.lineColor) || !/^#[0-9a-fA-F]{6}$/.test(input.casingColor)) {
+    throw new Error("Ongeldige kleur.");
+  }
+  if (input.lineWidth <= 0 || input.casingWidth < 0) {
+    throw new Error("Lijndikte moet groter dan 0 zijn.");
   }
 
   const { corners } = input;
@@ -35,6 +45,10 @@ export async function saveGridConfig(input: {
     columns: input.columns,
     rows: input.rows,
     labelOrientation: input.labelOrientation,
+    lineColor: input.lineColor,
+    lineWidth: input.lineWidth,
+    casingColor: input.casingColor,
+    casingWidth: input.casingWidth,
   };
 
   const existing = await db.query.gridConfig.findFirst({

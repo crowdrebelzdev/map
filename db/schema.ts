@@ -59,6 +59,10 @@ export const gridConfig = pgTable("grid_config", {
     .$type<GridLabelOrientation>()
     .notNull()
     .default("row-column"),
+  lineColor: text("line_color").notNull().default("#111827"),
+  lineWidth: doublePrecision("line_width").notNull().default(3),
+  casingColor: text("casing_color").notNull().default("#ffffff"),
+  casingWidth: doublePrecision("casing_width").notNull().default(2),
 });
 
 /** "column-row": code = column-letter + row-number (e.g. "C2"). "row-column": code = row-letter + column-number (e.g. "B3"). */

@@ -47,6 +47,10 @@ export type ImageOverlayEditorProps = {
   gridColumns: number;
   gridRows: number;
   gridLabelOrientation: GridLabelOrientation;
+  gridLineColor: string;
+  gridLineWidth: number;
+  gridCasingColor: string;
+  gridCasingWidth: number;
 
   mode: EditMode;
 };
@@ -103,6 +107,10 @@ export default function ImageOverlayEditor({
   gridColumns,
   gridRows,
   gridLabelOrientation,
+  gridLineColor,
+  gridLineWidth,
+  gridCasingColor,
+  gridCasingWidth,
   mode,
 }: ImageOverlayEditorProps) {
   const mapRef = useRef<MapRef | null>(null);
@@ -397,17 +405,52 @@ export default function ImageOverlayEditor({
           </Source>
         )}
 
-        {gridCells.length > 0 && (
+        {loaded && gridCells.length > 0 && (
           <Source id="overlay-grid-lines" type="geojson" data={gridGeoJson.lines}>
+            {gridCasingWidth > 0 && (
+              <Layer
+                id="overlay-grid-lines-casing-layer"
+                type="line"
+                paint={{
+                  "line-color": gridCasingColor,
+                  "line-width": [
+                    "interpolate",
+                    ["linear"],
+                    ["zoom"],
+                    10,
+                    (gridLineWidth + gridCasingWidth * 2) * 0.5,
+                    16,
+                    gridLineWidth + gridCasingWidth * 2,
+                    20,
+                    (gridLineWidth + gridCasingWidth * 2) * 1.5,
+                  ],
+                  "line-opacity": 0.9,
+                }}
+              />
+            )}
             <Layer
               id="overlay-grid-lines-layer"
               type="line"
-              paint={{ "line-color": "#facc15", "line-width": 2.5, "line-opacity": 1 }}
+              paint={{
+                "line-color": gridLineColor,
+                "line-width": [
+                  "interpolate",
+                  ["linear"],
+                  ["zoom"],
+                  10,
+                  gridLineWidth * 0.5,
+                  16,
+                  gridLineWidth,
+                  20,
+                  gridLineWidth * 1.5,
+                ],
+                "line-opacity": 1,
+              }}
             />
           </Source>
         )}
 
-        {gridCells.length > 0 && (
+        {loaded && gridCells.length > 0 && (
           <Source id="overlay-grid-labels" type="geojson" data={gridGeoJson.labels}>
             <Layer
               id="overlay-grid-labels-layer"

@@ -19,6 +19,8 @@ import { ImageOverlayEditor, type EditMode } from "@/components/image-overlay-ed
 import { uploadMapImage, saveMapCorners } from "@/actions/map";
 import { saveGridConfig } from "@/actions/grid";
 import { rasterizePdfToImageFile } from "@/lib/pdf-to-image";
+import { resizeImageFile } from "@/lib/resize-image";
+import { getContrastCasingColor } from "@/lib/grid-style";
 import type { CornerSet, GridLabelOrientation } from "@/lib/geo";
 import type { eventMap, gridConfig } from "@/db/schema";
 
@@ -81,6 +83,12 @@ export function MapImageEditor({
   const [labelOrientation, setLabelOrientation] = useState<GridLabelOrientation>(
     existingGrid?.labelOrientation ?? "row-column",
   );
+  const [lineColor, setLineColor] = useState(existingGrid?.lineColor ?? "#111827");
+  const [lineWidth, setLineWidth] = useState(existingGrid?.lineWidth ?? 3);
+  const [casingColor, setCasingColor] = useState(
+    existingGrid?.casingColor ?? getContrastCasingColor(existingGrid?.lineColor ?? "#111827"),
+  );
+  const [casingWidth, setCasingWidth] = useState(existingGrid?.casingWidth ?? 2);
 
   async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const rawFile = e.target.files?.[0];
@@ -90,7 +98,10 @@ export function MapImageEditor({
     try {
       const isPdf =
         rawFile.type === "application/pdf" || rawFile.name.toLowerCase().endsWith(".pdf");
-      const file = isPdf ? await rasterizePdfToImageFile(rawFile) : rawFile;
+      const rasterized = isPdf ? await rasterizePdfToImageFile(rawFile) : rawFile;
+      // PDFs are already rasterized at a sane target size — only resize direct
+      // image uploads, which can be arbitrarily large (phone photos, scans).
+      const file = isPdf ? rasterized : await resizeImageFile(rasterized);
 
       const dims = await new Promise<{ width: number; height: number }>((resolve, reject) => {
         const img = new Image();
@@ -145,6 +156,10 @@ export function MapImageEditor({
         columns,
         rows,
         labelOrientation,
+        lineColor,
+        lineWidth,
+        casingColor,
+        casingWidth,
       });
       toast.success("Grid opgeslagen.");
       router.refresh();
@@ -300,6 +315,69 @@ export function MapImageEditor({
                       Moet overeenkomen met de labels die al op de plattegrond staan afgedrukt.
                     </p>
                   </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="lineColor">Lijnkleur</Label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="lineColor"
+                          type="color"
+                          value={lineColor}
+                          onChange={(e) => setLineColor(e.target.value)}
+                          className="h-8 w-10 shrink-0 cursor-pointer rounded-md border border-input p-0.5"
+                        />
+                        <Input
+                          value={lineColor}
+                          onChange={(e) => setLineColor(e.target.value)}
+                          className="font-mono text-xs"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="lineWidth">Lijndikte (px)</Label>
+                      <Input
+                        id="lineWidth"
+                        type="number"
+                        min={0.5}
+                        step={0.5}
+                        value={lineWidth}
+                        onChange={(e) => setLineWidth(Number(e.target.value))}
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label htmlFor="casingColor">Buitenlijn-kleur</Label>
+                      <div className="flex items-center gap-2">
+                        <input
+                          id="casingColor"
+                          type="color"
+                          value={casingColor}
+                          onChange={(e) => setCasingColor(e.target.value)}
+                          className="h-8 w-10 shrink-0 cursor-pointer rounded-md border border-input p-0.5"
+                        />
+                        <Input
+                          value={casingColor}
+                          onChange={(e) => setCasingColor(e.target.value)}
+                          className="font-mono text-xs"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="casingWidth">Buitenlijn-dikte (px)</Label>
+                      <Input
+                        id="casingWidth"
+                        type="number"
+                        min={0}
+                        step={0.5}
+                        value={casingWidth}
+                        onChange={(e) => setCasingWidth(Number(e.target.value))}
+                      />
+                    </div>
+                  </div>
+                  <p className="-mt-2 text-xs text-muted-foreground">
+                    Zet de buitenlijn-dikte op 0 om 'm helemaal te verbergen.
+                  </p>
                   <Button
                     onClick={handleSaveGrid}
                     disabled={!gridCorners || savingGrid}
@@ -325,6 +403,10 @@ export function MapImageEditor({
               gridColumns={columns}
               gridRows={rows}
               gridLabelOrientation={labelOrientation}
+              gridLineColor={lineColor}
+              gridLineWidth={lineWidth}
+              gridCasingColor={casingColor}
+              gridCasingWidth={casingWidth}
               mode={mode}
             />
           </div>

@@ -14,14 +14,14 @@ export default async function EventsLayout({
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="flex h-dvh flex-col overflow-hidden">
       <NavBar
         title="Kaart"
         href="/events"
         email={session.user.email}
         role={session.user.role ?? "staff"}
       />
-      <main>{children}</main>
+      <main className="min-h-0 flex-1">{children}</main>
     </div>
   );
 }

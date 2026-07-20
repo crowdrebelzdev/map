@@ -227,6 +227,10 @@ export function PoiEditor({
             },
           }}
           gridCells={gridCells}
+          gridLineColor={grid?.lineColor}
+          gridLineWidth={grid?.lineWidth}
+          gridCasingColor={grid?.casingColor}
+          gridCasingWidth={grid?.casingWidth}
           pois={pois}
           onMapClick={setPendingLatLng}
           previewMarker={pendingLatLng}

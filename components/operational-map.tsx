@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { MapPin, LocateFixed, X } from "lucide-react";
+import { MapPin, LocateFixed, X, Download, Check, WifiOff } from "lucide-react";
+import { downloadMapForOffline, registerServiceWorker, type TileBounds } from "@/lib/offline";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,13 @@ import {
   POI_CATEGORY_LABELS,
   type FlyToTarget,
 } from "@/components/event-map-view";
-import { computeGridCellsFromQuad, findGridCellInQuad, parseGridCode, type LatLng } from "@/lib/geo";
+import {
+  computeGridCellsFromQuad,
+  findGridCellInQuad,
+  parseGridCode,
+  type GridCell,
+  type LatLng,
+} from "@/lib/geo";
 import { poiCategoryValues, type PoiCategory } from "@/db/schema";
 import type { eventMap, gridConfig, poi } from "@/db/schema";
 
@@ -44,6 +51,7 @@ export function OperationalMap({
     ...poiCategoryValues,
   ]);
   const [flyToTarget, setFlyToTarget] = useState<FlyToTarget | null>(null);
+  const [highlightedCell, setHighlightedCell] = useState<GridCell | null>(null);
 
   const [gpsPosition, setGpsPosition] = useState<LatLng | null>(null);
   const [gpsStatus, setGpsStatus] = useState<GpsStatus>("locating");
@@ -71,6 +79,55 @@ export function OperationalMap({
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
+
+  const [isOnline, setIsOnline] = useState(true);
+  const [offlineStatus, setOfflineStatus] = useState<"idle" | "downloading" | "done" | "error">(
+    "idle",
+  );
+  const [offlineProgress, setOfflineProgress] = useState({ done: 0, total: 0 });
+
+  useEffect(() => {
+    setIsOnline(navigator.onLine);
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    registerServiceWorker();
+    if (map && localStorage.getItem(`offline-map-${map.eventId}`)) {
+      setOfflineStatus("done");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map?.eventId]);
+
+  async function handleDownloadOffline() {
+    if (!map) return;
+    setOfflineStatus("downloading");
+    setOfflineProgress({ done: 0, total: 0 });
+    try {
+      const lats = [map.cornerTlLat, map.cornerTrLat, map.cornerBrLat, map.cornerBlLat];
+      const lngs = [map.cornerTlLng, map.cornerTrLng, map.cornerBrLng, map.cornerBlLng];
+      const bounds: TileBounds = {
+        minLat: Math.min(...lats),
+        maxLat: Math.max(...lats),
+        minLng: Math.min(...lngs),
+        maxLng: Math.max(...lngs),
+      };
+      await downloadMapForOffline(bounds, map.imageUrl, (done, total) =>
+        setOfflineProgress({ done, total }),
+      );
+      localStorage.setItem(`offline-map-${map.eventId}`, String(Date.now()));
+      setOfflineStatus("done");
+    } catch {
+      setOfflineStatus("error");
+    }
+  }
 
   const userPosition = manualPosition ?? gpsPosition;
   const usingManualPosition = manualPosition !== null;
@@ -120,6 +177,11 @@ export function OperationalMap({
     );
   }
 
+  function handleQueryChange(value: string) {
+    setQuery(value);
+    setHighlightedCell(null);
+  }
+
   function selectGridCell() {
     if (!gridMatch) return;
     setFlyToTarget({
@@ -129,11 +191,13 @@ export function OperationalMap({
         [gridMatch.latLngBounds.ne.lng, gridMatch.latLngBounds.ne.lat],
       ],
     });
+    setHighlightedCell(gridMatch);
     setQuery("");
   }
 
   function selectPoi(p: PoiRow) {
     setFlyToTarget({ type: "point", center: { lat: p.lat, lng: p.lng }, zoom: 19 });
+    setHighlightedCell(null);
     setQuery("");
   }
 
@@ -159,7 +223,7 @@ export function OperationalMap({
   const showGpsHint = !usingManualPosition && gpsStatus !== "active" && !placingManually;
 
   return (
-    <div className="relative h-[calc(100vh-57px)] w-full">
+    <div className="relative h-full w-full overflow-hidden">
       <EventMapView
         className="absolute inset-0"
         mapImage={{
@@ -172,6 +236,11 @@ export function OperationalMap({
           },
         }}
         gridCells={gridCells}
+        gridLineColor={grid?.lineColor}
+        gridLineWidth={grid?.lineWidth}
+        gridCasingColor={grid?.casingColor}
+        gridCasingWidth={grid?.casingWidth}
+        highlightedCell={highlightedCell}
         pois={pois}
         visibleCategories={visibleCategories}
         geolocate
@@ -185,7 +254,7 @@ export function OperationalMap({
           <Input
             placeholder="Zoek grid-code (bv. C4) of locatie..."
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => handleQueryChange(e.target.value)}
             className="bg-background shadow-md"
           />
           {showResults && (
@@ -246,7 +315,7 @@ export function OperationalMap({
         </div>
       )}
 
-      <div className="pointer-events-none absolute right-3 bottom-4 z-10 flex flex-col items-end gap-2">
+      <div className="pointer-events-none fixed right-3 bottom-24 z-20 flex flex-col items-end gap-2">
         {usingManualPosition ? (
           <Button
             variant="secondary"
@@ -268,20 +337,68 @@ export function OperationalMap({
             Locatie handmatig zetten
           </Button>
         )}
+
+        {offlineStatus === "done" ? (
+          <Button variant="secondary" size="sm" className="pointer-events-auto shadow-md" disabled>
+            <Check size={14} />
+            Offline beschikbaar
+          </Button>
+        ) : offlineStatus === "downloading" ? (
+          <Button variant="secondary" size="sm" className="pointer-events-auto shadow-md" disabled>
+            <Download size={14} className="animate-pulse" />
+            {offlineProgress.total > 0
+              ? `Bezig... ${offlineProgress.done}/${offlineProgress.total}`
+              : "Bezig..."}
+          </Button>
+        ) : (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="pointer-events-auto shadow-md"
+            onClick={handleDownloadOffline}
+          >
+            <Download size={14} />
+            {offlineStatus === "error" ? "Opnieuw proberen" : "Kaart offline opslaan"}
+          </Button>
+        )}
       </div>
 
+      {!isOnline && (
+        <div className="pointer-events-none fixed inset-x-0 top-16 z-20 flex justify-center">
+          <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1 text-xs font-medium text-white shadow-md">
+            <WifiOff size={13} />
+            Je bent offline — kaart draait op opgeslagen data
+          </div>
+        </div>
+      )}
+
+      {/* Fixed to the real viewport (not the map container) so it stays put and fully
+          visible regardless of mobile browser chrome or device size — this is the
+          single most important piece of info for staff in the field, so it's sized and
+          colored to be unmissable rather than a subtle footnote. */}
       {currentCell && !showGpsHint && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center">
-          <div className="flex items-center gap-1.5 rounded-full bg-foreground/80 px-3 py-1.5 text-xs font-medium text-background shadow-md backdrop-blur-sm">
-            <MapPin size={13} />
-            Je bevindt je in grid <span className="font-semibold">{currentCell.code}</span>
-            {usingManualPosition && <span className="opacity-70">(handmatig)</span>}
+        <div
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex justify-center px-3"
+          style={{ paddingBottom: "max(0.875rem, env(safe-area-inset-bottom))" }}
+        >
+          <div className="pointer-events-auto flex items-center gap-2.5 rounded-full bg-primary py-2 pr-4 pl-3 shadow-lg">
+            <MapPin size={18} className="shrink-0 text-primary-foreground" />
+            <span className="text-sm text-primary-foreground/90">Jouw grid-locatie</span>
+            <span className="rounded-full bg-primary-foreground px-3 py-1 text-lg leading-none font-bold text-primary">
+              {currentCell.code}
+            </span>
+            {usingManualPosition && (
+              <span className="text-xs text-primary-foreground/70">(handmatig)</span>
+            )}
           </div>
         </div>
       )}
 
       {showGpsHint && (
-        <div className="pointer-events-none absolute inset-x-0 bottom-4 z-10 flex justify-center">
+        <div
+          className="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex justify-center px-3"
+          style={{ paddingBottom: "max(0.875rem, env(safe-area-inset-bottom))" }}
+        >
           <div className="flex items-center gap-1.5 rounded-full bg-foreground/80 px-3 py-1.5 text-xs font-medium text-background shadow-md backdrop-blur-sm">
             {GPS_STATUS_MESSAGES[gpsStatus]}
           </div>

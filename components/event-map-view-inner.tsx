@@ -55,6 +55,12 @@ export type FlyToTarget =
 export type EventMapViewProps = {
   mapImage: EventMapImage | null;
   gridCells?: GridCell[];
+  gridLineColor?: string;
+  gridLineWidth?: number;
+  gridCasingColor?: string;
+  gridCasingWidth?: number;
+  /** The grid cell found via search — highlighted so it's unmistakable which one was meant. */
+  highlightedCell?: GridCell | null;
   pois?: EventMapPoi[];
   visibleCategories?: PoiCategory[];
   geolocate?: boolean;
@@ -78,6 +84,11 @@ function cornersToBounds(corners: EventMapImage["corners"]) {
 export default function EventMapView({
   mapImage,
   gridCells = [],
+  gridLineColor = "#111827",
+  gridLineWidth = 3,
+  gridCasingColor = "#ffffff",
+  gridCasingWidth = 2,
+  highlightedCell,
   pois = [],
   visibleCategories,
   geolocate = false,
@@ -105,6 +116,21 @@ export default function EventMapView({
   }, [flyToTarget, loaded]);
 
   const gridGeoJson = useMemo(() => gridCellsToGeoJSON(gridCells), [gridCells]);
+
+  const highlightGeoJson = useMemo(():
+    | GeoJSON.Feature<GeoJSON.Polygon>
+    | null => {
+    if (!highlightedCell) return null;
+    const ring = [...highlightedCell.corners.map((c) => [c.lng, c.lat]), [
+      highlightedCell.corners[0].lng,
+      highlightedCell.corners[0].lat,
+    ]];
+    return {
+      type: "Feature",
+      properties: {},
+      geometry: { type: "Polygon", coordinates: [ring] },
+    };
+  }, [highlightedCell]);
 
   const visiblePois = useMemo(
     () =>
@@ -161,12 +187,50 @@ export default function EventMapView({
         </Source>
       )}
 
-      {gridCells.length > 0 && (
+      {loaded && gridCells.length > 0 && (
         <Source id="grid-lines" type="geojson" data={gridGeoJson.lines}>
+          {/* Configurable casing under the line so the grid stays legible against any
+              basemap/plattegrond detail, especially when zoomed in close. Set casing
+              width to 0 to hide it entirely. */}
+          {gridCasingWidth > 0 && (
+            <Layer
+              id="grid-lines-casing-layer"
+              type="line"
+              paint={{
+                "line-color": gridCasingColor,
+                "line-width": [
+                  "interpolate",
+                  ["linear"],
+                  ["zoom"],
+                  10,
+                  (gridLineWidth + gridCasingWidth * 2) * 0.5,
+                  16,
+                  gridLineWidth + gridCasingWidth * 2,
+                  20,
+                  (gridLineWidth + gridCasingWidth * 2) * 1.5,
+                ],
+                "line-opacity": 0.9,
+              }}
+            />
+          )}
           <Layer
             id="grid-lines-layer"
             type="line"
-            paint={{ "line-color": "#facc15", "line-width": 2.5, "line-opacity": 1 }}
+            paint={{
+              "line-color": gridLineColor,
+              "line-width": [
+                "interpolate",
+                ["linear"],
+                ["zoom"],
+                10,
+                gridLineWidth * 0.5,
+                16,
+                gridLineWidth,
+                20,
+                gridLineWidth * 1.5,
+              ],
+              "line-opacity": 1,
+            }}
           />
         </Source>
       )}
@@ -174,7 +238,7 @@ export default function EventMapView({
       {/* Labels are dropped at low zoom on purpose: with hundreds of cells they'd overlap into
           unreadable clutter and visually bury the grid lines. They fade in once zoomed in enough
           to actually read them (e.g. after a grid-code search flies the user in). */}
-      {gridCells.length > 0 && (
+      {loaded && gridCells.length > 0 && (
         <Source id="grid-labels" type="geojson" data={gridGeoJson.labels}>
           <Layer
             id="grid-labels-layer"
@@ -191,6 +255,21 @@ export default function EventMapView({
               "text-halo-color": "#ffffff",
               "text-halo-width": 1.5,
             }}
+          />
+        </Source>
+      )}
+
+      {loaded && highlightGeoJson && (
+        <Source id="highlighted-cell" type="geojson" data={highlightGeoJson}>
+          <Layer
+            id="highlighted-cell-fill-layer"
+            type="fill"
+            paint={{ "fill-color": "#3b82f6", "fill-opacity": 0.35 }}
+          />
+          <Layer
+            id="highlighted-cell-outline-layer"
+            type="line"
+            paint={{ "line-color": "#3b82f6", "line-width": 3, "line-opacity": 1 }}
           />
         </Source>
       )}

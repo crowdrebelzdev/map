@@ -5,16 +5,22 @@ import {
   timestamp,
   boolean,
   integer,
+  bigint,
   doublePrecision,
   uuid,
   index,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 
 export const event = pgTable("event", {
   id: uuid("id").primaryKey().defaultRandom(),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
+  archivedAt: timestamp("archived_at"),
 });
 
 export const eventMap = pgTable("event_map", {
@@ -69,21 +75,50 @@ export const gridConfig = pgTable("grid_config", {
 export const gridLabelOrientationValues = ["column-row", "row-column"] as const;
 export type GridLabelOrientation = (typeof gridLabelOrientationValues)[number];
 
-export const poiCategoryValues = [
-  "security",
-  "medical",
-  "toilet",
-  "stage",
-  "other",
-] as const;
-export type PoiCategory = (typeof poiCategoryValues)[number];
+export const poiCategory = pgTable(
+  "poi_category",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    color: text("color").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("poi_category_event_key_idx").on(table.eventId, table.key),
+    index("poi_category_event_idx").on(table.eventId),
+  ],
+);
+
+export const eventDay = pgTable(
+  "event_day",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+    label: text("label"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("event_day_event_idx").on(table.eventId)],
+);
 
 export const poi = pgTable("poi", {
   id: uuid("id").primaryKey().defaultRandom(),
   eventId: uuid("event_id")
     .notNull()
     .references(() => event.id, { onDelete: "cascade" }),
-  category: text("category").$type<PoiCategory>().notNull(),
+  categoryId: uuid("category_id")
+    .notNull()
+    .references(() => poiCategory.id, { onDelete: "restrict" }),
+  // Nullable: a POI without a day is visible on every day of a multi-day event. Set,
+  // it's only visible on that specific day. Single-day events never set this at all.
+  eventDayId: uuid("event_day_id").references(() => eventDay.id, { onDelete: "set null" }),
   name: text("name").notNull(),
   description: text("description"),
   pixelX: doublePrecision("pixel_x").notNull(),
@@ -92,6 +127,129 @@ export const poi = pgTable("poi", {
   lng: doublePrecision("lng").notNull(),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
+
+export const searchLogTypeValues = ["grid", "poi"] as const;
+export type SearchLogType = (typeof searchLogTypeValues)[number];
+
+export const searchLog = pgTable(
+  "search_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    type: text("type").$type<SearchLogType>().notNull(),
+    term: text("term").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("search_log_event_idx").on(table.eventId)],
+);
+
+// --- Incident reports (staff-reported, includes one-tap SOS) --------------------------
+
+export const incidentTypeValues = ["incident", "sos"] as const;
+export type IncidentType = (typeof incidentTypeValues)[number];
+export const incidentStatusValues = ["open", "resolved"] as const;
+export type IncidentStatus = (typeof incidentStatusValues)[number];
+
+export const incident = pgTable(
+  "incident",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    reporterId: text("reporter_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    type: text("type").$type<IncidentType>().notNull(),
+    category: text("category"),
+    description: text("description"),
+    lat: doublePrecision("lat").notNull(),
+    lng: doublePrecision("lng").notNull(),
+    status: text("status").$type<IncidentStatus>().notNull().default("open"),
+    resolvedAt: timestamp("resolved_at"),
+    resolvedBy: text("resolved_by").references(() => user.id, { onDelete: "set null" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("incident_event_idx").on(table.eventId),
+    index("incident_event_status_idx").on(table.eventId, table.status),
+  ],
+);
+
+// --- Broadcast messages (command center -> everyone, or one specific staff member) ----
+
+export const broadcast = pgTable(
+  "broadcast",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    senderId: text("sender_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // Null = sent to everyone on the operational map. Set = only that one staff member
+    // sees/receives it — still stored in the same table since it's the same feature
+    // (a message from command center), just addressed differently.
+    recipientId: text("recipient_id").references(() => user.id, { onDelete: "cascade" }),
+    message: text("message").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("broadcast_event_created_idx").on(table.eventId, table.createdAt),
+    index("broadcast_recipient_idx").on(table.recipientId),
+  ],
+);
+
+// --- Event templates (POI category sets an org can reuse across recurring events) -----
+
+export const eventTemplate = pgTable(
+  "event_template",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("event_template_org_idx").on(table.organizationId)],
+);
+
+export const eventTemplateCategory = pgTable(
+  "event_template_category",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    templateId: uuid("template_id")
+      .notNull()
+      .references(() => eventTemplate.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    color: text("color").notNull(),
+    sortOrder: integer("sort_order").notNull().default(0),
+  },
+  (table) => [index("event_template_category_template_idx").on(table.templateId)],
+);
+
+// --- Activity log (per-event audit trail for configuration changes) -------------------
+
+export const activityLog = pgTable(
+  "activity_log",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    // Nullable + set-null on delete: the log entry should outlive the actor's account.
+    userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+    action: text("action").notNull(),
+    summary: text("summary").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("activity_log_event_created_idx").on(table.eventId, table.createdAt)],
+);
 
 // --- Better Auth tables (generated via `npx @better-auth/cli generate`, keep in sync with lib/auth.ts) ---
 
@@ -128,6 +286,7 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     impersonatedBy: text("impersonated_by"),
+    activeOrganizationId: text("active_organization_id"),
   },
   (table) => [index("session_userId_idx").on(table.userId)],
 );
@@ -156,6 +315,20 @@ export const account = pgTable(
   (table) => [index("account_userId_idx").on(table.userId)],
 );
 
+// Better Auth's own rate-limit storage (`rateLimit: { storage: "database" }` in
+// lib/auth.ts) — keeping this in the database rather than in-memory is what makes login
+// and password-reset throttling actually hold up on a serverless/multi-instance deploy.
+export const rateLimit = pgTable(
+  "rate_limit",
+  {
+    id: text("id").primaryKey(),
+    key: text("key").notNull(),
+    count: integer("count").notNull(),
+    lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+  },
+  (table) => [index("rate_limit_key_idx").on(table.key)],
+);
+
 export const verification = pgTable(
   "verification",
   {
@@ -171,6 +344,51 @@ export const verification = pgTable(
   },
   (table) => [index("verification_identifier_idx").on(table.identifier)],
 );
+
+// --- Organizations (multi-tenancy — one company/client per organization) --------------
+
+export const organization = pgTable("organization", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  logo: text("logo"),
+  metadata: text("metadata"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const member = pgTable(
+  "member",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    role: text("role").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("member_organization_user_idx").on(table.organizationId, table.userId),
+    index("member_user_idx").on(table.userId),
+  ],
+);
+
+export const invitation = pgTable("invitation", {
+  id: text("id").primaryKey(),
+  organizationId: text("organization_id")
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  email: text("email").notNull(),
+  role: text("role").notNull(),
+  status: text("status").notNull().default("pending"),
+  inviterId: text("inviter_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  expiresAt: timestamp("expires_at").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
 
 export const userRelations = relations(user, ({ many }) => ({
   sessions: many(session),
@@ -190,3 +408,63 @@ export const accountRelations = relations(account, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+// --- Per-event permissions (for the "user" role — admins bypass this entirely) --------
+
+export const eventMemberPermissionValues = [
+  "edit_map",
+  "manage_pois",
+  "manage_categories",
+  "view_live_locations",
+  // Bundles the "live ops" write actions: resolving incident reports and sending
+  // broadcasts. Reporting incidents/SOS stays available to any event member, same as
+  // live-location sharing.
+  "manage_incidents",
+] as const;
+export type EventMemberPermission = (typeof eventMemberPermissionValues)[number];
+
+export const eventMember = pgTable(
+  "event_member",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    // Being a member at all (even with zero permissions here) already grants baseline
+    // access to the operational map for this event — these unlock specific backoffice
+    // capabilities on top of that.
+    permissions: text("permissions")
+      .array()
+      .$type<EventMemberPermission[]>()
+      .notNull()
+      .default([]),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("event_member_event_user_idx").on(table.eventId, table.userId),
+    index("event_member_user_idx").on(table.userId),
+  ],
+);
+
+// --- Live locations (upserted while a user has the operational map open) --------------
+
+export const liveLocation = pgTable(
+  "live_location",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    lat: doublePrecision("lat").notNull(),
+    lng: doublePrecision("lng").notNull(),
+    accuracy: doublePrecision("accuracy"),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("live_location_event_user_idx").on(table.eventId, table.userId)],
+);

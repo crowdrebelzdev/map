@@ -1,7 +1,10 @@
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import { eq } from "drizzle-orm";
+import { db } from "@/db";
+import { member, organization } from "@/db/schema";
 import { getServerSession } from "@/lib/get-session";
-import { NavBar } from "@/components/nav-bar";
+import { isOrgAdmin, resolveActiveOrganizationId } from "@/lib/org-access";
+import { AdminHeader } from "@/components/admin-header";
 
 export default async function AdminLayout({
   children,
@@ -14,27 +17,29 @@ export default async function AdminLayout({
     redirect("/sign-in?redirect=/admin/events");
   }
 
-  if (session.user.role !== "admin") {
-    redirect("/events");
-  }
+  const [organizations, activeOrganizationId] = await Promise.all([
+    db
+      .select({ id: organization.id, name: organization.name })
+      .from(member)
+      .innerJoin(organization, eq(organization.id, member.organizationId))
+      .where(eq(member.userId, session.user.id)),
+    resolveActiveOrganizationId(session),
+  ]);
+  const canManageOrg = activeOrganizationId ? await isOrgAdmin(session, activeOrganizationId) : false;
 
   return (
-    <div className="min-h-screen">
-      <NavBar
-        title="Backoffice"
-        href="/admin/events"
+    <div className="flex h-screen flex-col overflow-hidden bg-background">
+      <AdminHeader
+        name={session.user.name}
         email={session.user.email}
-        role={session.user.role ?? "staff"}
+        role={session.user.role ?? "user"}
+        canManageOrg={canManageOrg}
+        organizations={organizations}
+        activeOrganizationId={activeOrganizationId}
       />
-      <nav className="flex gap-4 border-b px-4 py-2 text-sm">
-        <Link href="/admin/events" className="hover:underline">
-          Evenementen
-        </Link>
-        <Link href="/admin/users" className="hover:underline">
-          Gebruikers
-        </Link>
-      </nav>
-      <main className="p-4">{children}</main>
+      <main className="min-h-0 flex-1 overflow-auto bg-background">
+        <div className="min-h-full p-4 md:p-6">{children}</div>
+      </main>
     </div>
   );
 }

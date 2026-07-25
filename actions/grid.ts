@@ -4,11 +4,13 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { gridConfig, type GridLabelOrientation } from "@/db/schema";
-import { requireAdminSession } from "@/lib/get-session";
+import { requireEventPermission } from "@/lib/event-access";
+import { logActivity } from "@/lib/activity-log";
 import type { CornerSet } from "@/lib/geo";
 
 export async function saveGridConfig(input: {
   eventId: string;
+  eventSlug: string;
   corners: CornerSet;
   columns: number;
   rows: number;
@@ -18,7 +20,7 @@ export async function saveGridConfig(input: {
   casingColor: string;
   casingWidth: number;
 }) {
-  await requireAdminSession();
+  const { session } = await requireEventPermission(input.eventId, "edit_map");
 
   if (input.columns <= 0 || input.rows <= 0) {
     throw new Error("Rijen/kolommen moeten groter dan 0 zijn.");
@@ -64,6 +66,8 @@ export async function saveGridConfig(input: {
     await db.insert(gridConfig).values(values);
   }
 
-  revalidatePath(`/admin/events/${input.eventId}/map`);
-  revalidatePath(`/events/${input.eventId}/map`);
+  logActivity(input.eventId, session.user.id, "grid.update", `${session.user.name} heeft het grid aangepast.`);
+
+  revalidatePath(`/admin/events/${input.eventSlug}/map`);
+  revalidatePath(`/events/${input.eventSlug}/map`);
 }

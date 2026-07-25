@@ -1,16 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { MapPin, LocateFixed, X, Download, Check, WifiOff } from "lucide-react";
+import { toast } from "sonner";
 import { downloadMapForOffline, registerServiceWorker, type TileBounds } from "@/lib/offline";
+import { updateLiveLocation } from "@/actions/live-location";
+import { logSearch } from "@/actions/search-log";
+import { useHeaderSlot } from "@/components/header-slot";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { PoiFilterSheet } from "@/components/poi-filter-sheet";
+import { IncidentControls } from "@/components/incident-controls";
+import { BroadcastListener } from "@/components/broadcast-listener";
+import { MessagesSheet } from "@/components/messages-sheet";
 import {
   EventMapView,
-  POI_CATEGORY_COLORS,
-  POI_CATEGORY_LABELS,
+  type EventMapPoiCategory,
   type FlyToTarget,
 } from "@/components/event-map-view";
 import {
@@ -20,12 +28,15 @@ import {
   type GridCell,
   type LatLng,
 } from "@/lib/geo";
-import { poiCategoryValues, type PoiCategory } from "@/db/schema";
-import type { eventMap, gridConfig, poi } from "@/db/schema";
+import type { listMyMessages } from "@/actions/broadcasts";
+import type { eventMap, gridConfig, poi, eventDay } from "@/db/schema";
 
 type MapRow = typeof eventMap.$inferSelect;
 type GridRow = typeof gridConfig.$inferSelect;
 type PoiRow = typeof poi.$inferSelect;
+type EventDayRow = typeof eventDay.$inferSelect;
+
+const ALL_DAYS_VALUE = "__all__";
 
 type GpsStatus = "locating" | "active" | "denied" | "unavailable" | "insecure" | "unsupported";
 
@@ -38,18 +49,39 @@ const GPS_STATUS_MESSAGES: Record<Exclude<GpsStatus, "active">, string> = {
 };
 
 export function OperationalMap({
+  eventId,
+  eventSlug,
+  currentUserId,
   map,
   grid,
   pois,
+  categories,
+  eventDays,
+  initialMessages,
 }: {
+  eventId: string;
+  eventSlug: string;
+  currentUserId: string;
   map: MapRow | null;
   grid: GridRow | null;
   pois: PoiRow[];
+  categories: EventMapPoiCategory[];
+  eventDays: EventDayRow[];
+  initialMessages: Awaited<ReturnType<typeof listMyMessages>>;
 }) {
   const [query, setQuery] = useState("");
-  const [visibleCategories, setVisibleCategories] = useState<PoiCategory[]>([
-    ...poiCategoryValues,
-  ]);
+  const [visibleCategories, setVisibleCategories] = useState<string[]>(
+    categories.map((c) => c.id),
+  );
+  const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
+  const [selectedDayId, setSelectedDayId] = useState<string>(() => {
+    const todayIso = new Date().toISOString().slice(0, 10);
+    return eventDays.find((d) => d.date === todayIso)?.id ?? ALL_DAYS_VALUE;
+  });
+  const visiblePois = useMemo(() => {
+    if (selectedDayId === ALL_DAYS_VALUE) return pois;
+    return pois.filter((p) => !p.eventDayId || p.eventDayId === selectedDayId);
+  }, [pois, selectedDayId]);
   const [flyToTarget, setFlyToTarget] = useState<FlyToTarget | null>(null);
   const [highlightedCell, setHighlightedCell] = useState<GridCell | null>(null);
 
@@ -57,6 +89,9 @@ export function OperationalMap({
   const [gpsStatus, setGpsStatus] = useState<GpsStatus>("locating");
   const [manualPosition, setManualPosition] = useState<LatLng | null>(null);
   const [placingManually, setPlacingManually] = useState(false);
+  // Latest *real* GPS fix, kept in a ref (not state) so the periodic live-location
+  // upload below can read it without re-running on every high-frequency GPS tick.
+  const latestGpsRef = useRef<LatLng | null>(null);
 
   useEffect(() => {
     if (typeof window !== "undefined" && !window.isSecureContext) {
@@ -70,15 +105,30 @@ export function OperationalMap({
     const watchId = navigator.geolocation.watchPosition(
       (pos) => {
         setGpsStatus("active");
-        setGpsPosition({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        const next = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setGpsPosition(next);
+        latestGpsRef.current = next;
       },
       (err) => {
         setGpsStatus(err.code === err.PERMISSION_DENIED ? "denied" : "unavailable");
+        latestGpsRef.current = null;
       },
       { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
     );
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
+
+  // Automatically and periodically share the real GPS position while this page is open
+  // — powers the backoffice "live locations" view. Best-effort: a failed upload (flaky
+  // signal) is silently dropped rather than shown to the field user.
+  useEffect(() => {
+    const id = setInterval(() => {
+      const pos = latestGpsRef.current;
+      if (!pos) return;
+      updateLiveLocation(eventId, pos.lat, pos.lng, null).catch(() => {});
+    }, 20_000);
+    return () => clearInterval(id);
+  }, [eventId]);
 
   const [isOnline, setIsOnline] = useState(true);
   const [offlineStatus, setOfflineStatus] = useState<"idle" | "downloading" | "done" | "error">(
@@ -106,28 +156,88 @@ export function OperationalMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map?.eventId]);
 
-  async function handleDownloadOffline() {
-    if (!map) return;
+  async function runOfflineDownload(mapRow: MapRow, silent: boolean) {
     setOfflineStatus("downloading");
     setOfflineProgress({ done: 0, total: 0 });
     try {
-      const lats = [map.cornerTlLat, map.cornerTrLat, map.cornerBrLat, map.cornerBlLat];
-      const lngs = [map.cornerTlLng, map.cornerTrLng, map.cornerBrLng, map.cornerBlLng];
+      const lats = [mapRow.cornerTlLat, mapRow.cornerTrLat, mapRow.cornerBrLat, mapRow.cornerBlLat];
+      const lngs = [mapRow.cornerTlLng, mapRow.cornerTrLng, mapRow.cornerBrLng, mapRow.cornerBlLng];
       const bounds: TileBounds = {
         minLat: Math.min(...lats),
         maxLat: Math.max(...lats),
         minLng: Math.min(...lngs),
         maxLng: Math.max(...lngs),
       };
-      await downloadMapForOffline(bounds, map.imageUrl, (done, total) =>
+      await downloadMapForOffline(bounds, mapRow.imageUrl, (done, total) =>
         setOfflineProgress({ done, total }),
       );
-      localStorage.setItem(`offline-map-${map.eventId}`, String(Date.now()));
+      localStorage.setItem(`offline-map-${mapRow.eventId}`, String(Date.now()));
       setOfflineStatus("done");
+      if (!silent) toast.success("Kaart offline opgeslagen.");
     } catch {
       setOfflineStatus("error");
+      // A failed silent background refresh isn't user-actionable (probably just a
+      // flaky connection) and the existing offline copy still works fine, so only
+      // surface an error for an explicit, user-initiated download.
+      if (!silent) toast.error("Offline opslaan mislukt. Probeer het opnieuw.");
     }
   }
+
+  function handleDownloadOffline() {
+    if (!map) return;
+    runOfflineDownload(map, false);
+  }
+
+  // Whenever the device (re)gains connectivity, silently refresh the offline copy for
+  // events that were already saved for offline use — so it never goes stale, without
+  // requiring anyone to remember to press the button again.
+  useEffect(() => {
+    if (!map || !isOnline) return;
+    if (!localStorage.getItem(`offline-map-${map.eventId}`)) return;
+    runOfflineDownload(map, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [map?.eventId, isOnline]);
+
+  const offlineHeaderButton = useMemo(() => {
+    const icon =
+      offlineStatus === "done" ? (
+        <Check size={15} />
+      ) : offlineStatus === "downloading" ? (
+        <Download size={15} className="animate-pulse" />
+      ) : (
+        <Download size={15} />
+      );
+    const label =
+      offlineStatus === "done"
+        ? "Kaart is offline beschikbaar"
+        : offlineStatus === "downloading"
+          ? `Kaart offline opslaan... ${offlineProgress.done}/${offlineProgress.total || "?"}`
+          : offlineStatus === "error"
+            ? "Offline opslaan mislukt — klik om opnieuw te proberen"
+            : "Kaart offline opslaan";
+    return (
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className={offlineStatus === "done" ? "text-emerald-600" : undefined}
+              disabled={offlineStatus === "downloading"}
+            />
+          }
+          onClick={offlineStatus === "downloading" || offlineStatus === "done" ? undefined : handleDownloadOffline}
+        >
+          {icon}
+          <span className="sr-only">{label}</span>
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [offlineStatus, offlineProgress.done, offlineProgress.total]);
+
+  useHeaderSlot(offlineHeaderButton);
 
   const userPosition = manualPosition ?? gpsPosition;
   const usingManualPosition = manualPosition !== null;
@@ -168,12 +278,12 @@ export function OperationalMap({
   const poiMatches = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.trim().toLowerCase();
-    return pois.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 6);
-  }, [query, pois]);
+    return visiblePois.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 6);
+  }, [query, visiblePois]);
 
-  function toggleCategory(category: PoiCategory) {
+  function toggleCategory(categoryId: string) {
     setVisibleCategories((prev) =>
-      prev.includes(category) ? prev.filter((c) => c !== category) : [...prev, category],
+      prev.includes(categoryId) ? prev.filter((c) => c !== categoryId) : [...prev, categoryId],
     );
   }
 
@@ -193,12 +303,14 @@ export function OperationalMap({
     });
     setHighlightedCell(gridMatch);
     setQuery("");
+    logSearch(eventId, "grid", gridMatch.code).catch(() => {});
   }
 
   function selectPoi(p: PoiRow) {
     setFlyToTarget({ type: "point", center: { lat: p.lat, lng: p.lng }, zoom: 19 });
     setHighlightedCell(null);
     setQuery("");
+    logSearch(eventId, "poi", p.name).catch(() => {});
   }
 
   function handleMapClickForManualLocation(latLng: LatLng) {
@@ -221,6 +333,9 @@ export function OperationalMap({
 
   const showResults = query.trim().length > 0 && (gridMatch || poiMatches.length > 0);
   const showGpsHint = !usingManualPosition && gpsStatus !== "active" && !placingManually;
+  // Only offer manual placement when it's actually useful: no automatic position yet,
+  // or the automatic position falls outside the grid.
+  const showManualLocationButton = !usingManualPosition && (placingManually || !currentCell);
 
   return (
     <div className="relative h-full w-full overflow-hidden">
@@ -241,7 +356,8 @@ export function OperationalMap({
         gridCasingColor={grid?.casingColor}
         gridCasingWidth={grid?.casingWidth}
         highlightedCell={highlightedCell}
-        pois={pois}
+        pois={visiblePois}
+        categories={categories}
         visibleCategories={visibleCategories}
         geolocate
         flyToTarget={flyToTarget}
@@ -249,7 +365,7 @@ export function OperationalMap({
         onMapClick={placingManually ? handleMapClickForManualLocation : undefined}
       />
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col items-center gap-2 p-3">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-center gap-2 p-3">
         <div className="pointer-events-auto w-full max-w-sm">
           <Input
             placeholder="Zoek grid-code (bv. C4) of locatie..."
@@ -257,6 +373,29 @@ export function OperationalMap({
             onChange={(e) => handleQueryChange(e.target.value)}
             className="bg-background shadow-md"
           />
+          {eventDays.length > 0 && (
+            <div className="mt-1.5 flex gap-1.5 overflow-x-auto">
+              <Button
+                variant={selectedDayId === ALL_DAYS_VALUE ? "default" : "secondary"}
+                size="sm"
+                className="shrink-0 shadow-md"
+                onClick={() => setSelectedDayId(ALL_DAYS_VALUE)}
+              >
+                Alle dagen
+              </Button>
+              {eventDays.map((d) => (
+                <Button
+                  key={d.id}
+                  variant={selectedDayId === d.id ? "default" : "secondary"}
+                  size="sm"
+                  className="shrink-0 shadow-md"
+                  onClick={() => setSelectedDayId(d.id)}
+                >
+                  {d.label || d.date}
+                </Button>
+              ))}
+            </div>
+          )}
           {showResults && (
             <Card className="mt-1 max-h-64 overflow-y-auto py-2">
               <CardContent className="space-y-1 px-2">
@@ -269,40 +408,38 @@ export function OperationalMap({
                     <Badge>{gridMatch.code}</Badge>
                   </button>
                 )}
-                {poiMatches.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => selectPoi(p)}
-                    className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
-                  >
-                    <span
-                      className="h-2.5 w-2.5 shrink-0 rounded-full"
-                      style={{ backgroundColor: POI_CATEGORY_COLORS[p.category] }}
-                    />
-                    <span className="flex-1">{p.name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {POI_CATEGORY_LABELS[p.category]}
-                    </span>
-                  </button>
-                ))}
+                {poiMatches.map((p) => {
+                  const cat = categoryById.get(p.categoryId ?? "");
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => selectPoi(p)}
+                      className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
+                    >
+                      <span
+                        className="h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ backgroundColor: cat?.color ?? "#64748b" }}
+                      />
+                      <span className="flex-1">{p.name}</span>
+                      <span className="text-xs text-muted-foreground">{cat?.label ?? ""}</span>
+                    </button>
+                  );
+                })}
               </CardContent>
             </Card>
           )}
         </div>
 
-        <div className="pointer-events-auto flex flex-wrap justify-center gap-1.5">
-          {poiCategoryValues.map((c) => (
-            <Badge
-              key={c}
-              variant={visibleCategories.includes(c) ? "default" : "outline"}
-              className="cursor-pointer select-none shadow-md"
-              onClick={() => toggleCategory(c)}
-            >
-              {POI_CATEGORY_LABELS[c]}
-            </Badge>
-          ))}
-        </div>
+        <PoiFilterSheet
+          categories={categories}
+          visibleCategories={visibleCategories}
+          onToggle={toggleCategory}
+        />
+        <MessagesSheet eventId={eventId} currentUserId={currentUserId} initialMessages={initialMessages} />
       </div>
+
+      <BroadcastListener eventId={eventId} />
+      <IncidentControls eventId={eventId} eventSlug={eventSlug} position={userPosition} />
 
       {placingManually && (
         <div className="pointer-events-none absolute inset-x-0 top-20 z-10 flex justify-center">
@@ -316,7 +453,7 @@ export function OperationalMap({
       )}
 
       <div className="pointer-events-none fixed right-3 bottom-24 z-20 flex flex-col items-end gap-2">
-        {usingManualPosition ? (
+        {usingManualPosition && (
           <Button
             variant="secondary"
             size="sm"
@@ -326,7 +463,8 @@ export function OperationalMap({
             <LocateFixed size={14} />
             Terug naar GPS
           </Button>
-        ) : (
+        )}
+        {showManualLocationButton && (
           <Button
             variant="secondary"
             size="sm"
@@ -335,30 +473,6 @@ export function OperationalMap({
           >
             <MapPin size={14} />
             Locatie handmatig zetten
-          </Button>
-        )}
-
-        {offlineStatus === "done" ? (
-          <Button variant="secondary" size="sm" className="pointer-events-auto shadow-md" disabled>
-            <Check size={14} />
-            Offline beschikbaar
-          </Button>
-        ) : offlineStatus === "downloading" ? (
-          <Button variant="secondary" size="sm" className="pointer-events-auto shadow-md" disabled>
-            <Download size={14} className="animate-pulse" />
-            {offlineProgress.total > 0
-              ? `Bezig... ${offlineProgress.done}/${offlineProgress.total}`
-              : "Bezig..."}
-          </Button>
-        ) : (
-          <Button
-            variant="secondary"
-            size="sm"
-            className="pointer-events-auto shadow-md"
-            onClick={handleDownloadOffline}
-          >
-            <Download size={14} />
-            {offlineStatus === "error" ? "Opnieuw proberen" : "Kaart offline opslaan"}
           </Button>
         )}
       </div>

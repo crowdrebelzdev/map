@@ -1,61 +1,58 @@
+import { redirect } from "next/navigation";
+import { count, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
+import { member, user } from "@/db/schema";
+import { getServerSession } from "@/lib/get-session";
+import { isOrgAdmin, requireActiveOrganizationId } from "@/lib/org-access";
 import { CreateUserForm } from "@/components/create-user-form";
+import { UsersTable } from "@/components/users-table";
+import { PaginationControls } from "@/components/pagination-controls";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 
-export default async function UsersPage() {
-  const users = await db.query.user.findMany({
-    orderBy: (user, { desc }) => desc(user.createdAt),
-  });
+const PAGE_SIZE = 15;
+
+export default async function UsersPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ page?: string }>;
+}) {
+  const { page: pageParam } = await searchParams;
+  const page = Math.max(1, Number(pageParam) || 1);
+  const offset = (page - 1) * PAGE_SIZE;
+
+  const session = await getServerSession();
+  if (!session) {
+    redirect("/sign-in?redirect=/admin/users");
+  }
+  const { organizationId } = await requireActiveOrganizationId();
+  if (!(await isOrgAdmin(session, organizationId))) {
+    redirect("/admin/events");
+  }
+
+  const [[{ total }], rows] = await Promise.all([
+    db.select({ total: count() }).from(member).where(eq(member.organizationId, organizationId)),
+    db
+      .select({ id: user.id, name: user.name, email: user.email, role: user.role, orgRole: member.role })
+      .from(member)
+      .innerJoin(user, eq(user.id, member.userId))
+      .where(eq(member.organizationId, organizationId))
+      .orderBy(desc(user.createdAt))
+      .limit(PAGE_SIZE)
+      .offset(offset),
+  ]);
+
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Nieuwe gebruiker</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <CreateUserForm />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Gebruikers</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Naam</TableHead>
-                <TableHead>E-mail</TableHead>
-                <TableHead>Rol</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {users.map((u) => (
-                <TableRow key={u.id}>
-                  <TableCell className="font-medium">{u.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{u.email}</TableCell>
-                  <TableCell>
-                    <Badge variant={u.role === "admin" ? "default" : "secondary"}>
-                      {u.role ?? "staff"}
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-    </div>
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Gebruikers ({total})</CardTitle>
+        <CreateUserForm />
+      </CardHeader>
+      <CardContent>
+        <UsersTable users={rows} />
+        <PaginationControls page={page} totalPages={totalPages} basePath="/admin/users" />
+      </CardContent>
+    </Card>
   );
 }

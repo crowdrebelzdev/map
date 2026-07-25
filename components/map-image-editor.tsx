@@ -49,10 +49,12 @@ function gridCornersFromExisting(existing: ExistingGrid | null): CornerSet | nul
 
 export function MapImageEditor({
   eventId,
+  eventSlug,
   existingMap,
   existingGrid,
 }: {
   eventId: string;
+  eventSlug: string;
   existingMap: ExistingMap | null;
   existingGrid: ExistingGrid | null;
 }) {
@@ -115,7 +117,7 @@ export function MapImageEditor({
       formData.set("imageWidth", String(dims.width));
       formData.set("imageHeight", String(dims.height));
 
-      const result = await uploadMapImage(eventId, formData);
+      const result = await uploadMapImage(eventId, eventSlug, formData);
       setImage(result);
       setCorners(null);
       toast.success("Plattegrond geüpload. Plaats 'm op de kaart en pas 'm passend.");
@@ -132,6 +134,7 @@ export function MapImageEditor({
     try {
       await saveMapCorners({
         eventId,
+        eventSlug,
         imageUrl: image.imageUrl,
         imageWidth: image.imageWidth,
         imageHeight: image.imageHeight,
@@ -152,6 +155,7 @@ export function MapImageEditor({
     try {
       await saveGridConfig({
         eventId,
+        eventSlug,
         corners: gridCorners,
         columns,
         rows,

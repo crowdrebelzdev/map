@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/get-session";
 import { NavBar } from "@/components/nav-bar";
+import { HeaderSlotProvider } from "@/components/header-slot";
 
 export default async function EventsLayout({
   children,
@@ -15,13 +16,15 @@ export default async function EventsLayout({
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden">
-      <NavBar
-        title="Kaart"
-        href="/events"
-        email={session.user.email}
-        role={session.user.role ?? "staff"}
-      />
-      <main className="min-h-0 flex-1">{children}</main>
+      <HeaderSlotProvider>
+        <NavBar
+          title="Kaart"
+          href="/events"
+          email={session.user.email}
+          role={session.user.role ?? "user"}
+        />
+        <main className="min-h-0 flex-1">{children}</main>
+      </HeaderSlotProvider>
     </div>
   );
 }

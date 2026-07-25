@@ -14,31 +14,25 @@ import {
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { GridCell, LatLng } from "@/lib/geo";
 import { gridCellsToGeoJSON } from "@/lib/geo";
-import type { PoiCategory } from "@/db/schema";
 import { cn } from "@/lib/utils";
 
 const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 
-export const POI_CATEGORY_COLORS: Record<PoiCategory, string> = {
-  security: "#dc2626",
-  medical: "#16a34a",
-  toilet: "#2563eb",
-  stage: "#9333ea",
-  other: "#64748b",
-};
+const FALLBACK_CATEGORY_COLOR = "#64748b";
 
-export const POI_CATEGORY_LABELS: Record<PoiCategory, string> = {
-  security: "Beveiliging",
-  medical: "EHBO",
-  toilet: "Toiletten",
-  stage: "Podium",
-  other: "Overig",
-};
+export type EventMapPoiCategory = { id: string; label: string; color: string };
 
 export type EventMapPoi = {
   id: string;
   name: string;
-  category: PoiCategory;
+  categoryId: string;
+  lat: number;
+  lng: number;
+};
+
+export type EventMapLiveUser = {
+  userId: string;
+  userName: string;
   lat: number;
   lng: number;
 };
@@ -62,7 +56,9 @@ export type EventMapViewProps = {
   /** The grid cell found via search — highlighted so it's unmistakable which one was meant. */
   highlightedCell?: GridCell | null;
   pois?: EventMapPoi[];
-  visibleCategories?: PoiCategory[];
+  categories?: EventMapPoiCategory[];
+  visibleCategories?: string[];
+  liveUsers?: EventMapLiveUser[];
   geolocate?: boolean;
   onMapClick?: (latLng: LatLng) => void;
   previewMarker?: LatLng | null;
@@ -90,7 +86,9 @@ export default function EventMapView({
   gridCasingWidth = 2,
   highlightedCell,
   pois = [],
+  categories = [],
   visibleCategories,
+  liveUsers = [],
   geolocate = false,
   onMapClick,
   previewMarker,
@@ -132,10 +130,17 @@ export default function EventMapView({
     };
   }, [highlightedCell]);
 
+  // Not `new Map(...)` — this file imports `Map` from react-map-gl for the map component,
+  // which shadows the built-in Map constructor.
+  const categoryById = useMemo(
+    () => Object.fromEntries(categories.map((c) => [c.id, c])),
+    [categories],
+  );
+
   const visiblePois = useMemo(
     () =>
       visibleCategories
-        ? pois.filter((p) => visibleCategories.includes(p.category))
+        ? pois.filter((p) => visibleCategories.includes(p.categoryId))
         : pois,
     [pois, visibleCategories],
   );
@@ -274,19 +279,61 @@ export default function EventMapView({
         </Source>
       )}
 
-      {visiblePois.map((p) => (
-        <Marker key={p.id} longitude={p.lng} latitude={p.lat} anchor="bottom">
+      {visiblePois.map((p) => {
+        const cat = categoryById[p.categoryId];
+        return (
+          <Marker key={p.id} longitude={p.lng} latitude={p.lat} anchor="bottom">
+            <div
+              title={`${p.name}${cat ? ` (${cat.label})` : ""}`}
+              style={{
+                width: 18,
+                height: 18,
+                borderRadius: "50%",
+                background: cat?.color ?? FALLBACK_CATEGORY_COLOR,
+                border: "2px solid white",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
+              }}
+            />
+          </Marker>
+        );
+      })}
+
+      {liveUsers.map((u) => (
+        <Marker key={u.userId} longitude={u.lng} latitude={u.lat} anchor="bottom">
           <div
-            title={`${p.name} (${POI_CATEGORY_LABELS[p.category]})`}
+            title={u.userName}
             style={{
-              width: 18,
-              height: 18,
-              borderRadius: "50%",
-              background: POI_CATEGORY_COLORS[p.category],
-              border: "2px solid white",
-              boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 2,
             }}
-          />
+          >
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: "white",
+                background: "#111827",
+                borderRadius: 4,
+                padding: "1px 5px",
+                whiteSpace: "nowrap",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
+              }}
+            >
+              {u.userName}
+            </span>
+            <div
+              style={{
+                width: 16,
+                height: 16,
+                borderRadius: "50%",
+                background: "#f59e0b",
+                border: "2px solid white",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
+              }}
+            />
+          </div>
         </Marker>
       ))}
 

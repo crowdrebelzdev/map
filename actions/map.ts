@@ -4,15 +4,17 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { eventMap } from "@/db/schema";
-import { requireAdminSession } from "@/lib/get-session";
+import { requireEventPermission } from "@/lib/event-access";
+import { logActivity } from "@/lib/activity-log";
 import { saveMapImage } from "@/lib/storage";
 import type { CornerSet } from "@/lib/geo";
 
 export async function uploadMapImage(
   eventId: string,
+  eventSlug: string,
   formData: FormData,
 ): Promise<{ imageUrl: string; imageWidth: number; imageHeight: number }> {
-  await requireAdminSession();
+  const { session } = await requireEventPermission(eventId, "edit_map");
 
   const file = formData.get("file");
   const imageWidth = Number(formData.get("imageWidth"));
@@ -24,18 +26,21 @@ export async function uploadMapImage(
 
   const imageUrl = await saveMapImage(eventId, file);
 
-  revalidatePath(`/admin/events/${eventId}/map`);
+  logActivity(eventId, session.user.id, "map.upload", `${session.user.name} heeft een nieuwe plattegrond geüpload.`);
+
+  revalidatePath(`/admin/events/${eventSlug}/map`);
   return { imageUrl, imageWidth, imageHeight };
 }
 
 export async function saveMapCorners(input: {
   eventId: string;
+  eventSlug: string;
   imageUrl: string;
   imageWidth: number;
   imageHeight: number;
   corners: CornerSet;
 }) {
-  await requireAdminSession();
+  const { session } = await requireEventPermission(input.eventId, "edit_map");
 
   const { corners } = input;
 
@@ -65,5 +70,7 @@ export async function saveMapCorners(input: {
     await db.insert(eventMap).values(values);
   }
 
-  revalidatePath(`/admin/events/${input.eventId}`);
+  logActivity(input.eventId, session.user.id, "map.corners_update", `${session.user.name} heeft de kaartplaatsing aangepast.`);
+
+  revalidatePath(`/admin/events/${input.eventSlug}`);
 }

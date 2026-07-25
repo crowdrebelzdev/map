@@ -1,8 +1,20 @@
-import { writeFile, mkdir } from "fs/promises";
+import { writeFile, mkdir, rm, copyFile } from "fs/promises";
 import path from "path";
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand, CopyObjectCommand } from "@aws-sdk/client-s3";
 
 const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
+
+// The client always rasterizes PDF uploads to an image before sending them here (see
+// map-image-editor.tsx), so a legitimate request only ever arrives as one of these image
+// types. The extension used for the stored filename is derived from this allowlist (never
+// from the client-supplied `file.name`), so an uploaded file can never inject its own
+// extension/path into the storage key.
+const ALLOWED_MAP_IMAGE_TYPES: Record<string, string> = {
+  "image/png": "png",
+  "image/jpeg": "jpg",
+  "image/webp": "webp",
+};
+const MAX_MAP_IMAGE_BYTES = 20 * 1024 * 1024;
 
 // None of these are named with the AWS_ prefix on purpose: AWS Amplify Hosting
 // (and the Lambda runtime its SSR compute runs on) reserves that whole prefix
@@ -30,7 +42,14 @@ const s3Client = s3Bucket
  * filesystem for zero-setup local development.
  */
 export async function saveMapImage(eventId: string, file: File): Promise<string> {
-  const ext = (file.name.split(".").pop() || "png").toLowerCase();
+  const ext = ALLOWED_MAP_IMAGE_TYPES[file.type];
+  if (!ext) {
+    throw new Error("Ongeldig bestandstype. Toegestaan: PNG, JPEG of WebP.");
+  }
+  if (file.size > MAX_MAP_IMAGE_BYTES) {
+    throw new Error("Bestand is te groot (max. 20 MB).");
+  }
+
   const filename = `map.${ext}`;
   const key = `uploads/${eventId}/${filename}`;
   const buffer = Buffer.from(await file.arrayBuffer());
@@ -41,7 +60,7 @@ export async function saveMapImage(eventId: string, file: File): Promise<string>
         Bucket: s3Bucket,
         Key: key,
         Body: buffer,
-        ContentType: file.type || "application/octet-stream",
+        ContentType: file.type,
       }),
     );
     return `https://${s3Bucket}.s3.${s3Region}.amazonaws.com/${key}`;
@@ -51,4 +70,52 @@ export async function saveMapImage(eventId: string, file: File): Promise<string>
   await mkdir(dir, { recursive: true });
   await writeFile(path.join(dir, filename), buffer);
   return `/uploads/${eventId}/${filename}`;
+}
+
+/**
+ * Copies an event's map image to a new event's own storage path (used when duplicating an
+ * event) so the two events don't end up sharing — and later fighting over — the same file.
+ */
+export async function copyMapImage(
+  sourceEventId: string,
+  targetEventId: string,
+  imageUrl: string,
+): Promise<string> {
+  const filename = imageUrl.split("/").pop();
+  if (!filename) return imageUrl;
+  const targetKey = `uploads/${targetEventId}/${filename}`;
+
+  if (s3Client && s3Bucket) {
+    await s3Client.send(
+      new CopyObjectCommand({
+        Bucket: s3Bucket,
+        CopySource: `${s3Bucket}/uploads/${sourceEventId}/${filename}`,
+        Key: targetKey,
+      }),
+    );
+    return `https://${s3Bucket}.s3.${s3Region}.amazonaws.com/${targetKey}`;
+  }
+
+  const targetDir = path.join(UPLOADS_DIR, targetEventId);
+  await mkdir(targetDir, { recursive: true });
+  await copyFile(
+    path.join(UPLOADS_DIR, sourceEventId, filename),
+    path.join(targetDir, filename),
+  );
+  return `/uploads/${targetEventId}/${filename}`;
+}
+
+/** Best-effort cleanup of an event's uploaded map image, called when the event is deleted. */
+export async function deleteMapImage(eventId: string, imageUrl: string): Promise<void> {
+  const filename = imageUrl.split("/").pop();
+  if (!filename) return;
+
+  if (s3Client && s3Bucket) {
+    await s3Client.send(
+      new DeleteObjectCommand({ Bucket: s3Bucket, Key: `uploads/${eventId}/${filename}` }),
+    );
+    return;
+  }
+
+  await rm(path.join(UPLOADS_DIR, eventId), { recursive: true, force: true });
 }

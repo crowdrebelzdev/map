@@ -12,6 +12,7 @@ export type {
   EventMapViewProps,
   EventMapImage,
   EventMapPoi,
+  EventMapPoiCategory,
+  EventMapLiveUser,
   FlyToTarget,
 } from "./event-map-view-inner";
-export { POI_CATEGORY_COLORS, POI_CATEGORY_LABELS } from "./event-map-view-inner";

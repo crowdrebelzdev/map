@@ -16,13 +16,20 @@ function isCacheableAsset(url) {
   return false;
 }
 
-async function cacheFirst(request) {
+// Serves the cached copy immediately (instant, and works offline) but always kicks
+// off a network fetch in the background to refresh the cache for next time. This is
+// what keeps offline-saved tiles/plattegrond/bundles from going stale forever once a
+// device has real connectivity again, without making the current request wait for it.
+async function staleWhileRevalidate(request) {
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(request);
-  if (cached) return cached;
-  const response = await fetch(request);
-  if (response && response.ok) cache.put(request, response.clone());
-  return response;
+  const networkFetch = fetch(request)
+    .then((response) => {
+      if (response && response.ok) cache.put(request, response.clone());
+      return response;
+    })
+    .catch(() => cached);
+  return cached || networkFetch;
 }
 
 async function networkFirst(request) {
@@ -48,7 +55,7 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
 
   if (isCacheableAsset(url)) {
-    event.respondWith(cacheFirst(event.request));
+    event.respondWith(staleWhileRevalidate(event.request));
     return;
   }
 

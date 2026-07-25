@@ -1,12 +1,34 @@
 import Link from "next/link";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
+import { event, eventMember } from "@/db/schema";
+import { getServerSession } from "@/lib/get-session";
+import { isOrgAdmin, requireActiveOrganizationId } from "@/lib/org-access";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 
 export default async function StaffEventsPage() {
-  const events = await db.query.event.findMany({
-    orderBy: (event, { desc }) => desc(event.createdAt),
-  });
+  const session = await getServerSession();
+  const { organizationId } = await requireActiveOrganizationId();
+  const isAdmin = session ? await isOrgAdmin(session, organizationId) : false;
+
+  const events = isAdmin
+    ? await db.query.event.findMany({
+        where: and(eq(event.organizationId, organizationId), isNull(event.archivedAt)),
+        orderBy: (event, { desc }) => desc(event.createdAt),
+      })
+    : await db
+        .select({ id: event.id, name: event.name, slug: event.slug, createdAt: event.createdAt })
+        .from(event)
+        .innerJoin(eventMember, eq(eventMember.eventId, event.id))
+        .where(
+          and(
+            eq(eventMember.userId, session!.user.id),
+            eq(event.organizationId, organizationId),
+            isNull(event.archivedAt),
+          ),
+        )
+        .orderBy(desc(event.createdAt));
 
   return (
     <div className="mx-auto max-w-lg space-y-3 p-4">
@@ -20,7 +42,7 @@ export default async function StaffEventsPage() {
             <CardTitle className="text-base">{e.name}</CardTitle>
           </CardHeader>
           <CardContent>
-            <Link href={`/events/${e.id}/map`} className={buttonVariants({ className: "w-full" })}>
+            <Link href={`/events/${e.slug}/map`} className={buttonVariants({ className: "w-full" })}>
               Open kaart
             </Link>
           </CardContent>

@@ -127,6 +127,10 @@ export type EventMapViewProps = {
   pois?: EventMapPoi[];
   categories?: EventMapPoiCategory[];
   visibleCategories?: string[];
+  /** Shown regardless of `visibleCategories` — e.g. a POI a visitor searched for whose
+   * category happens to be filtered off, so there's still something to select/see rather
+   * than silently nothing. Only this one POI is exempted, not its whole category. */
+  extraVisiblePoiId?: string | null;
   areas?: EventMapArea[];
   areaCategories?: EventMapAreaCategory[];
   visibleAreaCategoryIds?: string[];
@@ -239,6 +243,7 @@ export default function EventMapView({
   pois = [],
   categories = [],
   visibleCategories,
+  extraVisiblePoiId,
   areas = [],
   areaCategories = [],
   visibleAreaCategoryIds,
@@ -343,9 +348,9 @@ export default function EventMapView({
   const visiblePois = useMemo(
     () =>
       visibleCategories
-        ? pois.filter((p) => visibleCategories.includes(p.categoryId))
+        ? pois.filter((p) => visibleCategories.includes(p.categoryId) || p.id === extraVisiblePoiId)
         : pois,
-    [pois, visibleCategories],
+    [pois, visibleCategories, extraVisiblePoiId],
   );
 
   // Not `new Map(...)` — see the comment on categoryById above; same shadowing trap.

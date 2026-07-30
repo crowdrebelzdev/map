@@ -943,11 +943,12 @@ export default function EventMapView({
           <span className="sr-only">Sluiten</span>
         </button>
         <div className="pr-8">
-          <div className="flex items-center gap-2">
+          <div className="flex items-start gap-2">
             {(() => {
               const Icon = getPoiIcon(selectedPoi.icon ?? selectedCategory?.icon);
               return (
                 <div
+                  className="shrink-0"
                   style={getShapeContainerStyle(
                     "circle",
                     selectedPoi.fillColor ?? selectedCategory?.color ?? FALLBACK_CATEGORY_COLOR,
@@ -959,7 +960,7 @@ export default function EventMapView({
               );
             })()}
             <div className="min-w-0">
-              <p className="truncate font-semibold">{selectedPoi.name}</p>
+              <p className="break-words font-semibold">{selectedPoi.name}</p>
               {selectedCategory && (
                 <p className="truncate text-xs text-muted-foreground">{selectedCategory.label}</p>
               )}

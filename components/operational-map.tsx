@@ -111,13 +111,17 @@ export function OperationalMap({
     readStoredIds(visibleAreaCategoriesKey(eventId), areaCategories.map((c) => c.id)),
   );
 
-  // A freshly created category isn't in `visibleCategories` yet (that state was only seeded
-  // from `categories` once, at mount) — without this it'd default to hidden in the filters.
+  // A freshly created category isn't in `visibleCategories` yet — without this it'd default
+  // to hidden in the filters. Tracked against the ids seen on the *previous* render (not
+  // against `visibleCategories` itself), so a category the visitor deliberately hid isn't
+  // mistaken for a brand-new one and silently re-shown on every render/reload.
+  const knownCategoryIdsRef = useRef<Set<string>>(new Set(categories.map((c) => c.id)));
   useEffect(() => {
-    setVisibleCategories((prev) => {
-      const newIds = categories.map((c) => c.id).filter((id) => !prev.includes(id));
-      return newIds.length > 0 ? [...prev, ...newIds] : prev;
-    });
+    const currentIds = categories.map((c) => c.id);
+    const newlyAppeared = currentIds.filter((id) => !knownCategoryIdsRef.current.has(id));
+    knownCategoryIdsRef.current = new Set(currentIds);
+    if (newlyAppeared.length === 0) return;
+    setVisibleCategories((prev) => [...prev, ...newlyAppeared.filter((id) => !prev.includes(id))]);
   }, [categories]);
 
   // Persist filter choices so a refresh (or coming back later) doesn't reset to "alles
@@ -131,11 +135,13 @@ export function OperationalMap({
     localStorage.setItem(visibleAreaCategoriesKey(eventId), JSON.stringify(visibleAreaCategoryIds));
   }, [eventId, visibleAreaCategoryIds]);
 
+  const knownAreaCategoryIdsRef = useRef<Set<string>>(new Set(areaCategories.map((c) => c.id)));
   useEffect(() => {
-    setVisibleAreaCategoryIds((prev) => {
-      const newIds = areaCategories.map((c) => c.id).filter((id) => !prev.includes(id));
-      return newIds.length > 0 ? [...prev, ...newIds] : prev;
-    });
+    const currentIds = areaCategories.map((c) => c.id);
+    const newlyAppeared = currentIds.filter((id) => !knownAreaCategoryIdsRef.current.has(id));
+    knownAreaCategoryIdsRef.current = new Set(currentIds);
+    if (newlyAppeared.length === 0) return;
+    setVisibleAreaCategoryIds((prev) => [...prev, ...newlyAppeared.filter((id) => !prev.includes(id))]);
   }, [areaCategories]);
 
   const [poiSizeMultiplier, setPoiSizeMultiplier] = useState(1);

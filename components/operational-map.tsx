@@ -6,7 +6,6 @@ import { toast } from "sonner";
 import { downloadMapForOffline, registerServiceWorker, type TileBounds } from "@/lib/offline";
 import { updateLiveLocation } from "@/actions/live-location";
 import { logSearch } from "@/actions/search-log";
-import { useHeaderSlot } from "@/components/header-slot";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,6 +18,7 @@ import { InstallPromptBanner } from "@/components/install-prompt-banner";
 import { PushSubscribeButton } from "@/components/push-subscribe-button";
 import { VisitorNameGate } from "@/components/visitor-name-gate";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { cn } from "@/lib/utils";
 import {
   EventMapView,
   type EventMapArea,
@@ -274,14 +274,14 @@ export function OperationalMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map?.eventId, isOnline]);
 
-  const offlineHeaderButton = useMemo(() => {
+  const offlineDownloadButton = useMemo(() => {
     const icon =
       offlineStatus === "done" ? (
-        <Check size={15} />
+        <Check size={16} />
       ) : offlineStatus === "downloading" ? (
-        <Download size={15} className="animate-pulse" />
+        <Download size={16} className="animate-pulse" />
       ) : (
-        <Download size={15} />
+        <Download size={16} />
       );
     const label =
       offlineStatus === "done"
@@ -296,9 +296,12 @@ export function OperationalMap({
         <TooltipTrigger
           render={
             <Button
-              variant="ghost"
-              size="icon-sm"
-              className={offlineStatus === "done" ? "text-emerald-600" : undefined}
+              variant="secondary"
+              size="icon"
+              className={cn(
+                "pointer-events-auto shrink-0 shadow-md",
+                offlineStatus === "done" && "text-emerald-600",
+              )}
               disabled={offlineStatus === "downloading"}
             />
           }
@@ -312,8 +315,6 @@ export function OperationalMap({
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offlineStatus, offlineProgress.done, offlineProgress.total]);
-
-  useHeaderSlot(offlineHeaderButton);
 
   const userPosition = manualPosition ?? gpsPosition;
   const usingManualPosition = manualPosition !== null;
@@ -558,6 +559,7 @@ export function OperationalMap({
           areas={areas}
         />
         <PoiSizeControl sizeMultiplier={poiSizeMultiplier} onChange={setPoiSizeMultiplier} />
+        {offlineDownloadButton}
         <ThemeToggle variant="secondary" size="icon" className="pointer-events-auto shrink-0 shadow-md" />
         {isStaff && <PushSubscribeButton eventId={eventId} />}
       </div>

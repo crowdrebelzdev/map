@@ -492,39 +492,125 @@ export function OperationalMap({
         onMapClick={placingManually ? handleMapClickForManualLocation : undefined}
       />
 
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex items-start justify-center gap-2 p-3">
+      {/* Fixed to the real viewport (not the map container) so it stays put and fully
+          visible regardless of mobile browser chrome or device size — this is the
+          single most important piece of info for staff in the field, so it's sized and
+          colored to be unmissable rather than a subtle footnote. */}
+      {currentCell && !showGpsHint && (
+        <div
+          className="pointer-events-none fixed inset-x-0 top-0 z-20 flex justify-center px-16"
+          style={{ paddingTop: "max(0.875rem, env(safe-area-inset-top))" }}
+        >
+          <div className="pointer-events-auto flex items-center gap-2.5 rounded-full bg-primary py-2 pr-4 pl-3 shadow-lg">
+            <MapPin size={18} className="shrink-0 text-primary-foreground" />
+            <span className="text-sm text-primary-foreground/90">Jouw grid-locatie</span>
+            <span className="rounded-full bg-primary-foreground px-3 py-1 text-lg leading-none font-bold text-primary">
+              {currentCell.code}
+            </span>
+            {usingManualPosition && (
+              <span className="text-xs text-primary-foreground/70">(handmatig)</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      {showGpsHint && (
+        <div
+          className="pointer-events-none fixed inset-x-0 top-0 z-20 flex justify-center px-16"
+          style={{ paddingTop: "max(0.875rem, env(safe-area-inset-top))" }}
+        >
+          <div className="flex items-center gap-1.5 rounded-full bg-foreground/80 px-3 py-1.5 text-xs font-medium text-background shadow-md backdrop-blur-sm">
+            {GPS_STATUS_MESSAGES[gpsStatus]}
+          </div>
+        </div>
+      )}
+
+      {/* Top-right icon toolbar — its own stack, mirroring the bottom-right manual-location
+          stack below, so it never has to share a row with the (centered) grid-location pill. */}
+      <div
+        className="pointer-events-none fixed right-3 top-0 z-10 flex flex-col-reverse gap-2"
+        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-top))", top: "max(0.75rem, env(safe-area-inset-top))" }}
+      >
+        <PoiFilterSheet
+          categories={categories}
+          visibleCategories={visibleCategories}
+          onToggle={toggleCategory}
+          pois={pois}
+          areaCategories={areaCategories}
+          visibleAreaCategoryIds={visibleAreaCategoryIds}
+          onToggleArea={toggleAreaCategory}
+          areas={areas}
+        />
+        <PoiSizeControl sizeMultiplier={poiSizeMultiplier} onChange={setPoiSizeMultiplier} />
+        {offlineDownloadButton}
+        <ThemeToggle variant="secondary" size="icon" className="pointer-events-auto shrink-0 shadow-md" />
+        {isStaff && <PushSubscribeButton eventId={eventId} />}
+      </div>
+
+      {!isOnline ? (
+        <div className="pointer-events-none fixed inset-x-0 top-16 z-10 flex justify-center px-16">
+          <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1 text-xs font-medium text-white shadow-md">
+            <WifiOff size={13} />
+            Je bent offline — kaart draait op opgeslagen data
+          </div>
+        </div>
+      ) : (
+        <div className="pointer-events-none fixed inset-x-0 top-16 z-10 flex justify-center px-16">
+          <div className="pointer-events-auto">
+            <InstallPromptBanner />
+          </div>
+        </div>
+      )}
+
+      {isStaff && <BroadcastListener eventId={eventId} />}
+
+      {placingManually && (
+        <div className="pointer-events-none absolute inset-x-0 top-24 z-10 flex justify-center px-16">
+          <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-foreground/90 px-3 py-1.5 text-xs font-medium text-background shadow-md">
+            Tik op de kaart om je locatie te zetten
+            <button onClick={() => setPlacingManually(false)} className="opacity-80 hover:opacity-100">
+              <X size={13} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Bottom, thumb-reachable search bar — taller, and kept clear of the map's own
+          bottom-right zoom/compass/geolocate stack via right padding on the row (rather
+          than overlapping it), instead of the icon toolbar that used to live here. */}
+      <div
+        className="pointer-events-none fixed inset-x-0 bottom-0 z-10 flex justify-center p-3 pr-16"
+        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+      >
         <div className="pointer-events-auto w-full max-w-sm">
-          <Input
-            placeholder="Zoek grid-code (bv. C4) of locatie..."
-            value={query}
-            onChange={(e) => handleQueryChange(e.target.value)}
-            className="bg-background shadow-md dark:bg-background"
-          />
-          {eventDays.length > 0 && (
-            <div className="mt-1.5 flex gap-1.5 overflow-x-auto">
-              <Button
-                variant={selectedDayId === ALL_DAYS_VALUE ? "default" : "secondary"}
-                size="sm"
-                className="shrink-0 shadow-md"
-                onClick={() => setSelectedDayId(ALL_DAYS_VALUE)}
-              >
-                Alle dagen
-              </Button>
-              {eventDays.map((d) => (
+          {(usingManualPosition || showManualLocationButton) && (
+            <div className="mb-1.5 flex justify-end gap-2">
+              {usingManualPosition && (
                 <Button
-                  key={d.id}
-                  variant={selectedDayId === d.id ? "default" : "secondary"}
+                  variant="secondary"
                   size="sm"
-                  className="shrink-0 shadow-md"
-                  onClick={() => setSelectedDayId(d.id)}
+                  className="shadow-md"
+                  onClick={handleStopUsingManualLocation}
                 >
-                  {d.label || d.date}
+                  <LocateFixed size={14} />
+                  Terug naar GPS
                 </Button>
-              ))}
+              )}
+              {showManualLocationButton && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="shadow-md"
+                  onClick={() => setPlacingManually((v) => !v)}
+                >
+                  <MapPin size={14} />
+                  Locatie handmatig zetten
+                </Button>
+              )}
             </div>
           )}
           {showResults && (
-            <Card className="mt-1 max-h-64 overflow-y-auto py-2">
+            <Card className="mb-1 max-h-64 overflow-y-auto py-2">
               <CardContent className="space-y-1 px-2">
                 {gridMatch && (
                   <button
@@ -555,111 +641,37 @@ export function OperationalMap({
               </CardContent>
             </Card>
           )}
+          {eventDays.length > 0 && (
+            <div className="mb-1.5 flex gap-1.5 overflow-x-auto">
+              <Button
+                variant={selectedDayId === ALL_DAYS_VALUE ? "default" : "secondary"}
+                size="sm"
+                className="shrink-0 shadow-md"
+                onClick={() => setSelectedDayId(ALL_DAYS_VALUE)}
+              >
+                Alle dagen
+              </Button>
+              {eventDays.map((d) => (
+                <Button
+                  key={d.id}
+                  variant={selectedDayId === d.id ? "default" : "secondary"}
+                  size="sm"
+                  className="shrink-0 shadow-md"
+                  onClick={() => setSelectedDayId(d.id)}
+                >
+                  {d.label || d.date}
+                </Button>
+              ))}
+            </div>
+          )}
+          <Input
+            placeholder="Zoek grid-code (bv. C4) of locatie..."
+            value={query}
+            onChange={(e) => handleQueryChange(e.target.value)}
+            className="h-12 bg-background text-base shadow-md dark:bg-background"
+          />
         </div>
-
-        <PoiFilterSheet
-          categories={categories}
-          visibleCategories={visibleCategories}
-          onToggle={toggleCategory}
-          pois={pois}
-          areaCategories={areaCategories}
-          visibleAreaCategoryIds={visibleAreaCategoryIds}
-          onToggleArea={toggleAreaCategory}
-          areas={areas}
-        />
-        <PoiSizeControl sizeMultiplier={poiSizeMultiplier} onChange={setPoiSizeMultiplier} />
-        {offlineDownloadButton}
-        <ThemeToggle variant="secondary" size="icon" className="pointer-events-auto shrink-0 shadow-md" />
-        {isStaff && <PushSubscribeButton eventId={eventId} />}
       </div>
-
-      {isStaff && <BroadcastListener eventId={eventId} />}
-
-      {placingManually && (
-        <div className="pointer-events-none absolute inset-x-0 top-20 z-10 flex justify-center">
-          <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-foreground/90 px-3 py-1.5 text-xs font-medium text-background shadow-md">
-            Tik op de kaart om je locatie te zetten
-            <button onClick={() => setPlacingManually(false)} className="opacity-80 hover:opacity-100">
-              <X size={13} />
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Offset well above bottom-0 to clear the map's own zoom/compass/geolocate controls,
-          which now stack in that same corner (bottom-right) instead of top-right. */}
-      <div className="pointer-events-none fixed right-3 bottom-48 z-20 flex flex-col items-end gap-2">
-        {usingManualPosition && (
-          <Button
-            variant="secondary"
-            size="sm"
-            className="pointer-events-auto shadow-md"
-            onClick={handleStopUsingManualLocation}
-          >
-            <LocateFixed size={14} />
-            Terug naar GPS
-          </Button>
-        )}
-        {showManualLocationButton && (
-          <Button
-            variant="secondary"
-            size="sm"
-            className="pointer-events-auto shadow-md"
-            onClick={() => setPlacingManually((v) => !v)}
-          >
-            <MapPin size={14} />
-            Locatie handmatig zetten
-          </Button>
-        )}
-      </div>
-
-      {!isOnline ? (
-        <div className="pointer-events-none fixed inset-x-0 top-16 z-20 flex justify-center">
-          <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1 text-xs font-medium text-white shadow-md">
-            <WifiOff size={13} />
-            Je bent offline — kaart draait op opgeslagen data
-          </div>
-        </div>
-      ) : (
-        <div className="pointer-events-none fixed inset-x-0 top-16 z-20 flex justify-center">
-          <div className="pointer-events-auto">
-            <InstallPromptBanner />
-          </div>
-        </div>
-      )}
-
-      {/* Fixed to the real viewport (not the map container) so it stays put and fully
-          visible regardless of mobile browser chrome or device size — this is the
-          single most important piece of info for staff in the field, so it's sized and
-          colored to be unmissable rather than a subtle footnote. */}
-      {currentCell && !showGpsHint && (
-        <div
-          className="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex justify-center px-3"
-          style={{ paddingBottom: "max(0.875rem, env(safe-area-inset-bottom))" }}
-        >
-          <div className="pointer-events-auto flex items-center gap-2.5 rounded-full bg-primary py-2 pr-4 pl-3 shadow-lg">
-            <MapPin size={18} className="shrink-0 text-primary-foreground" />
-            <span className="text-sm text-primary-foreground/90">Jouw grid-locatie</span>
-            <span className="rounded-full bg-primary-foreground px-3 py-1 text-lg leading-none font-bold text-primary">
-              {currentCell.code}
-            </span>
-            {usingManualPosition && (
-              <span className="text-xs text-primary-foreground/70">(handmatig)</span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {showGpsHint && (
-        <div
-          className="pointer-events-none fixed inset-x-0 bottom-0 z-20 flex justify-center px-3"
-          style={{ paddingBottom: "max(0.875rem, env(safe-area-inset-bottom))" }}
-        >
-          <div className="flex items-center gap-1.5 rounded-full bg-foreground/80 px-3 py-1.5 text-xs font-medium text-background shadow-md backdrop-blur-sm">
-            {GPS_STATUS_MESSAGES[gpsStatus]}
-          </div>
-        </div>
-      )}
     </div>
   );
 

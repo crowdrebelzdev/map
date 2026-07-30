@@ -25,6 +25,7 @@ import {
   type EventMapAreaCategory,
   type EventMapPoiCategory,
   type FlyToTarget,
+  type PoiSelectSignal,
 } from "@/components/event-map-view";
 import {
   computeGridCellsFromQuad,
@@ -162,6 +163,7 @@ export function OperationalMap({
     });
   }, [pois, selectedDayId]);
   const [flyToTarget, setFlyToTarget] = useState<FlyToTarget | null>(null);
+  const [selectPoiSignal, setSelectPoiSignal] = useState<PoiSelectSignal | null>(null);
   const [highlightedCell, setHighlightedCell] = useState<GridCell | null>(null);
 
   const [gpsPosition, setGpsPosition] = useState<LatLng | null>(null);
@@ -425,6 +427,10 @@ export function OperationalMap({
 
   function selectPoi(p: PoiRow) {
     setFlyToTarget({ type: "point", center: { lat: p.lat, lng: p.lng }, zoom: 19 });
+    // Opens the same detail panel a direct marker tap would, and — since the map dims every
+    // other POI while one is selected — puts this one in the spotlight until the visitor
+    // taps elsewhere on the map to clear the selection again.
+    setSelectPoiSignal({ id: p.id, token: Date.now() });
     setHighlightedCell(null);
     setQuery("");
     if (isStaff) logSearch(eventId, "poi", p.name).catch(() => {});
@@ -488,6 +494,7 @@ export function OperationalMap({
         poiSizeMultiplier={poiSizeMultiplier}
         geolocate
         flyToTarget={flyToTarget}
+        externalSelectPoi={selectPoiSignal}
         userLocation={userPosition}
         onMapClick={placingManually ? handleMapClickForManualLocation : undefined}
       />

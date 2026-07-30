@@ -2,14 +2,32 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Download, Trash2 } from "lucide-react";
+import { Download, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { setEventMemberPermissions, removeEventMember } from "@/actions/event-members";
 import { eventMemberPermissionValues, type EventMemberPermission } from "@/db/schema";
 import { downloadCsv } from "@/lib/csv";
+import { PERMISSION_PRESETS } from "@/lib/permission-presets";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Empty,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+  EmptyDescription,
+} from "@/components/ui/empty";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Select,
   SelectContent,
@@ -51,6 +69,21 @@ export function EventTeamEditor({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [addUserId, setAddUserId] = useState("");
+  const [confirmRemoveMember, setConfirmRemoveMember] = useState<MemberRow | null>(null);
+
+  function applyPreset(member: MemberRow, presetKey: string) {
+    const preset = PERMISSION_PRESETS.find((p) => p.key === presetKey);
+    if (!preset) return;
+    startTransition(async () => {
+      try {
+        await setEventMemberPermissions(eventId, eventSlug, member.userId, preset.permissions);
+        toast.success(`Preset "${preset.label}" toegepast.`);
+        router.refresh();
+      } catch (err) {
+        toast.error(err instanceof Error ? err.message : "Opslaan mislukt.");
+      }
+    });
+  }
 
   function togglePermission(member: MemberRow, permission: EventMemberPermission) {
     const next = member.permissions.includes(permission)
@@ -59,6 +92,7 @@ export function EventTeamEditor({
     startTransition(async () => {
       try {
         await setEventMemberPermissions(eventId, eventSlug, member.userId, next);
+        toast.success("Rechten bijgewerkt.");
         router.refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Opslaan mislukt.");
@@ -71,6 +105,7 @@ export function EventTeamEditor({
       try {
         await removeEventMember(eventId, eventSlug, userId);
         toast.success("Teamlid verwijderd.");
+        setConfirmRemoveMember(null);
         router.refresh();
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
@@ -117,13 +152,22 @@ export function EventTeamEditor({
         </CardHeader>
         <CardContent>
           {members.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Nog geen teamleden toegevoegd.</p>
+            <Empty className="border-0 p-0">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <Users />
+                </EmptyMedia>
+                <EmptyTitle>Nog geen teamleden</EmptyTitle>
+                <EmptyDescription>Voeg hieronder een gebruiker toe aan dit team.</EmptyDescription>
+              </EmptyHeader>
+            </Empty>
           ) : (
             <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead>Naam</TableHead>
+                  <TableHead>Preset</TableHead>
                   {eventMemberPermissionValues.map((p) => (
                     <TableHead key={p} className="text-center">
                       {PERMISSION_LABELS[p]}
@@ -139,6 +183,20 @@ export function EventTeamEditor({
                       <div className="font-medium">{m.name}</div>
                       <div className="text-xs text-muted-foreground">{m.email}</div>
                     </TableCell>
+                    <TableCell>
+                      <Select value="" onValueChange={(v) => v && applyPreset(m, v)} disabled={isPending}>
+                        <SelectTrigger className="h-8 w-40 text-xs">
+                          <SelectValue placeholder="Kies preset..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {PERMISSION_PRESETS.map((preset) => (
+                            <SelectItem key={preset.key} value={preset.key}>
+                              {preset.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </TableCell>
                     {eventMemberPermissionValues.map((p) => (
                       <TableCell key={p} className="text-center">
                         <Checkbox
@@ -153,7 +211,7 @@ export function EventTeamEditor({
                         variant="ghost"
                         size="icon-sm"
                         className="text-destructive hover:bg-destructive/10"
-                        onClick={() => handleRemove(m.userId)}
+                        onClick={() => setConfirmRemoveMember(m)}
                         disabled={isPending}
                       >
                         <Trash2 />
@@ -194,6 +252,30 @@ export function EventTeamEditor({
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog
+        open={confirmRemoveMember !== null}
+        onOpenChange={(open) => !open && setConfirmRemoveMember(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Teamlid verwijderen?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Weet je zeker dat je &quot;{confirmRemoveMember?.name}&quot; uit dit team wilt verwijderen?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isPending}>Annuleren</AlertDialogCancel>
+            <AlertDialogAction
+              variant="destructive"
+              onClick={() => confirmRemoveMember && handleRemove(confirmRemoveMember.userId)}
+              disabled={isPending}
+            >
+              {isPending ? "Bezig..." : "Verwijderen"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

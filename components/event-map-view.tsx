@@ -13,6 +13,10 @@ export type {
   EventMapImage,
   EventMapPoi,
   EventMapPoiCategory,
+  EventMapArea,
+  EventMapAreaCategory,
   EventMapLiveUser,
   FlyToTarget,
+  PoiSelectSignal,
+  PreviewPoiMarker,
 } from "./event-map-view-inner";

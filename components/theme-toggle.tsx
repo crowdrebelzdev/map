@@ -3,15 +3,25 @@
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { Moon, Sun } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button, type buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+import type { VariantProps } from "class-variance-authority";
 
-export function ThemeToggle() {
+export function ThemeToggle({
+  variant = "ghost",
+  size = "icon-sm",
+  className,
+}: {
+  variant?: VariantProps<typeof buttonVariants>["variant"];
+  size?: VariantProps<typeof buttonVariants>["size"];
+  className?: string;
+}) {
   const { setTheme } = useTheme();
   // Avoid rendering theme-dependent icon state before hydration confirms the real theme.
   const [mounted, setMounted] = useState(false);
@@ -19,7 +29,9 @@ export function ThemeToggle() {
 
   return (
     <DropdownMenu>
-      <DropdownMenuTrigger render={<Button variant="ghost" size="icon-sm" className="relative" />}>
+      <DropdownMenuTrigger
+        render={<Button variant={variant} size={size} className={cn("relative", className)} />}
+      >
         {mounted ? (
           <>
             <Sun className="scale-100 rotate-0 transition-all dark:scale-0 dark:-rotate-90" />

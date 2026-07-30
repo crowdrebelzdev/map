@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { getLiveLocations } from "@/actions/live-location";
-import { EventMapView, type EventMapLiveUser, type EventMapPoiCategory } from "@/components/event-map-view";
+import {
+  EventMapView,
+  type EventMapArea,
+  type EventMapAreaCategory,
+  type EventMapLiveUser,
+  type EventMapPoiCategory,
+} from "@/components/event-map-view";
 import { IncidentsSheet } from "@/components/incidents-sheet";
 import { BroadcastDialog } from "@/components/broadcast-dialog";
 import { TopSearchesSheet } from "@/components/top-searches-sheet";
@@ -12,7 +18,7 @@ import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
 import type { listIncidents } from "@/actions/incidents";
 import type { eventMap, gridConfig, poi } from "@/db/schema";
-import type { GridCell } from "@/lib/geo";
+import { isPointInPolygon, type GridCell } from "@/lib/geo";
 
 type MapRow = typeof eventMap.$inferSelect;
 type GridRow = typeof gridConfig.$inferSelect;
@@ -30,6 +36,8 @@ export function LiveOpsView({
   gridCells,
   pois,
   categories,
+  areas,
+  areaCategories,
   canViewLive,
   canManageIncidents,
   initialLiveUsers,
@@ -44,6 +52,8 @@ export function LiveOpsView({
   gridCells: GridCell[];
   pois: PoiRow[];
   categories: EventMapPoiCategory[];
+  areas: EventMapArea[];
+  areaCategories: EventMapAreaCategory[];
   canViewLive: boolean;
   canManageIncidents: boolean;
   initialLiveUsers: EventMapLiveUser[];
@@ -51,20 +61,29 @@ export function LiveOpsView({
   topSearches: TopSearch[];
   recipients: { id: string; name: string }[];
 }) {
-  const [liveUsers, setLiveUsers] = useState<EventMapLiveUser[]>(initialLiveUsers);
+  const [rawLiveUsers, setRawLiveUsers] = useState<EventMapLiveUser[]>(initialLiveUsers);
 
   useEffect(() => {
     if (!canViewLive) return;
     const id = setInterval(async () => {
       try {
         const rows = await getLiveLocations(eventId);
-        setLiveUsers(rows.map((r) => ({ userId: r.userId, userName: r.userName, lat: r.lat, lng: r.lng })));
+        setRawLiveUsers(rows.map((r) => ({ userId: r.userId, userName: r.userName, lat: r.lat, lng: r.lng })));
       } catch {
         // Best-effort polling — a transient failure just skips this refresh.
       }
     }, POLL_INTERVAL_MS);
     return () => clearInterval(id);
   }, [eventId, canViewLive]);
+
+  const liveUsers = useMemo(
+    () =>
+      rawLiveUsers.map((u) => {
+        const area = areas.find((a) => isPointInPolygon({ lat: u.lat, lng: u.lng }, a.vertices));
+        return { ...u, areaLabel: area?.name ?? null };
+      }),
+    [rawLiveUsers, areas],
+  );
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
@@ -111,6 +130,8 @@ export function LiveOpsView({
             gridCells={gridCells}
             pois={pois}
             categories={categories}
+            areas={areas}
+            areaCategories={areaCategories}
             liveUsers={canViewLive ? liveUsers : []}
           />
         ) : (

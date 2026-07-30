@@ -10,7 +10,17 @@ import {
   uuid,
   index,
   uniqueIndex,
+  jsonb,
 } from "drizzle-orm/pg-core";
+
+/** "members_only" (default, current behavior): requires an eventMember row or org-admin.
+ * "public_anonymous": anyone with the link, no login/name needed. "public_named": anyone
+ * with the link, but must type a name first — the name is a client-side-only entry gate
+ * (never sent to the server), see `components/visitor-name-gate.tsx`. Public visitors never
+ * get live-ops features (live location, incidents, broadcasts) regardless of mode — those
+ * stay staff-only. */
+export const publicAccessModeValues = ["members_only", "public_anonymous", "public_named"] as const;
+export type PublicAccessMode = (typeof publicAccessModeValues)[number];
 
 export const event = pgTable("event", {
   id: uuid("id").primaryKey().defaultRandom(),
@@ -19,6 +29,7 @@ export const event = pgTable("event", {
     .references(() => organization.id, { onDelete: "cascade" }),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
+  publicAccessMode: text("public_access_mode").$type<PublicAccessMode>().notNull().default("members_only"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   archivedAt: timestamp("archived_at"),
 });
@@ -43,6 +54,33 @@ export const eventMap = pgTable("event_map", {
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
+// A snapshot of `eventMap`'s previous values, saved right before it's overwritten — lets an
+// admin undo an accidental re-upload or a botched corner-placement without redoing the
+// original setup from scratch. Intentionally has no unique constraint on eventId: an event
+// accumulates one row per past replacement.
+export const eventMapVersion = pgTable(
+  "event_map_version",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    imageUrl: text("image_url").notNull(),
+    imageWidth: integer("image_width").notNull(),
+    imageHeight: integer("image_height").notNull(),
+    cornerTlLat: doublePrecision("corner_tl_lat").notNull(),
+    cornerTlLng: doublePrecision("corner_tl_lng").notNull(),
+    cornerTrLat: doublePrecision("corner_tr_lat").notNull(),
+    cornerTrLng: doublePrecision("corner_tr_lng").notNull(),
+    cornerBrLat: doublePrecision("corner_br_lat").notNull(),
+    cornerBrLng: doublePrecision("corner_br_lng").notNull(),
+    cornerBlLat: doublePrecision("corner_bl_lat").notNull(),
+    cornerBlLng: doublePrecision("corner_bl_lng").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("event_map_version_event_idx").on(table.eventId, table.createdAt)],
+);
+
 export const gridConfig = pgTable("grid_config", {
   id: uuid("id").primaryKey().defaultRandom(),
   eventId: uuid("event_id")
@@ -65,6 +103,17 @@ export const gridConfig = pgTable("grid_config", {
     .$type<GridLabelOrientation>()
     .notNull()
     .default("row-column"),
+  // Lets a grid that only covers part of a venue's larger, pre-printed grid line up with
+  // it: e.g. a plattegrond labelled "10E1".."10E3" needs labelPrefix "10" and
+  // labelLetterStart pointing at "E" instead of "A", even though this grid itself only has
+  // one row. Defaults reproduce the old always-starts-at-A1 behavior exactly.
+  labelPrefix: text("label_prefix").notNull().default(""),
+  labelLetterStart: integer("label_letter_start").notNull().default(0),
+  labelNumberStart: integer("label_number_start").notNull().default(1),
+  // 0 = off (flat "{letter}{number}" codes, as above). >0 subdivides the letter axis into
+  // groups of this size, producing "{number}{letter}{subnumber}" codes (e.g. "10E1".."10E4",
+  // then "10F1"..) — matches how large venues print their own master grid.
+  labelLetterGroupSize: integer("label_letter_group_size").notNull().default(0),
   lineColor: text("line_color").notNull().default("#111827"),
   lineWidth: doublePrecision("line_width").notNull().default(3),
   casingColor: text("casing_color").notNull().default("#ffffff"),
@@ -74,6 +123,17 @@ export const gridConfig = pgTable("grid_config", {
 /** "column-row": code = column-letter + row-number (e.g. "C2"). "row-column": code = row-letter + column-number (e.g. "B3"). */
 export const gridLabelOrientationValues = ["column-row", "row-column"] as const;
 export type GridLabelOrientation = (typeof gridLabelOrientationValues)[number];
+
+export const poiCategoryShapeValues = ["circle", "square", "pin", "diamond", "triangle"] as const;
+export type PoiCategoryShape = (typeof poiCategoryShapeValues)[number];
+
+export const poiExtraFieldTypeValues = ["text", "url", "phone"] as const;
+export type PoiExtraFieldType = (typeof poiExtraFieldTypeValues)[number];
+export type PoiExtraFieldDef = { key: string; label: string; type: PoiExtraFieldType };
+
+/** A single labeled info row on a POI — carries its own label so it renders correctly
+ * whether it came from a category template field or was added freely on the POI itself. */
+export type PoiExtraFieldValue = { key: string; label: string; value: string };
 
 export const poiCategory = pgTable(
   "poi_category",
@@ -85,6 +145,18 @@ export const poiCategory = pgTable(
     key: text("key").notNull(),
     label: text("label").notNull(),
     color: text("color").notNull(),
+    // Lucide icon name (see lib/poi-icons.ts) — null renders the marker without an icon.
+    icon: text("icon"),
+    shape: text("shape").$type<PoiCategoryShape>().notNull().default("circle"),
+    // Category-defined custom fields (e.g. "Telefoon" for a first-aid post); POIs in
+    // this category store values for these under poi.extraFieldValues.
+    extraFields: jsonb("extra_fields").$type<PoiExtraFieldDef[]>().notNull().default([]),
+    // Opt-in auto-naming for new POIs in this category: "{prefix}{autoNumberNext}{suffix}",
+    // suggested (still overridable) on create, then autoNumberNext advances by 1.
+    autoNumberEnabled: boolean("auto_number_enabled").notNull().default(false),
+    autoNumberPrefix: text("auto_number_prefix").notNull().default(""),
+    autoNumberSuffix: text("auto_number_suffix").notNull().default(""),
+    autoNumberNext: integer("auto_number_next").notNull().default(1),
     sortOrder: integer("sort_order").notNull().default(0),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
@@ -108,6 +180,9 @@ export const eventDay = pgTable(
   (table) => [index("event_day_event_idx").on(table.eventId)],
 );
 
+export const poiSizeValues = ["small", "medium", "large"] as const;
+export type PoiSize = (typeof poiSizeValues)[number];
+
 export const poi = pgTable("poi", {
   id: uuid("id").primaryKey().defaultRandom(),
   eventId: uuid("event_id")
@@ -121,10 +196,63 @@ export const poi = pgTable("poi", {
   eventDayId: uuid("event_day_id").references(() => eventDay.id, { onDelete: "set null" }),
   name: text("name").notNull(),
   description: text("description"),
+  // Per-POI overrides — null falls back to the category's icon/color/default border.
+  icon: text("icon"),
+  fillColor: text("fill_color"),
+  borderColor: text("border_color"),
+  owner: text("owner"),
+  size: text("size").$type<PoiSize>().notNull().default("medium"),
+  // Optional "HH:MM" time-of-day window (both set or both null) — combines with
+  // eventDayId so a POI can be e.g. "Saturday only" AND "12:00-16:00 only".
+  startTime: text("start_time"),
+  endTime: text("end_time"),
+  // Labeled info rows — from the category's extraFields template and/or added freely
+  // on this POI directly. Each row carries its own label (see PoiExtraFieldValue).
+  extraFieldValues: jsonb("extra_field_values").$type<PoiExtraFieldValue[]>().notNull().default([]),
   pixelX: doublePrecision("pixel_x").notNull(),
   pixelY: doublePrecision("pixel_y").notNull(),
   lat: doublePrecision("lat").notNull(),
   lng: doublePrecision("lng").notNull(),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+});
+
+export const areaCategory = pgTable(
+  "area_category",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    key: text("key").notNull(),
+    label: text("label").notNull(),
+    color: text("color").notNull(),
+    // Category-defined custom fields, same idea as poiCategory.extraFields — areas in
+    // this category store values for these under mapArea.extraFieldValues.
+    extraFields: jsonb("extra_fields").$type<PoiExtraFieldDef[]>().notNull().default([]),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("area_category_event_key_idx").on(table.eventId, table.key),
+    index("area_category_event_idx").on(table.eventId),
+  ],
+);
+
+/** A single lat/lng vertex of a free-form area outline. */
+export type AreaVertex = { lat: number; lng: number };
+
+export const mapArea = pgTable("map_area", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  eventId: uuid("event_id")
+    .notNull()
+    .references(() => event.id, { onDelete: "cascade" }),
+  categoryId: uuid("category_id")
+    .notNull()
+    .references(() => areaCategory.id, { onDelete: "restrict" }),
+  name: text("name").notNull(),
+  // Free-form polygon outline — at least 3 points, drawn/edited by dragging each vertex.
+  vertices: jsonb("vertices").$type<AreaVertex[]>().notNull().default([]),
+  extraFieldValues: jsonb("extra_field_values").$type<PoiExtraFieldValue[]>().notNull().default([]),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
@@ -467,4 +595,28 @@ export const liveLocation = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => [uniqueIndex("live_location_event_user_idx").on(table.eventId, table.userId)],
+);
+
+// --- Web Push subscriptions (per event, so opting in on one event's map doesn't push
+// notifications for every other event a user happens to be a member of) -----------------
+
+export const pushSubscription = pgTable(
+  "push_subscription",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("push_subscription_event_idx").on(table.eventId),
+    index("push_subscription_user_idx").on(table.userId),
+  ],
 );

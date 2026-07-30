@@ -18,6 +18,16 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 const NO_TEMPLATE_VALUE = "__none__";
 
@@ -31,6 +41,7 @@ export function CreateEventForm({
   const [templateId, setTemplateId] = useState(NO_TEMPLATE_VALUE);
   const [isPending, startTransition] = useTransition();
   const [deletingTemplate, setDeletingTemplate] = useState(false);
+  const [confirmDeleteTemplate, setConfirmDeleteTemplate] = useState(false);
 
   async function handleDeleteTemplate() {
     if (templateId === NO_TEMPLATE_VALUE) return;
@@ -39,6 +50,7 @@ export function CreateEventForm({
       await deleteEventTemplate(templateId);
       toast.success("Sjabloon verwijderd.");
       setTemplateId(NO_TEMPLATE_VALUE);
+      setConfirmDeleteTemplate(false);
       router.refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
@@ -100,7 +112,7 @@ export function CreateEventForm({
                     variant="ghost"
                     size="icon-sm"
                     className="shrink-0 text-destructive hover:bg-destructive/10"
-                    onClick={handleDeleteTemplate}
+                    onClick={() => setConfirmDeleteTemplate(true)}
                     disabled={deletingTemplate}
                   >
                     <Trash2 />
@@ -111,6 +123,28 @@ export function CreateEventForm({
               <p className="text-xs text-muted-foreground">
                 Neemt de POI-categorieën van het sjabloon over.
               </p>
+              <AlertDialog open={confirmDeleteTemplate} onOpenChange={setConfirmDeleteTemplate}>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Sjabloon verwijderen?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Weet je zeker dat je &quot;
+                      {templates.find((t) => t.id === templateId)?.name}&quot; wilt verwijderen? Dit kan
+                      niet ongedaan worden gemaakt.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel disabled={deletingTemplate}>Annuleren</AlertDialogCancel>
+                    <AlertDialogAction
+                      variant="destructive"
+                      onClick={handleDeleteTemplate}
+                      disabled={deletingTemplate}
+                    >
+                      {deletingTemplate ? "Bezig..." : "Verwijderen"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </div>
           )}
           <DialogFooter>

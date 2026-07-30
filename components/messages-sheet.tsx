@@ -6,6 +6,7 @@ import { listMyMessages } from "@/actions/broadcasts";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 
 type MessageRow = Awaited<ReturnType<typeof listMyMessages>>[number];
 
@@ -68,7 +69,14 @@ export function MessagesSheet({
         </SheetHeader>
         <div className="flex flex-col gap-2 overflow-y-auto px-4 pb-4">
           {messages.length === 0 && (
-            <p className="text-sm text-muted-foreground">Nog geen berichten ontvangen.</p>
+            <Empty className="border-0 p-0">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <MessageSquare />
+                </EmptyMedia>
+                <EmptyTitle>Nog geen berichten ontvangen</EmptyTitle>
+              </EmptyHeader>
+            </Empty>
           )}
           {messages.map((m) => (
             <div key={m.id} className="space-y-0.5 rounded-md border p-2.5">

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, CalendarDays, Users as UsersIcon, LogOut, ChevronDown, Check } from "lucide-react";
+import { LayoutDashboard, CalendarDays, Users as UsersIcon, LayoutTemplate, LogOut, ChevronDown, Check } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { ROLE_LABELS } from "@/lib/auth-roles";
@@ -37,7 +37,10 @@ const NAV_ITEMS = [
   { href: "/admin/events", label: "Evenementen", icon: CalendarDays },
 ];
 
-const MANAGE_ITEMS = [{ href: "/admin/users", label: "Gebruikers", icon: UsersIcon }];
+const MANAGE_ITEMS = [
+  { href: "/admin/users", label: "Gebruikers", icon: UsersIcon },
+  { href: "/admin/templates", label: "Sjablonen", icon: LayoutTemplate },
+];
 
 function isRouteActive(pathname: string, href: string) {
   return href === "/admin" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -16,12 +16,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ImageOverlayEditor, type EditMode } from "@/components/image-overlay-editor";
+import { EventFullscreenHeader } from "@/components/event-fullscreen-header";
+import { MapVersionHistoryDialog } from "@/components/map-version-history-dialog";
 import { uploadMapImage, saveMapCorners } from "@/actions/map";
 import { saveGridConfig } from "@/actions/grid";
 import { rasterizePdfToImageFile } from "@/lib/pdf-to-image";
 import { resizeImageFile } from "@/lib/resize-image";
 import { getContrastCasingColor } from "@/lib/grid-style";
-import type { CornerSet, GridLabelOrientation } from "@/lib/geo";
+import { formatGridCode, type CornerSet, type GridLabelOrientation } from "@/lib/geo";
 import type { eventMap, gridConfig } from "@/db/schema";
 
 type ExistingMap = typeof eventMap.$inferSelect;
@@ -50,11 +52,15 @@ function gridCornersFromExisting(existing: ExistingGrid | null): CornerSet | nul
 export function MapImageEditor({
   eventId,
   eventSlug,
+  eventName,
+  tabs,
   existingMap,
   existingGrid,
 }: {
   eventId: string;
   eventSlug: string;
+  eventName: string;
+  tabs: { href: string; label: string }[];
   existingMap: ExistingMap | null;
   existingGrid: ExistingGrid | null;
 }) {
@@ -85,6 +91,34 @@ export function MapImageEditor({
   const [labelOrientation, setLabelOrientation] = useState<GridLabelOrientation>(
     existingGrid?.labelOrientation ?? "row-column",
   );
+  const [labelPrefix, setLabelPrefix] = useState(existingGrid?.labelPrefix ?? "");
+  const [labelLetterStart, setLabelLetterStart] = useState(existingGrid?.labelLetterStart ?? 0);
+  const [labelNumberStart, setLabelNumberStart] = useState(existingGrid?.labelNumberStart ?? 1);
+  const [labelLetterGroupSize, setLabelLetterGroupSize] = useState(
+    existingGrid?.labelLetterGroupSize ?? 0,
+  );
+
+  const labelExampleCodes = useMemo(() => {
+    const opts = {
+      prefix: labelPrefix,
+      letterStart: labelLetterStart,
+      numberStart: labelNumberStart,
+      letterGroupSize: labelLetterGroupSize,
+    };
+    const toColRow = (letterAxis: number, numberAxis: number) =>
+      labelOrientation === "row-column"
+        ? { col: numberAxis, row: letterAxis }
+        : { col: letterAxis, row: numberAxis };
+
+    const first = toColRow(0, 0);
+    const secondLetterAxis = labelLetterGroupSize > 0 ? labelLetterGroupSize : 1;
+    const second = toColRow(secondLetterAxis, 0);
+
+    return [
+      formatGridCode(first.col, first.row, labelOrientation, opts),
+      formatGridCode(second.col, second.row, labelOrientation, opts),
+    ].join(", ");
+  }, [labelPrefix, labelLetterStart, labelNumberStart, labelLetterGroupSize, labelOrientation]);
   const [lineColor, setLineColor] = useState(existingGrid?.lineColor ?? "#111827");
   const [lineWidth, setLineWidth] = useState(existingGrid?.lineWidth ?? 3);
   const [casingColor, setCasingColor] = useState(
@@ -119,8 +153,24 @@ export function MapImageEditor({
 
       const result = await uploadMapImage(eventId, eventSlug, formData);
       setImage(result);
-      setCorners(null);
-      toast.success("Plattegrond geüpload. Plaats 'm op de kaart en pas 'm passend.");
+
+      if (corners) {
+        // Re-upload of an already-placed plattegrond: keep the existing geo-plaatsing
+        // and just swap which image renders there. Persist right away so the new
+        // corners+image are saved even if the admin never touches "Plaatsing opslaan".
+        await saveMapCorners({
+          eventId,
+          eventSlug,
+          imageUrl: result.imageUrl,
+          imageWidth: result.imageWidth,
+          imageHeight: result.imageHeight,
+          corners,
+        });
+        router.refresh();
+        toast.success("Plattegrond bijgewerkt — plaatsing is ongewijzigd gebleven.");
+      } else {
+        toast.success("Plattegrond geüpload. Plaats 'm op de kaart en pas 'm passend.");
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Upload mislukt.");
     } finally {
@@ -160,6 +210,10 @@ export function MapImageEditor({
         columns,
         rows,
         labelOrientation,
+        labelPrefix,
+        labelLetterStart,
+        labelNumberStart,
+        labelLetterGroupSize,
         lineColor,
         lineWidth,
         casingColor,
@@ -174,34 +228,49 @@ export function MapImageEditor({
     }
   }
 
-  return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle>Plattegrond</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <Label htmlFor="map-image">
-            {image ? "Andere plattegrond uploaden" : "Plattegrond uploaden"}
-          </Label>
-          <Input
-            id="map-image"
-            type="file"
-            accept="image/png,image/jpeg,image/webp,.pdf,application/pdf"
-            onChange={handleFileChange}
-            disabled={uploading}
-          />
-          <p className="text-xs text-muted-foreground">
-            PNG, JPG of PDF. Bij een PDF wordt de eerste pagina gebruikt.
-          </p>
-          {uploading && <p className="text-xs text-muted-foreground">Bezig met verwerken...</p>}
-        </CardContent>
-      </Card>
+  const uploadCard = (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between gap-2">
+        <CardTitle>Plattegrond</CardTitle>
+        {existingMap && <MapVersionHistoryDialog eventId={eventId} eventSlug={eventSlug} />}
+      </CardHeader>
+      <CardContent className="space-y-2">
+        <Label htmlFor="map-image">
+          {image ? "Andere plattegrond uploaden" : "Plattegrond uploaden"}
+        </Label>
+        <Input
+          id="map-image"
+          type="file"
+          accept="image/png,image/jpeg,image/webp,.pdf,application/pdf"
+          onChange={handleFileChange}
+          disabled={uploading}
+        />
+        <p className="text-xs text-muted-foreground">
+          PNG, JPG of PDF. Bij een PDF wordt de eerste pagina gebruikt.
+        </p>
+        {uploading && <p className="text-xs text-muted-foreground">Bezig met verwerken...</p>}
+      </CardContent>
+    </Card>
+  );
 
-      {image && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[320px_1fr]">
-          <div className="space-y-4">
-            <Card>
+  if (!image) {
+    return (
+      <div className="fixed inset-x-0 bottom-0 top-16 z-40 flex flex-col bg-background">
+        <EventFullscreenHeader eventSlug={eventSlug} eventName={eventName} tabs={tabs} />
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="mx-auto max-w-lg space-y-4">{uploadCard}</div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-x-0 bottom-0 top-16 z-40 flex flex-col bg-background">
+      <EventFullscreenHeader eventSlug={eventSlug} eventName={eventName} tabs={tabs} />
+      <div className="flex min-h-0 flex-1">
+      <div className="w-80 shrink-0 space-y-4 overflow-y-auto border-r p-4">
+        {uploadCard}
+        <Card>
               <CardContent className="pt-6">
                 <p className="mb-2 text-sm font-medium">Wat pas je aan?</p>
                 <p className="mb-3 text-xs text-muted-foreground">
@@ -319,6 +388,68 @@ export function MapImageEditor({
                       Moet overeenkomen met de labels die al op de plattegrond staan afgedrukt.
                     </p>
                   </div>
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    <div className="space-y-1">
+                      <Label htmlFor="labelPrefix">Label-prefix</Label>
+                      <Input
+                        id="labelPrefix"
+                        value={labelPrefix}
+                        onChange={(e) => setLabelPrefix(e.target.value)}
+                        placeholder="bv. 10"
+                        maxLength={12}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="labelLetterStart">Startletter</Label>
+                      <Select
+                        value={String.fromCharCode(65 + labelLetterStart)}
+                        onValueChange={(v) => setLabelLetterStart((v ?? "A").charCodeAt(0) - 65)}
+                      >
+                        <SelectTrigger id="labelLetterStart" className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)).map(
+                            (letter) => (
+                              <SelectItem key={letter} value={letter}>
+                                {letter}
+                              </SelectItem>
+                            ),
+                          )}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="labelNumberStart">Startnummer</Label>
+                      <Input
+                        id="labelNumberStart"
+                        type="number"
+                        value={labelNumberStart}
+                        onChange={(e) => setLabelNumberStart(Number(e.target.value))}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="labelLetterGroupSize">Subcellen per letter</Label>
+                      <Input
+                        id="labelLetterGroupSize"
+                        type="number"
+                        min={0}
+                        value={labelLetterGroupSize}
+                        onChange={(e) => setLabelLetterGroupSize(Number(e.target.value))}
+                        placeholder="0 = uit"
+                      />
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Handig als deze plattegrond maar een deel is van een grotere, al bestaande
+                    grid-indeling. Voorbeeld met deze instellingen:{" "}
+                    <span className="font-mono font-medium text-foreground">
+                      {labelExampleCodes}
+                    </span>
+                    . Laat &quot;Subcellen per letter&quot; op 0 voor gewone codes zoals A1, B2 —
+                    zet 'm bv. op 4 als elke letter-zone (zoals &quot;E&quot;) op de plattegrond
+                    zelf al in 4 genummerde stukken is verdeeld.
+                  </p>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <Label htmlFor="lineColor">Lijnkleur</Label>
@@ -392,30 +523,33 @@ export function MapImageEditor({
                 </CardContent>
               </Card>
             )}
-          </div>
+      </div>
 
-          <div className="h-[75vh] overflow-hidden rounded-md border">
-            <ImageOverlayEditor
-              imageUrl={image.imageUrl}
-              imageWidth={image.imageWidth}
-              imageHeight={image.imageHeight}
-              corners={corners}
-              onCornersChange={setCorners}
-              opacity={opacity}
-              gridCorners={gridCorners}
-              onGridCornersChange={setGridCorners}
-              gridColumns={columns}
-              gridRows={rows}
-              gridLabelOrientation={labelOrientation}
-              gridLineColor={lineColor}
-              gridLineWidth={lineWidth}
-              gridCasingColor={casingColor}
-              gridCasingWidth={casingWidth}
-              mode={mode}
-            />
-          </div>
-        </div>
-      )}
+      <div className="min-w-0 flex-1">
+        <ImageOverlayEditor
+          imageUrl={image.imageUrl}
+          imageWidth={image.imageWidth}
+          imageHeight={image.imageHeight}
+          corners={corners}
+          onCornersChange={setCorners}
+          opacity={opacity}
+          gridCorners={gridCorners}
+          onGridCornersChange={setGridCorners}
+          gridColumns={columns}
+          gridRows={rows}
+          gridLabelOrientation={labelOrientation}
+          gridLabelPrefix={labelPrefix}
+          gridLabelLetterStart={labelLetterStart}
+          gridLabelNumberStart={labelNumberStart}
+          gridLabelLetterGroupSize={labelLetterGroupSize}
+          gridLineColor={lineColor}
+          gridLineWidth={lineWidth}
+          gridCasingColor={casingColor}
+          gridCasingWidth={casingWidth}
+          mode={mode}
+        />
+      </div>
+      </div>
     </div>
   );
 }

@@ -20,5 +20,5 @@ export default async function EventActivityPage({
 
   const entries = await listActivity(ev.id);
 
-  return <ActivityLogView entries={entries} />;
+  return <ActivityLogView eventId={ev.id} entries={entries} />;
 }

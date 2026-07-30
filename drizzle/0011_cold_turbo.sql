@@ -1,0 +1,1 @@
+ALTER TABLE "grid_config" ADD COLUMN "label_letter_group_size" integer DEFAULT 0 NOT NULL;

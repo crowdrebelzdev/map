@@ -5,6 +5,7 @@ import { and, asc, desc, eq, gt, isNull, or } from "drizzle-orm";
 import { db } from "@/db";
 import { broadcast, eventMember, user } from "@/db/schema";
 import { requireAnyEventAccess, requireEventPermission } from "@/lib/event-access";
+import { sendBroadcastPush } from "@/lib/web-push";
 
 const MAX_MESSAGE_LENGTH = 300;
 
@@ -38,6 +39,13 @@ export async function sendBroadcast(
   await db
     .insert(broadcast)
     .values({ eventId, senderId: session.user.id, recipientId: recipientId || null, message: trimmed });
+
+  // Fire-and-forget: push delivery is a best-effort extra on top of the in-app
+  // polling/toast, never something that should block or fail the broadcast itself.
+  sendBroadcastPush(eventId, recipientId || null, {
+    title: recipientId ? "Bericht van command center" : "Melding van command center",
+    body: trimmed,
+  }).catch(() => {});
 
   revalidatePath(`/admin/events/${eventSlug}/live`);
 }

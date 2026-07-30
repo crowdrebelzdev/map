@@ -7,6 +7,7 @@ import { listIncidents, resolveIncident } from "@/actions/incidents";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { cn } from "@/lib/utils";
 
 type IncidentRow = Awaited<ReturnType<typeof listIncidents>>[number];
@@ -86,7 +87,14 @@ export function IncidentsSheet({
         </SheetHeader>
         <div className="flex flex-col gap-2 overflow-y-auto px-4 pb-4">
           {incidents.length === 0 && (
-            <p className="text-sm text-muted-foreground">Nog geen meldingen.</p>
+            <Empty className="border-0 p-0">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <AlertTriangle />
+                </EmptyMedia>
+                <EmptyTitle>Nog geen meldingen</EmptyTitle>
+              </EmptyHeader>
+            </Empty>
           )}
           {incidents.map((i) => (
             <div

@@ -27,6 +27,16 @@ export function localMetersToLatLng(east: number, north: number, refLat: number)
   };
 }
 
+/** Straight-line distance in meters between two points, via the same flat-earth
+ * approximation used throughout this file — accurate enough at event scale (a venue
+ * spans meters to a few kilometers, nowhere near where the flat-earth error compounds). */
+export function distanceMeters(a: LatLng, b: LatLng): number {
+  const refLat = (a.lat + b.lat) / 2;
+  const east = (b.lng - a.lng) * metersPerDegLng(refLat);
+  const north = (b.lat - a.lat) * metersPerDegLat();
+  return Math.sqrt(east * east + north * north);
+}
+
 // --- Generic linear algebra (Gaussian elimination with partial pivoting) ---
 
 function solveLinearSystem(A: number[][], b: number[]): number[] {
@@ -217,6 +227,21 @@ export function defaultQuadAt(
 
 export type GridLabelOrientation = "column-row" | "row-column";
 
+/** Lets a grid that only covers part of a venue's larger, pre-printed grid line up with it
+ * (e.g. a plattegrond labelled "10E1".."10E3" needs prefix "10" and letterStart pointing at
+ * "E"). Omitting this reproduces the old always-starts-at-A1 behavior exactly.
+ *
+ * `letterGroupSize`, when set (>0), subdivides the letter axis into groups of that size and
+ * switches the code shape to "{number}{letter}{subnumber}" (e.g. "10E1".."10E4", "10F1"..) —
+ * how many real venues print their own master grid, with a coarse lettered zone further split
+ * into a handful of numbered sub-cells. */
+export type GridLabelOptions = {
+  prefix?: string;
+  letterStart?: number;
+  numberStart?: number;
+  letterGroupSize?: number;
+};
+
 export type GridConfigInput = {
   originPixelX: number;
   originPixelY: number;
@@ -225,6 +250,7 @@ export type GridConfigInput = {
   columns: number;
   rows: number;
   labelOrientation: GridLabelOrientation;
+  labelOptions?: GridLabelOptions;
 };
 
 export type GridCell = {
@@ -258,10 +284,23 @@ export function formatGridCode(
   col: number,
   row: number,
   orientation: GridLabelOrientation,
+  labelOptions?: GridLabelOptions,
 ): string {
-  return orientation === "row-column"
-    ? `${columnLabel(row)}${col + 1}`
-    : `${columnLabel(col)}${row + 1}`;
+  const prefix = labelOptions?.prefix ?? "";
+  const letterStart = labelOptions?.letterStart ?? 0;
+  const numberStart = labelOptions?.numberStart ?? 1;
+  const groupSize = labelOptions?.letterGroupSize ?? 0;
+
+  const letterAxis = orientation === "row-column" ? row : col;
+  const numberAxis = orientation === "row-column" ? col : row;
+
+  if (groupSize > 0) {
+    const groupIndex = Math.floor(letterAxis / groupSize);
+    const subNumber = (letterAxis % groupSize) + 1;
+    return `${prefix}${numberAxis + numberStart}${columnLabel(groupIndex + letterStart)}${subNumber}`;
+  }
+
+  return `${prefix}${columnLabel(letterAxis + letterStart)}${numberAxis + numberStart}`;
 }
 
 export function computeGridCells(t: Transform, grid: GridConfigInput): GridCell[] {
@@ -285,7 +324,7 @@ export function computeGridCells(t: Transform, grid: GridConfigInput): GridCell[
       const lngs = corners.map((c) => c.lng);
 
       cells.push({
-        code: formatGridCode(col, row, grid.labelOrientation),
+        code: formatGridCode(col, row, grid.labelOrientation, grid.labelOptions),
         col,
         row,
         pixelBounds: { minX, minY, maxX, maxY },
@@ -312,6 +351,7 @@ export function computeGridCellsFromQuad(
   columns: number,
   rows: number,
   labelOrientation: GridLabelOrientation,
+  labelOptions?: GridLabelOptions,
 ): GridCell[] {
   const transform = computeTransform(columns, rows, corners);
   return computeGridCells(transform, {
@@ -322,6 +362,7 @@ export function computeGridCellsFromQuad(
     columns,
     rows,
     labelOrientation,
+    labelOptions,
   });
 }
 
@@ -356,27 +397,59 @@ export function gridCellsToGeoJSON(cells: GridCell[]) {
   return { lines, labels };
 }
 
-/** Parse a grid code like "C4" or "AB12" into { col, row } (0-indexed), given the labelling orientation. Returns null if invalid. */
+function letterToIndex(letters: string): number {
+  let index = 0;
+  for (const char of letters) {
+    index = index * 26 + (char.charCodeAt(0) - 64);
+  }
+  return index - 1;
+}
+
+/** Parse a grid code like "C4" or "10E1" into { col, row } (0-indexed), given the labelling
+ * orientation and the same labelOptions the grid was rendered with. Returns null if invalid,
+ * including when the code doesn't start with the expected prefix. */
 export function parseGridCode(
   code: string,
   orientation: GridLabelOrientation,
+  labelOptions?: GridLabelOptions,
 ): { col: number; row: number } | null {
-  const match = code.trim().toUpperCase().match(/^([A-Z]+)(\d+)$/);
-  if (!match) return null;
+  const prefix = labelOptions?.prefix ?? "";
+  const letterStart = labelOptions?.letterStart ?? 0;
+  const numberStart = labelOptions?.numberStart ?? 1;
+  const groupSize = labelOptions?.letterGroupSize ?? 0;
 
-  const [, letters, digits] = match;
-  let letterIndex = 0;
-  for (const char of letters) {
-    letterIndex = letterIndex * 26 + (char.charCodeAt(0) - 64);
+  let input = code.trim().toUpperCase();
+  if (prefix) {
+    const normalizedPrefix = prefix.trim().toUpperCase();
+    if (!input.startsWith(normalizedPrefix)) return null;
+    input = input.slice(normalizedPrefix.length);
   }
-  letterIndex -= 1;
 
-  const numberIndex = parseInt(digits, 10) - 1;
-  if (numberIndex < 0) return null;
+  let letterAxis: number;
+  let numberAxis: number;
+
+  if (groupSize > 0) {
+    const match = input.match(/^(\d+)([A-Z]+)(\d+)$/);
+    if (!match) return null;
+    const [, numberDigits, letters, subDigits] = match;
+    const groupIndex = letterToIndex(letters) - letterStart;
+    const subIndex = parseInt(subDigits, 10) - 1;
+    if (groupIndex < 0 || subIndex < 0 || subIndex >= groupSize) return null;
+    letterAxis = groupIndex * groupSize + subIndex;
+    numberAxis = parseInt(numberDigits, 10) - numberStart;
+  } else {
+    const match = input.match(/^([A-Z]+)(\d+)$/);
+    if (!match) return null;
+    const [, letters, digits] = match;
+    letterAxis = letterToIndex(letters) - letterStart;
+    numberAxis = parseInt(digits, 10) - numberStart;
+  }
+
+  if (letterAxis < 0 || numberAxis < 0) return null;
 
   return orientation === "row-column"
-    ? { row: letterIndex, col: numberIndex }
-    : { col: letterIndex, row: numberIndex };
+    ? { row: letterAxis, col: numberAxis }
+    : { col: letterAxis, row: numberAxis };
 }
 
 /** Find which grid cell a lat/lng point falls into, if any, for a grid placed as its own quad. */
@@ -386,6 +459,7 @@ export function findGridCellInQuad(
   rows: number,
   labelOrientation: GridLabelOrientation,
   point: LatLng,
+  labelOptions?: GridLabelOptions,
 ): GridCell | null {
   const transform = computeTransform(columns, rows, corners);
   const pixel = latLngToPixel(transform, point);
@@ -398,8 +472,55 @@ export function findGridCellInQuad(
   }
 
   return (
-    computeGridCellsFromQuad(corners, columns, rows, labelOrientation).find(
+    computeGridCellsFromQuad(corners, columns, rows, labelOrientation, labelOptions).find(
       (c) => c.col === col && c.row === row,
     ) ?? null
   );
+}
+
+/** Ray-casting point-in-polygon test, working directly in lat/lng — fine at the local
+ * scale an event venue covers (same flat-earth approximation used elsewhere in this file).
+ * Feeds area click-detection, grid-cell overlap, and live-location containment. */
+export function isPointInPolygon(point: LatLng, vertices: LatLng[]): boolean {
+  if (vertices.length < 3) return false;
+  let inside = false;
+  for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
+    const vi = vertices[i];
+    const vj = vertices[j];
+    const intersects =
+      vi.lng > point.lng !== vj.lng > point.lng &&
+      point.lat < ((vj.lat - vi.lat) * (point.lng - vi.lng)) / (vj.lng - vi.lng) + vi.lat;
+    if (intersects) inside = !inside;
+  }
+  return inside;
+}
+
+function segmentsIntersect(p1: LatLng, p2: LatLng, p3: LatLng, p4: LatLng): boolean {
+  const cross = (o: LatLng, a: LatLng, b: LatLng) =>
+    (a.lng - o.lng) * (b.lat - o.lat) - (a.lat - o.lat) * (b.lng - o.lng);
+  const d1 = cross(p3, p4, p1);
+  const d2 = cross(p3, p4, p2);
+  const d3 = cross(p1, p2, p3);
+  const d4 = cross(p1, p2, p4);
+  return (d1 > 0 !== d2 > 0) && (d3 > 0 !== d4 > 0);
+}
+
+/** True if two polygons overlap at all — including a sliver where neither has a vertex
+ * inside the other (e.g. an area edge just clipping a grid cell's corner). Used instead of
+ * `isPointInPolygon` on a cell's center, which would miss any cell an area only partially
+ * covers. */
+export function polygonsIntersect(a: LatLng[], b: LatLng[]): boolean {
+  if (a.length < 3 || b.length < 3) return false;
+  if (a.some((p) => isPointInPolygon(p, b))) return true;
+  if (b.some((p) => isPointInPolygon(p, a))) return true;
+  for (let i = 0; i < a.length; i++) {
+    const a1 = a[i];
+    const a2 = a[(i + 1) % a.length];
+    for (let j = 0; j < b.length; j++) {
+      const b1 = b[j];
+      const b2 = b[(j + 1) % b.length];
+      if (segmentsIntersect(a1, a2, b1, b2)) return true;
+    }
+  }
+  return false;
 }

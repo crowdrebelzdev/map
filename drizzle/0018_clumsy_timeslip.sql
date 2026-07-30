@@ -1,0 +1,1 @@
+ALTER TABLE "event" ADD COLUMN "public_access_mode" text DEFAULT 'members_only' NOT NULL;

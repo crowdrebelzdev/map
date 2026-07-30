@@ -1,7 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSessionCookie } from "better-auth/cookies";
 
+// `/events/[eventSlug]/map` is reachable by anonymous visitors when the event's
+// `publicAccessMode` allows it — that page (and its layout) do their own DB-backed access
+// check, since this proxy has no DB access and can't know an event's mode. Everything else
+// under /events (and all of /admin) still requires a session at this layer.
+const PUBLIC_MAP_PATTERN = /^\/events\/[^/]+\/map\/?$/;
+
 export function proxy(request: NextRequest) {
+  if (PUBLIC_MAP_PATTERN.test(request.nextUrl.pathname)) {
+    return NextResponse.next();
+  }
+
   const sessionCookie = getSessionCookie(request);
 
   if (!sessionCookie) {

@@ -1,7 +1,7 @@
 import { asc, count, desc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { eventMap, gridConfig, poi, poiCategory, searchLog } from "@/db/schema";
+import { areaCategory, eventMap, gridConfig, mapArea, poi, poiCategory, searchLog } from "@/db/schema";
 import { requireEventBySlug } from "@/lib/get-event";
 import { getServerSession } from "@/lib/get-session";
 import { getEventAccess, hasEventPermission } from "@/lib/event-access";
@@ -27,13 +27,18 @@ export default async function EventLivePage({
     redirect("/admin/events");
   }
 
-  const [map, grid, pois, categories, liveUsers, topSearches, incidents, recipients] = await Promise.all([
+  const [map, grid, pois, categories, areas, areaCategories, liveUsers, topSearches, incidents, recipients] = await Promise.all([
     db.query.eventMap.findFirst({ where: eq(eventMap.eventId, ev.id) }),
     db.query.gridConfig.findFirst({ where: eq(gridConfig.eventId, ev.id) }),
     db.query.poi.findMany({ where: eq(poi.eventId, ev.id) }),
     db.query.poiCategory.findMany({
       where: eq(poiCategory.eventId, ev.id),
       orderBy: asc(poiCategory.sortOrder),
+    }),
+    db.query.mapArea.findMany({ where: eq(mapArea.eventId, ev.id) }),
+    db.query.areaCategory.findMany({
+      where: eq(areaCategory.eventId, ev.id),
+      orderBy: asc(areaCategory.sortOrder),
     }),
     canViewLive ? getLiveLocations(ev.id) : Promise.resolve([]),
     db
@@ -58,6 +63,12 @@ export default async function EventLivePage({
         grid.columns,
         grid.rows,
         grid.labelOrientation,
+        {
+          prefix: grid.labelPrefix,
+          letterStart: grid.labelLetterStart,
+          numberStart: grid.labelNumberStart,
+          letterGroupSize: grid.labelLetterGroupSize,
+        },
       )
     : [];
 
@@ -70,6 +81,8 @@ export default async function EventLivePage({
       gridCells={gridCells}
       pois={pois}
       categories={categories}
+      areas={areas}
+      areaCategories={areaCategories}
       canViewLive={canViewLive}
       canManageIncidents={canManageIncidents}
       initialLiveUsers={liveUsers.map((r) => ({

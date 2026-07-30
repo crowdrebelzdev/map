@@ -13,23 +13,29 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { PoiFilterSheet } from "@/components/poi-filter-sheet";
-import { IncidentControls } from "@/components/incident-controls";
+import { PoiSizeControl } from "@/components/poi-size-control";
 import { BroadcastListener } from "@/components/broadcast-listener";
-import { MessagesSheet } from "@/components/messages-sheet";
+import { InstallPromptBanner } from "@/components/install-prompt-banner";
+import { PushSubscribeButton } from "@/components/push-subscribe-button";
+import { VisitorNameGate } from "@/components/visitor-name-gate";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   EventMapView,
+  type EventMapArea,
+  type EventMapAreaCategory,
   type EventMapPoiCategory,
   type FlyToTarget,
 } from "@/components/event-map-view";
 import {
   computeGridCellsFromQuad,
+  distanceMeters,
   findGridCellInQuad,
   parseGridCode,
   type GridCell,
   type LatLng,
 } from "@/lib/geo";
 import type { listMyMessages } from "@/actions/broadcasts";
-import type { eventMap, gridConfig, poi, eventDay } from "@/db/schema";
+import type { eventMap, gridConfig, poi, eventDay, PublicAccessMode } from "@/db/schema";
 
 type MapRow = typeof eventMap.$inferSelect;
 type GridRow = typeof gridConfig.$inferSelect;
@@ -37,6 +43,24 @@ type PoiRow = typeof poi.$inferSelect;
 type EventDayRow = typeof eventDay.$inferSelect;
 
 const ALL_DAYS_VALUE = "__all__";
+
+const visibleCategoriesKey = (eventId: string) => `visible-categories-${eventId}`;
+const visibleAreaCategoriesKey = (eventId: string) => `visible-area-categories-${eventId}`;
+
+/** Reads a JSON array of ids back out of localStorage (e.g. a saved category-visibility
+ * filter) — falls back safely on the server (no `window`), a first-ever visit (nothing
+ * stored yet), or corrupted/foreign data in that key. */
+function readStoredIds(key: string, fallback: string[]): string[] {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.every((v) => typeof v === "string") ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
 
 type GpsStatus = "locating" | "active" | "denied" | "unavailable" | "insecure" | "unsupported";
 
@@ -52,35 +76,84 @@ export function OperationalMap({
   eventId,
   eventSlug,
   currentUserId,
+  isStaff,
+  publicAccessMode,
   map,
   grid,
   pois,
   categories,
+  areas,
+  areaCategories,
   eventDays,
   initialMessages,
 }: {
   eventId: string;
   eventSlug: string;
-  currentUserId: string;
+  currentUserId: string | null;
+  /** Real teamlid/org-admin, as opposed to a "public" visitor let in via `publicAccessMode` —
+   * gates live-ops features (live locatie delen, broadcasts, push) that need a real account. */
+  isStaff: boolean;
+  publicAccessMode: PublicAccessMode;
   map: MapRow | null;
   grid: GridRow | null;
   pois: PoiRow[];
   categories: EventMapPoiCategory[];
+  areas: EventMapArea[];
+  areaCategories: EventMapAreaCategory[];
   eventDays: EventDayRow[];
   initialMessages: Awaited<ReturnType<typeof listMyMessages>>;
 }) {
   const [query, setQuery] = useState("");
-  const [visibleCategories, setVisibleCategories] = useState<string[]>(
-    categories.map((c) => c.id),
+  const [visibleCategories, setVisibleCategories] = useState<string[]>(() =>
+    readStoredIds(visibleCategoriesKey(eventId), categories.map((c) => c.id)),
   );
+  const [visibleAreaCategoryIds, setVisibleAreaCategoryIds] = useState<string[]>(() =>
+    readStoredIds(visibleAreaCategoriesKey(eventId), areaCategories.map((c) => c.id)),
+  );
+
+  // A freshly created category isn't in `visibleCategories` yet (that state was only seeded
+  // from `categories` once, at mount) — without this it'd default to hidden in the filters.
+  useEffect(() => {
+    setVisibleCategories((prev) => {
+      const newIds = categories.map((c) => c.id).filter((id) => !prev.includes(id));
+      return newIds.length > 0 ? [...prev, ...newIds] : prev;
+    });
+  }, [categories]);
+
+  // Persist filter choices so a refresh (or coming back later) doesn't reset to "alles
+  // zichtbaar" — separate from the "auto-add new category" effect above, which still runs
+  // on top of whatever was restored here.
+  useEffect(() => {
+    localStorage.setItem(visibleCategoriesKey(eventId), JSON.stringify(visibleCategories));
+  }, [eventId, visibleCategories]);
+
+  useEffect(() => {
+    localStorage.setItem(visibleAreaCategoriesKey(eventId), JSON.stringify(visibleAreaCategoryIds));
+  }, [eventId, visibleAreaCategoryIds]);
+
+  useEffect(() => {
+    setVisibleAreaCategoryIds((prev) => {
+      const newIds = areaCategories.map((c) => c.id).filter((id) => !prev.includes(id));
+      return newIds.length > 0 ? [...prev, ...newIds] : prev;
+    });
+  }, [areaCategories]);
+
+  const [poiSizeMultiplier, setPoiSizeMultiplier] = useState(1);
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const [selectedDayId, setSelectedDayId] = useState<string>(() => {
     const todayIso = new Date().toISOString().slice(0, 10);
     return eventDays.find((d) => d.date === todayIso)?.id ?? ALL_DAYS_VALUE;
   });
   const visiblePois = useMemo(() => {
-    if (selectedDayId === ALL_DAYS_VALUE) return pois;
-    return pois.filter((p) => !p.eventDayId || p.eventDayId === selectedDayId);
+    const byDay =
+      selectedDayId === ALL_DAYS_VALUE
+        ? pois
+        : pois.filter((p) => !p.eventDayId || p.eventDayId === selectedDayId);
+    const nowHHMM = new Date().toTimeString().slice(0, 5);
+    return byDay.filter((p) => {
+      if (!p.startTime || !p.endTime) return true;
+      return nowHHMM >= p.startTime && nowHHMM <= p.endTime;
+    });
   }, [pois, selectedDayId]);
   const [flyToTarget, setFlyToTarget] = useState<FlyToTarget | null>(null);
   const [highlightedCell, setHighlightedCell] = useState<GridCell | null>(null);
@@ -120,15 +193,18 @@ export function OperationalMap({
 
   // Automatically and periodically share the real GPS position while this page is open
   // — powers the backoffice "live locations" view. Best-effort: a failed upload (flaky
-  // signal) is silently dropped rather than shown to the field user.
+  // signal) is silently dropped rather than shown to the field user. Public (non-staff)
+  // visitors never share their location with the command center — the action requires a
+  // real account anyway, and would just fail for them.
   useEffect(() => {
+    if (!isStaff) return;
     const id = setInterval(() => {
       const pos = latestGpsRef.current;
       if (!pos) return;
       updateLiveLocation(eventId, pos.lat, pos.lng, null).catch(() => {});
     }, 20_000);
     return () => clearInterval(id);
-  }, [eventId]);
+  }, [eventId, isStaff]);
 
   const [isOnline, setIsOnline] = useState(true);
   const [offlineStatus, setOfflineStatus] = useState<"idle" | "downloading" | "done" | "error">(
@@ -252,10 +328,29 @@ export function OperationalMap({
     };
   }, [grid]);
 
+  const gridLabelOptions = useMemo(
+    () =>
+      grid
+        ? {
+            prefix: grid.labelPrefix,
+            letterStart: grid.labelLetterStart,
+            numberStart: grid.labelNumberStart,
+            letterGroupSize: grid.labelLetterGroupSize,
+          }
+        : undefined,
+    [grid],
+  );
+
   const gridCells = useMemo(() => {
     if (!grid || !gridCorners) return [];
-    return computeGridCellsFromQuad(gridCorners, grid.columns, grid.rows, grid.labelOrientation);
-  }, [grid, gridCorners]);
+    return computeGridCellsFromQuad(
+      gridCorners,
+      grid.columns,
+      grid.rows,
+      grid.labelOrientation,
+      gridLabelOptions,
+    );
+  }, [grid, gridCorners, gridLabelOptions]);
 
   const currentCell = useMemo(() => {
     if (!grid || !gridCorners || !userPosition) return null;
@@ -265,24 +360,39 @@ export function OperationalMap({
       grid.rows,
       grid.labelOrientation,
       userPosition,
+      gridLabelOptions,
     );
-  }, [grid, gridCorners, userPosition]);
+  }, [grid, gridCorners, userPosition, gridLabelOptions]);
 
   const gridMatch = useMemo(() => {
     if (!query.trim() || gridCells.length === 0 || !grid) return null;
-    const parsed = parseGridCode(query, grid.labelOrientation);
+    const parsed = parseGridCode(query, grid.labelOrientation, gridLabelOptions);
     if (!parsed) return null;
     return gridCells.find((c) => c.col === parsed.col && c.row === parsed.row) ?? null;
-  }, [query, gridCells, grid]);
+  }, [query, gridCells, grid, gridLabelOptions]);
 
   const poiMatches = useMemo(() => {
     if (!query.trim()) return [];
     const q = query.trim().toLowerCase();
-    return visiblePois.filter((p) => p.name.toLowerCase().includes(q)).slice(0, 6);
-  }, [query, visiblePois]);
+    const matches = visiblePois.filter((p) => p.name.toLowerCase().includes(q));
+    // Closest-first when we know where the user is — falls back to source order (as before)
+    // once no position is available yet (GPS still starting up, permission denied, etc.).
+    if (userPosition) {
+      matches.sort(
+        (a, b) => distanceMeters(userPosition, a) - distanceMeters(userPosition, b),
+      );
+    }
+    return matches.slice(0, 6);
+  }, [query, visiblePois, userPosition]);
 
   function toggleCategory(categoryId: string) {
     setVisibleCategories((prev) =>
+      prev.includes(categoryId) ? prev.filter((c) => c !== categoryId) : [...prev, categoryId],
+    );
+  }
+
+  function toggleAreaCategory(categoryId: string) {
+    setVisibleAreaCategoryIds((prev) =>
       prev.includes(categoryId) ? prev.filter((c) => c !== categoryId) : [...prev, categoryId],
     );
   }
@@ -303,14 +413,14 @@ export function OperationalMap({
     });
     setHighlightedCell(gridMatch);
     setQuery("");
-    logSearch(eventId, "grid", gridMatch.code).catch(() => {});
+    if (isStaff) logSearch(eventId, "grid", gridMatch.code).catch(() => {});
   }
 
   function selectPoi(p: PoiRow) {
     setFlyToTarget({ type: "point", center: { lat: p.lat, lng: p.lng }, zoom: 19 });
     setHighlightedCell(null);
     setQuery("");
-    logSearch(eventId, "poi", p.name).catch(() => {});
+    if (isStaff) logSearch(eventId, "poi", p.name).catch(() => {});
   }
 
   function handleMapClickForManualLocation(latLng: LatLng) {
@@ -323,12 +433,15 @@ export function OperationalMap({
     setPlacingManually(false);
   }
 
+  const needsNameGate = !isStaff && publicAccessMode === "public_named";
+
   if (!map) {
-    return (
+    const empty = (
       <div className="p-4 text-sm text-muted-foreground">
         Voor dit evenement is nog geen kaart ingesteld.
       </div>
     );
+    return needsNameGate ? <VisitorNameGate eventId={eventId}>{empty}</VisitorNameGate> : empty;
   }
 
   const showResults = query.trim().length > 0 && (gridMatch || poiMatches.length > 0);
@@ -337,7 +450,7 @@ export function OperationalMap({
   // or the automatic position falls outside the grid.
   const showManualLocationButton = !usingManualPosition && (placingManually || !currentCell);
 
-  return (
+  const content = (
     <div className="relative h-full w-full overflow-hidden">
       <EventMapView
         className="absolute inset-0"
@@ -359,6 +472,10 @@ export function OperationalMap({
         pois={visiblePois}
         categories={categories}
         visibleCategories={visibleCategories}
+        areas={areas}
+        areaCategories={areaCategories}
+        visibleAreaCategoryIds={visibleAreaCategoryIds}
+        poiSizeMultiplier={poiSizeMultiplier}
         geolocate
         flyToTarget={flyToTarget}
         userLocation={userPosition}
@@ -371,7 +488,7 @@ export function OperationalMap({
             placeholder="Zoek grid-code (bv. C4) of locatie..."
             value={query}
             onChange={(e) => handleQueryChange(e.target.value)}
-            className="bg-background shadow-md"
+            className="bg-background shadow-md dark:bg-background"
           />
           {eventDays.length > 0 && (
             <div className="mt-1.5 flex gap-1.5 overflow-x-auto">
@@ -434,12 +551,18 @@ export function OperationalMap({
           categories={categories}
           visibleCategories={visibleCategories}
           onToggle={toggleCategory}
+          pois={pois}
+          areaCategories={areaCategories}
+          visibleAreaCategoryIds={visibleAreaCategoryIds}
+          onToggleArea={toggleAreaCategory}
+          areas={areas}
         />
-        <MessagesSheet eventId={eventId} currentUserId={currentUserId} initialMessages={initialMessages} />
+        <PoiSizeControl sizeMultiplier={poiSizeMultiplier} onChange={setPoiSizeMultiplier} />
+        <ThemeToggle variant="secondary" size="icon" className="pointer-events-auto shrink-0 shadow-md" />
+        {isStaff && <PushSubscribeButton eventId={eventId} />}
       </div>
 
-      <BroadcastListener eventId={eventId} />
-      <IncidentControls eventId={eventId} eventSlug={eventSlug} position={userPosition} />
+      {isStaff && <BroadcastListener eventId={eventId} />}
 
       {placingManually && (
         <div className="pointer-events-none absolute inset-x-0 top-20 z-10 flex justify-center">
@@ -452,7 +575,9 @@ export function OperationalMap({
         </div>
       )}
 
-      <div className="pointer-events-none fixed right-3 bottom-24 z-20 flex flex-col items-end gap-2">
+      {/* Offset well above bottom-0 to clear the map's own zoom/compass/geolocate controls,
+          which now stack in that same corner (bottom-right) instead of top-right. */}
+      <div className="pointer-events-none fixed right-3 bottom-48 z-20 flex flex-col items-end gap-2">
         {usingManualPosition && (
           <Button
             variant="secondary"
@@ -477,11 +602,17 @@ export function OperationalMap({
         )}
       </div>
 
-      {!isOnline && (
+      {!isOnline ? (
         <div className="pointer-events-none fixed inset-x-0 top-16 z-20 flex justify-center">
           <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1 text-xs font-medium text-white shadow-md">
             <WifiOff size={13} />
             Je bent offline — kaart draait op opgeslagen data
+          </div>
+        </div>
+      ) : (
+        <div className="pointer-events-none fixed inset-x-0 top-16 z-20 flex justify-center">
+          <div className="pointer-events-auto">
+            <InstallPromptBanner />
           </div>
         </div>
       )}
@@ -520,4 +651,6 @@ export function OperationalMap({
       )}
     </div>
   );
+
+  return needsNameGate ? <VisitorNameGate eventId={eventId}>{content}</VisitorNameGate> : content;
 }

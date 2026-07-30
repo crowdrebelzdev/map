@@ -68,3 +68,34 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 });
+
+// Broadcasts sent via actions/broadcasts.ts's sendBroadcastPush arrive here as a Web Push
+// message — shown as a native notification even if no tab is open. The payload is plain
+// JSON `{ title, body }` (see lib/web-push.ts), not the Notification API's own format.
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+  let payload;
+  try {
+    payload = event.data.json();
+  } catch {
+    payload = { title: "Eventkaart", body: event.data.text() };
+  }
+  event.waitUntil(
+    self.registration.showNotification(payload.title || "Eventkaart", {
+      body: payload.body,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clients) => {
+      const existing = clients.find((c) => isMapPage(new URL(c.url)));
+      if (existing) return existing.focus();
+      return self.clients.openWindow("/");
+    }),
+  );
+});

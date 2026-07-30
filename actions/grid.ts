@@ -15,6 +15,10 @@ export async function saveGridConfig(input: {
   columns: number;
   rows: number;
   labelOrientation: GridLabelOrientation;
+  labelPrefix: string;
+  labelLetterStart: number;
+  labelNumberStart: number;
+  labelLetterGroupSize: number;
   lineColor: string;
   lineWidth: number;
   casingColor: string;
@@ -30,6 +34,18 @@ export async function saveGridConfig(input: {
   }
   if (input.lineWidth <= 0 || input.casingWidth < 0) {
     throw new Error("Lijndikte moet groter dan 0 zijn.");
+  }
+  if (input.labelPrefix.length > 12) {
+    throw new Error("Label-prefix mag maximaal 12 tekens zijn.");
+  }
+  if (!Number.isInteger(input.labelLetterStart) || input.labelLetterStart < 0) {
+    throw new Error("Startletter is ongeldig.");
+  }
+  if (!Number.isInteger(input.labelNumberStart)) {
+    throw new Error("Startnummer is ongeldig.");
+  }
+  if (!Number.isInteger(input.labelLetterGroupSize) || input.labelLetterGroupSize < 0) {
+    throw new Error("Subcellen per letter is ongeldig.");
   }
 
   const { corners } = input;
@@ -47,6 +63,10 @@ export async function saveGridConfig(input: {
     columns: input.columns,
     rows: input.rows,
     labelOrientation: input.labelOrientation,
+    labelPrefix: input.labelPrefix,
+    labelLetterStart: input.labelLetterStart,
+    labelNumberStart: input.labelNumberStart,
+    labelLetterGroupSize: input.labelLetterGroupSize,
     lineColor: input.lineColor,
     lineWidth: input.lineWidth,
     casingColor: input.casingColor,

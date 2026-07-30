@@ -9,6 +9,11 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "Eventkaart",
   description: "Kaart, grid en POI-beheer voor evenementen",
+  manifest: "/manifest.json",
+};
+
+export const viewport = {
+  themeColor: "#2563eb",
 };
 
 export default function RootLayout({

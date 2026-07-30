@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { event, eventMember } from "@/db/schema";
@@ -9,6 +10,11 @@ import { buttonVariants } from "@/components/ui/button";
 
 export default async function StaffEventsPage() {
   const session = await getServerSession();
+  // The parent layout no longer requires a session (it also serves the public map route) —
+  // this page itself still does, since it lists events by team membership.
+  if (!session) {
+    redirect("/sign-in?redirect=/events");
+  }
   const { organizationId } = await requireActiveOrganizationId();
   const isAdmin = session ? await isOrgAdmin(session, organizationId) : false;
 

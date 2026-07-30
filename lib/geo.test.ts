@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   computeGridCells,
   computeTransform,
+  distanceMeters,
   findGridCellInQuad,
   formatGridCode,
+  isPointInPolygon,
   latLngToPixel,
   parseGridCode,
   pixelToLatLng,
+  polygonsIntersect,
   type CornerSet,
+  type LatLng,
 } from "@/lib/geo";
 
 // A plausible non-axis-aligned placement (rotated/skewed rectangle over Amsterdam),
@@ -109,5 +113,66 @@ describe("computeGridCells / findGridCellInQuad", () => {
 
     const farAway = { lat: CORNERS.tl.lat + 1, lng: CORNERS.tl.lng + 1 };
     expect(findGridCellInQuad(CORNERS, 4, 3, "column-row", farAway)).toBeNull();
+  });
+});
+
+describe("polygonsIntersect", () => {
+  // A simple 1x1 square cell, (0,0) to (1,1) in lat/lng terms.
+  const cell: LatLng[] = [
+    { lat: 0, lng: 0 },
+    { lat: 0, lng: 1 },
+    { lat: 1, lng: 1 },
+    { lat: 1, lng: 0 },
+  ];
+
+  it("is true when one polygon fully contains the other", () => {
+    const bigArea: LatLng[] = [
+      { lat: -5, lng: -5 },
+      { lat: -5, lng: 5 },
+      { lat: 5, lng: 5 },
+      { lat: 5, lng: -5 },
+    ];
+    expect(polygonsIntersect(cell, bigArea)).toBe(true);
+  });
+
+  it("is false when polygons are entirely apart", () => {
+    const farAway: LatLng[] = [
+      { lat: 10, lng: 10 },
+      { lat: 10, lng: 11 },
+      { lat: 11, lng: 11 },
+      { lat: 11, lng: 10 },
+    ];
+    expect(polygonsIntersect(cell, farAway)).toBe(false);
+  });
+
+  it("is true when an area only clips a cell's corner, even though the cell's center stays outside", () => {
+    // Triangle covering the region beyond the line lat+lng=1.9, which clips the cell's
+    // (1, 1) corner but doesn't reach anywhere near the cell's center (0.5, 0.5) — exactly
+    // the case `isPointInPolygon(cell.center, area)` used to miss.
+    const cornerClip: LatLng[] = [
+      { lat: 0.4, lng: 1.5 },
+      { lat: 1.5, lng: 0.4 },
+      { lat: 1.5, lng: 1.5 },
+    ];
+    expect(isPointInPolygon({ lat: 0.5, lng: 0.5 }, cornerClip)).toBe(false);
+    expect(polygonsIntersect(cell, cornerClip)).toBe(true);
+  });
+});
+
+describe("distanceMeters", () => {
+  it("is zero for the same point", () => {
+    expect(distanceMeters({ lat: 52.37, lng: 4.9 }, { lat: 52.37, lng: 4.9 })).toBe(0);
+  });
+
+  it("matches the ~111.32km/degree-of-latitude approximation", () => {
+    const a = { lat: 52.0, lng: 4.9 };
+    const b = { lat: 52.001, lng: 4.9 };
+    expect(distanceMeters(a, b)).toBeCloseTo(111.32, 0);
+  });
+
+  it("is symmetric", () => {
+    const a = { lat: 52.37, lng: 4.9 };
+    const b = { lat: 52.3705, lng: 4.9012 };
+    expect(distanceMeters(a, b)).toBeCloseTo(distanceMeters(b, a), 9);
   });
 });

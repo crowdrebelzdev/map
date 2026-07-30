@@ -1,12 +1,20 @@
 import Link from "next/link";
-import { CheckCircle2, Circle } from "lucide-react";
-import { asc, count, eq } from "drizzle-orm";
+import { CheckCircle2, Circle, MapPin, Radio, ShieldAlert, Users } from "lucide-react";
+import { and, asc, count, eq, gte } from "drizzle-orm";
 import { db } from "@/db";
-import { eventMap, gridConfig, poi, poiCategory, eventMember, eventDay } from "@/db/schema";
+import { eventMap, gridConfig, poi, poiCategory, eventMember, eventDay, incident, liveLocation } from "@/db/schema";
 import { requireEventBySlug } from "@/lib/get-event";
+import { getServerSession } from "@/lib/get-session";
+import { getEventAccess, hasEventPermission } from "@/lib/event-access";
 import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EventDaysManager } from "@/components/event-days-manager";
+import { TopSearchesCard } from "@/components/top-searches-card";
+import { ExportEventPdfButton } from "@/components/export-event-pdf-button";
+
+// A live-location row this recent counts as "currently on the map" — matches the 20s
+// upload interval in operational-map.tsx with generous slack for a missed beat or two.
+const ACTIVE_WINDOW_MS = 3 * 60 * 1000;
 
 export default async function EventOverviewPage({
   params,
@@ -15,16 +23,49 @@ export default async function EventOverviewPage({
 }) {
   const { eventSlug } = await params;
   const ev = await requireEventBySlug(eventSlug);
+  const session = await getServerSession();
+  const access = await getEventAccess(ev.id, { id: session!.user.id, role: session!.user.role ?? null });
+  const canViewIncidents = hasEventPermission(access, "manage_incidents");
+  const canViewLive = hasEventPermission(access, "view_live_locations");
 
-  const [map, grid, [{ value: categoryCount }], [{ value: poiCount }], [{ value: memberCount }], days] =
-    await Promise.all([
-      db.query.eventMap.findFirst({ where: eq(eventMap.eventId, ev.id) }),
-      db.query.gridConfig.findFirst({ where: eq(gridConfig.eventId, ev.id) }),
-      db.select({ value: count() }).from(poiCategory).where(eq(poiCategory.eventId, ev.id)),
-      db.select({ value: count() }).from(poi).where(eq(poi.eventId, ev.id)),
-      db.select({ value: count() }).from(eventMember).where(eq(eventMember.eventId, ev.id)),
-      db.query.eventDay.findMany({ where: eq(eventDay.eventId, ev.id), orderBy: asc(eventDay.date) }),
-    ]);
+  const [
+    map,
+    grid,
+    [{ value: categoryCount }],
+    [{ value: poiCount }],
+    [{ value: memberCount }],
+    [{ value: openIncidentCount }],
+    [{ value: activeLiveCount }],
+    days,
+  ] = await Promise.all([
+    db.query.eventMap.findFirst({ where: eq(eventMap.eventId, ev.id) }),
+    db.query.gridConfig.findFirst({ where: eq(gridConfig.eventId, ev.id) }),
+    db.select({ value: count() }).from(poiCategory).where(eq(poiCategory.eventId, ev.id)),
+    db.select({ value: count() }).from(poi).where(eq(poi.eventId, ev.id)),
+    db.select({ value: count() }).from(eventMember).where(eq(eventMember.eventId, ev.id)),
+    canViewIncidents
+      ? db
+          .select({ value: count() })
+          .from(incident)
+          .where(and(eq(incident.eventId, ev.id), eq(incident.status, "open")))
+      : Promise.resolve([{ value: 0 }]),
+    canViewLive
+      ? db
+          .select({ value: count() })
+          .from(liveLocation)
+          .where(
+            and(eq(liveLocation.eventId, ev.id), gte(liveLocation.updatedAt, new Date(Date.now() - ACTIVE_WINDOW_MS))),
+          )
+      : Promise.resolve([{ value: 0 }]),
+    db.query.eventDay.findMany({ where: eq(eventDay.eventId, ev.id), orderBy: asc(eventDay.date) }),
+  ]);
+
+  const [exportPois, exportCategories] = access.isAdmin
+    ? await Promise.all([
+        db.query.poi.findMany({ where: eq(poi.eventId, ev.id) }),
+        db.query.poiCategory.findMany({ where: eq(poiCategory.eventId, ev.id) }),
+      ])
+    : [[], []];
 
   const items = [
     {
@@ -40,7 +81,7 @@ export default async function EventOverviewPage({
     {
       label: "Categorieën aangemaakt",
       done: categoryCount > 0,
-      href: `/admin/events/${eventSlug}/categories`,
+      href: `/admin/events/${eventSlug}/pois`,
     },
     {
       label: "POI's geplaatst",
@@ -56,8 +97,55 @@ export default async function EventOverviewPage({
 
   const doneCount = items.filter((i) => i.done).length;
 
+  const stats = [
+    { label: "POI's", value: poiCount, icon: MapPin, href: `/admin/events/${eventSlug}/pois` },
+    { label: "Teamleden", value: memberCount, icon: Users, href: `/admin/events/${eventSlug}/team` },
+    canViewIncidents && {
+      label: "Open meldingen",
+      value: openIncidentCount,
+      icon: ShieldAlert,
+      href: `/admin/events/${eventSlug}/live`,
+      alert: openIncidentCount > 0,
+    },
+    canViewLive && {
+      label: "Live op de kaart",
+      value: activeLiveCount,
+      icon: Radio,
+      href: `/admin/events/${eventSlug}/live`,
+    },
+  ].filter((s): s is Exclude<typeof s, false> => !!s);
+
   return (
     <div className="space-y-4">
+      {access.isAdmin && (
+        <div className="flex justify-end">
+          <ExportEventPdfButton
+            eventName={ev.name}
+            map={map ? { imageUrl: map.imageUrl, imageWidth: map.imageWidth, imageHeight: map.imageHeight } : null}
+            pois={exportPois.map((p) => ({ name: p.name, categoryId: p.categoryId, pixelX: p.pixelX, pixelY: p.pixelY }))}
+            categories={exportCategories.map((c) => ({ id: c.id, label: c.label, color: c.color }))}
+          />
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {stats.map((s) => (
+          <Link key={s.label} href={s.href}>
+            <Card className="transition-colors hover:bg-muted/50">
+              <CardContent className="flex items-center gap-3 py-4">
+                <s.icon className={cn("size-5 shrink-0", s.alert ? "text-destructive" : "text-muted-foreground")} />
+                <div>
+                  <p className={cn("text-2xl font-semibold leading-none", s.alert && "text-destructive")}>
+                    {s.value}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{s.label}</p>
+                </div>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>
@@ -86,6 +174,8 @@ export default async function EventOverviewPage({
       </Card>
 
       <EventDaysManager eventId={ev.id} eventSlug={eventSlug} days={days} />
+
+      {access.isAdmin && <TopSearchesCard eventId={ev.id} />}
     </div>
   );
 }

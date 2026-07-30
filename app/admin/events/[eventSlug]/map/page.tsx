@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { eventMap, gridConfig } from "@/db/schema";
 import { requireEventBySlug } from "@/lib/get-event";
 import { getServerSession } from "@/lib/get-session";
-import { getEventAccess, hasEventPermission } from "@/lib/event-access";
+import { getEventAccess, hasEventPermission, buildEventTabs } from "@/lib/event-access";
 import { MapImageEditor } from "@/components/map-image-editor";
 
 export default async function EventMapPage({
@@ -30,6 +30,8 @@ export default async function EventMapPage({
     <MapImageEditor
       eventId={ev.id}
       eventSlug={eventSlug}
+      eventName={ev.name}
+      tabs={buildEventTabs(eventSlug, access)}
       existingMap={existingMap ?? null}
       existingGrid={existingGrid ?? null}
     />

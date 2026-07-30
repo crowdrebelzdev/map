@@ -1,0 +1,1 @@
+ALTER TABLE "poi" ALTER COLUMN "extra_field_values" SET DEFAULT '[]'::jsonb;

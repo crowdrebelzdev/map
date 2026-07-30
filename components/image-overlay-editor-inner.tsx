@@ -47,6 +47,10 @@ export type ImageOverlayEditorProps = {
   gridColumns: number;
   gridRows: number;
   gridLabelOrientation: GridLabelOrientation;
+  gridLabelPrefix?: string;
+  gridLabelLetterStart?: number;
+  gridLabelNumberStart?: number;
+  gridLabelLetterGroupSize?: number;
   gridLineColor: string;
   gridLineWidth: number;
   gridCasingColor: string;
@@ -107,6 +111,10 @@ export default function ImageOverlayEditor({
   gridColumns,
   gridRows,
   gridLabelOrientation,
+  gridLabelPrefix,
+  gridLabelLetterStart,
+  gridLabelNumberStart,
+  gridLabelLetterGroupSize,
   gridLineColor,
   gridLineWidth,
   gridCasingColor,
@@ -147,8 +155,22 @@ export default function ImageOverlayEditor({
 
   const gridCells = useMemo(() => {
     if (!gridCorners || gridColumns <= 0 || gridRows <= 0) return [];
-    return computeGridCellsFromQuad(gridCorners, gridColumns, gridRows, gridLabelOrientation);
-  }, [gridCorners, gridColumns, gridRows, gridLabelOrientation]);
+    return computeGridCellsFromQuad(gridCorners, gridColumns, gridRows, gridLabelOrientation, {
+      prefix: gridLabelPrefix,
+      letterStart: gridLabelLetterStart,
+      numberStart: gridLabelNumberStart,
+      letterGroupSize: gridLabelLetterGroupSize,
+    });
+  }, [
+    gridCorners,
+    gridColumns,
+    gridRows,
+    gridLabelOrientation,
+    gridLabelPrefix,
+    gridLabelLetterStart,
+    gridLabelNumberStart,
+    gridLabelLetterGroupSize,
+  ]);
   const gridGeoJson = useMemo(() => gridCellsToGeoJSON(gridCells), [gridCells]);
 
   function handlePlaceHere() {
@@ -385,7 +407,32 @@ export default function ImageOverlayEditor({
         mapStyle={BASEMAP_STYLE}
         initialViewState={{ longitude: 5.2913, latitude: 52.1326, zoom: 14 }}
         style={{ width: "100%", height: "100%" }}
-        onLoad={() => setLoaded(true)}
+        onLoad={() => {
+          setLoaded(true);
+          const map = mapRef.current?.getMap();
+          if (!map) return;
+          // Already-placed plattegrond/grid takes priority — open where the work already
+          // is, not a fixed default. Only fall back to the visitor's own location (and,
+          // failing that, the hardcoded `initialViewState` above) when nothing is placed yet.
+          const existing = corners ?? gridCorners;
+          if (existing) {
+            const lats = [existing.tl.lat, existing.tr.lat, existing.br.lat, existing.bl.lat];
+            const lngs = [existing.tl.lng, existing.tr.lng, existing.br.lng, existing.bl.lng];
+            map.fitBounds(
+              [
+                [Math.min(...lngs), Math.min(...lats)],
+                [Math.max(...lngs), Math.max(...lats)],
+              ],
+              { padding: 80, duration: 0 },
+            );
+          } else if ("geolocation" in navigator) {
+            navigator.geolocation.getCurrentPosition(
+              (pos) => map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 16 }),
+              () => {},
+              { timeout: 8000 },
+            );
+          }
+        }}
       >
         <NavigationControl position="top-right" />
 

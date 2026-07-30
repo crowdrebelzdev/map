@@ -50,7 +50,9 @@ export async function saveMapImage(eventId: string, file: File): Promise<string>
     throw new Error("Bestand is te groot (max. 20 MB).");
   }
 
-  const filename = `map.${ext}`;
+  // Versioned filename (not a fixed `map.${ext}`) so a re-upload doesn't overwrite the
+  // previous file — `eventMapVersion` rows keep pointing at their own image after this.
+  const filename = `map-${Date.now()}.${ext}`;
   const key = `uploads/${eventId}/${filename}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 

@@ -7,14 +7,16 @@ import { toast } from "sonner";
 import { deleteEvent } from "@/actions/events";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 export function DeleteEventButton({ eventId, eventName }: { eventId: string; eventName: string }) {
   const router = useRouter();
@@ -35,32 +37,30 @@ export function DeleteEventButton({ eventId, eventName }: { eventId: string; eve
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
+    <AlertDialog open={open} onOpenChange={setOpen}>
+      <AlertDialogTrigger
         render={
           <Button variant="ghost" size="icon-sm" className="text-destructive hover:bg-destructive/10" />
         }
       >
         <Trash2 />
         <span className="sr-only">Verwijderen</span>
-      </DialogTrigger>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Evenement verwijderen?</DialogTitle>
-          <DialogDescription>
+      </AlertDialogTrigger>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Evenement verwijderen?</AlertDialogTitle>
+          <AlertDialogDescription>
             Dit verwijdert &quot;{eventName}&quot; inclusief de plattegrond, het grid en alle POI&apos;s
             definitief. Dit kan niet ongedaan worden gemaakt.
-          </DialogDescription>
-        </DialogHeader>
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)} disabled={isPending}>
-            Annuleren
-          </Button>
-          <Button variant="destructive" onClick={handleDelete} disabled={isPending}>
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={isPending}>Annuleren</AlertDialogCancel>
+          <AlertDialogAction variant="destructive" onClick={handleDelete} disabled={isPending}>
             {isPending ? "Bezig..." : "Verwijderen"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   );
 }

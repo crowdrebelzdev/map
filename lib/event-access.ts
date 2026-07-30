@@ -55,6 +55,29 @@ export async function requireEventPermission(eventId: string, permission: EventM
   return { session, access };
 }
 
+/** Shared tab list for the event admin sub-nav — used both by the normal breadcrumb/tabs
+ * chrome and by the fullscreen map/POI pages' own slim header, so the two stay in sync. */
+export function buildEventTabs(eventSlug: string, access: EventAccess) {
+  return [
+    { href: `/admin/events/${eventSlug}`, label: "Overzicht" },
+    hasEventPermission(access, "edit_map") && {
+      href: `/admin/events/${eventSlug}/map`,
+      label: "Kaart & Grid",
+    },
+    (hasEventPermission(access, "manage_pois") || hasEventPermission(access, "manage_categories")) && {
+      href: `/admin/events/${eventSlug}/pois`,
+      label: "POI's & Categorieën",
+    },
+    (hasEventPermission(access, "view_live_locations") || hasEventPermission(access, "manage_incidents")) && {
+      href: `/admin/events/${eventSlug}/live`,
+      label: "Live locaties",
+    },
+    access.isAdmin && { href: `/admin/events/${eventSlug}/team`, label: "Team" },
+    access.isAdmin && { href: `/admin/events/${eventSlug}/activity`, label: "Activiteit" },
+    access.isAdmin && { href: `/admin/events/${eventSlug}/settings`, label: "Instellingen" },
+  ].filter((t): t is { href: string; label: string } => !!t);
+}
+
 /** Looser variant of requireEventPermission for actions with no specific permission,
  * just baseline operational-map access (e.g. logging a search on the live map). */
 export async function requireAnyEventAccess(eventId: string) {

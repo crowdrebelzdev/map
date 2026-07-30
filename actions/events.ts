@@ -3,9 +3,23 @@
 import { revalidatePath } from "next/cache";
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { event, eventMap, eventTemplate, eventTemplateCategory, gridConfig, poi, poiCategory } from "@/db/schema";
+import {
+  areaCategory,
+  event,
+  eventDay,
+  eventMap,
+  eventTemplate,
+  eventTemplateCategory,
+  gridConfig,
+  mapArea,
+  poi,
+  poiCategory,
+  publicAccessModeValues,
+  type PublicAccessMode,
+} from "@/db/schema";
 import { requireActiveOrganizationId, requireOrgAdmin, requireOrgAdminForEvent } from "@/lib/org-access";
 import { copyMapImage, deleteMapImage } from "@/lib/storage";
+import { logActivity } from "@/lib/activity-log";
 
 function slugify(name: string) {
   return name
@@ -94,16 +108,29 @@ export async function duplicateEvent(eventId: string) {
       .values({ name: `${source.name} (kopie)`, slug, organizationId })
       .returning();
 
-    const [sourceGrid, sourceCategories, sourcePois, map] = await Promise.all([
-      tx.query.gridConfig.findFirst({ where: eq(gridConfig.eventId, eventId) }),
-      tx.query.poiCategory.findMany({ where: eq(poiCategory.eventId, eventId) }),
-      tx.query.poi.findMany({ where: eq(poi.eventId, eventId) }),
-      tx.query.eventMap.findFirst({ where: eq(eventMap.eventId, eventId) }),
-    ]);
+    const [sourceGrid, sourceCategories, sourcePois, sourceEventDays, sourceAreaCategories, sourceAreas, map] =
+      await Promise.all([
+        tx.query.gridConfig.findFirst({ where: eq(gridConfig.eventId, eventId) }),
+        tx.query.poiCategory.findMany({ where: eq(poiCategory.eventId, eventId) }),
+        tx.query.poi.findMany({ where: eq(poi.eventId, eventId) }),
+        tx.query.eventDay.findMany({ where: eq(eventDay.eventId, eventId) }),
+        tx.query.areaCategory.findMany({ where: eq(areaCategory.eventId, eventId) }),
+        tx.query.mapArea.findMany({ where: eq(mapArea.eventId, eventId) }),
+        tx.query.eventMap.findFirst({ where: eq(eventMap.eventId, eventId) }),
+      ]);
 
     if (sourceGrid) {
       const { id: _id, eventId: _eventId, ...gridValues } = sourceGrid;
       await tx.insert(gridConfig).values({ ...gridValues, eventId: ev.id });
+    }
+
+    const dayIdMap = new Map<string, string>();
+    if (sourceEventDays.length > 0) {
+      const insertedDays = await tx
+        .insert(eventDay)
+        .values(sourceEventDays.map((d) => ({ eventId: ev.id, date: d.date, label: d.label })))
+        .returning();
+      sourceEventDays.forEach((d, i) => dayIdMap.set(d.id, insertedDays[i].id));
     }
 
     if (sourceCategories.length > 0) {
@@ -116,6 +143,13 @@ export async function duplicateEvent(eventId: string) {
             key: c.key,
             label: c.label,
             color: c.color,
+            icon: c.icon,
+            shape: c.shape,
+            extraFields: c.extraFields,
+            autoNumberEnabled: c.autoNumberEnabled,
+            autoNumberPrefix: c.autoNumberPrefix,
+            autoNumberSuffix: c.autoNumberSuffix,
+            autoNumberNext: c.autoNumberNext,
             sortOrder: c.sortOrder,
           })),
         )
@@ -127,12 +161,51 @@ export async function duplicateEvent(eventId: string) {
           sourcePois.map((p) => ({
             eventId: ev.id,
             categoryId: categoryIdMap.get(p.categoryId)!,
+            eventDayId: p.eventDayId ? (dayIdMap.get(p.eventDayId) ?? null) : null,
             name: p.name,
             description: p.description,
+            icon: p.icon,
+            fillColor: p.fillColor,
+            borderColor: p.borderColor,
+            owner: p.owner,
+            size: p.size,
+            startTime: p.startTime,
+            endTime: p.endTime,
+            extraFieldValues: p.extraFieldValues,
             pixelX: p.pixelX,
             pixelY: p.pixelY,
             lat: p.lat,
             lng: p.lng,
+          })),
+        );
+      }
+    }
+
+    if (sourceAreaCategories.length > 0) {
+      const areaCategoryIdMap = new Map<string, string>();
+      const insertedAreaCategories = await tx
+        .insert(areaCategory)
+        .values(
+          sourceAreaCategories.map((c) => ({
+            eventId: ev.id,
+            key: c.key,
+            label: c.label,
+            color: c.color,
+            extraFields: c.extraFields,
+            sortOrder: c.sortOrder,
+          })),
+        )
+        .returning();
+      sourceAreaCategories.forEach((c, i) => areaCategoryIdMap.set(c.id, insertedAreaCategories[i].id));
+
+      if (sourceAreas.length > 0) {
+        await tx.insert(mapArea).values(
+          sourceAreas.map((a) => ({
+            eventId: ev.id,
+            categoryId: areaCategoryIdMap.get(a.categoryId)!,
+            name: a.name,
+            vertices: a.vertices,
+            extraFieldValues: a.extraFieldValues,
           })),
         );
       }
@@ -182,6 +255,20 @@ export async function unarchiveEvent(eventId: string) {
   revalidatePath("/admin/events");
   revalidatePath("/admin");
   revalidatePath("/events");
+}
+
+export async function updatePublicAccessMode(eventId: string, eventSlug: string, mode: PublicAccessMode) {
+  const session = await requireOrgAdminForEvent(eventId);
+  if (!publicAccessModeValues.includes(mode)) {
+    throw new Error("Ongeldig toegangsniveau.");
+  }
+
+  await db.update(event).set({ publicAccessMode: mode }).where(eq(event.id, eventId));
+
+  logActivity(eventId, session.user.id, "event.public_access_mode_update", `${session.user.name} heeft het publieke toegangsniveau gewijzigd.`);
+
+  revalidatePath(`/admin/events/${eventSlug}/settings`);
+  revalidatePath(`/events/${eventSlug}/map`);
 }
 
 export async function deleteEvent(eventId: string) {

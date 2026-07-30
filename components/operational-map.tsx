@@ -471,6 +471,9 @@ export function OperationalMap({
           },
         }}
         gridCells={gridCells}
+        gridTransformInput={
+          grid && gridCorners ? { corners: gridCorners, columns: grid.columns, rows: grid.rows } : undefined
+        }
         gridLineColor={grid?.lineColor}
         gridLineWidth={grid?.lineWidth}
         gridCasingColor={grid?.casingColor}

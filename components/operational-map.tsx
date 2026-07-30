@@ -164,6 +164,10 @@ export function OperationalMap({
   }, [pois, selectedDayId]);
   const [flyToTarget, setFlyToTarget] = useState<FlyToTarget | null>(null);
   const [selectPoiSignal, setSelectPoiSignal] = useState<PoiSelectSignal | null>(null);
+  // A category we auto-revealed only so a search result from a hidden category could be
+  // shown — reverted once the selection clears, unless the visitor has since taken an
+  // explicit opinion on that category via the filter sheet (see toggleCategory below).
+  const [tempRevealedCategoryId, setTempRevealedCategoryId] = useState<string | null>(null);
   const [highlightedCell, setHighlightedCell] = useState<GridCell | null>(null);
 
   const [gpsPosition, setGpsPosition] = useState<LatLng | null>(null);
@@ -395,9 +399,20 @@ export function OperationalMap({
   }, [query, visiblePois, userPosition]);
 
   function toggleCategory(categoryId: string) {
+    // The visitor now has an explicit opinion on this category — stop auto-hiding it once
+    // the current selection clears, whichever way they just toggled it.
+    if (categoryId === tempRevealedCategoryId) setTempRevealedCategoryId(null);
     setVisibleCategories((prev) =>
       prev.includes(categoryId) ? prev.filter((c) => c !== categoryId) : [...prev, categoryId],
     );
+  }
+
+  function handleSelectedPoiIdChange(poiId: string | null) {
+    if (poiId !== null || !tempRevealedCategoryId) return;
+    // Selection cleared (panel closed, or the map background was tapped) — hide the
+    // category again, back to how the visitor had it filtered.
+    setVisibleCategories((prev) => prev.filter((c) => c !== tempRevealedCategoryId));
+    setTempRevealedCategoryId(null);
   }
 
   function toggleAreaCategory(categoryId: string) {
@@ -427,6 +442,13 @@ export function OperationalMap({
 
   function selectPoi(p: PoiRow) {
     setFlyToTarget({ type: "point", center: { lat: p.lat, lng: p.lng }, zoom: 19 });
+    // Search can surface a POI whose category is currently filtered off — reveal it
+    // temporarily so there's actually something to select/see, and remember to hide it
+    // again once the selection clears (handleSelectedPoiIdChange below).
+    if (!visibleCategories.includes(p.categoryId)) {
+      setTempRevealedCategoryId(p.categoryId);
+      setVisibleCategories((prev) => [...prev, p.categoryId]);
+    }
     // Opens the same detail panel a direct marker tap would, and — since the map dims every
     // other POI while one is selected — puts this one in the spotlight until the visitor
     // taps elsewhere on the map to clear the selection again.
@@ -495,6 +517,7 @@ export function OperationalMap({
         geolocate
         flyToTarget={flyToTarget}
         externalSelectPoi={selectPoiSignal}
+        onSelectedPoiIdChange={handleSelectedPoiIdChange}
         userLocation={userPosition}
         onMapClick={placingManually ? handleMapClickForManualLocation : undefined}
       />

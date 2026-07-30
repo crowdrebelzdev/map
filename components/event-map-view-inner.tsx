@@ -148,6 +148,11 @@ export type EventMapViewProps = {
   /** Lets a parent open the built-in read-only detail panel for a specific POI — as if its
    * marker had been clicked directly on the map — e.g. from a sidebar list row. */
   externalSelectPoi?: PoiSelectSignal | null;
+  /** Fires whenever the selected POI changes for any reason — a direct marker tap, the map
+   * background being clicked (clearing it back to null), the panel's own close button, or
+   * `externalSelectPoi` above — so a parent can react to the selection being cleared again,
+   * not just set it. */
+  onSelectedPoiIdChange?: (poiId: string | null) => void;
   /** A single flag for "all POIs draggable", or a predicate to allow it per-POI — used to
    * restrict dragging to whichever category the admin has focused for editing. */
   draggablePois?: boolean | ((poi: EventMapPoi) => boolean);
@@ -247,6 +252,7 @@ export default function EventMapView({
   onMapClick,
   onPoiClick,
   externalSelectPoi,
+  onSelectedPoiIdChange,
   draggablePois = false,
   onPoiDragEnd,
   poiSizeMultiplier = 1,
@@ -271,6 +277,11 @@ export default function EventMapView({
     setSelectedPoiId(externalSelectPoi.id);
     setSelectedAreaId(null);
   }, [externalSelectPoi]);
+
+  useEffect(() => {
+    onSelectedPoiIdChange?.(selectedPoiId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedPoiId]);
 
   // Tracked for POI clustering + zoom-gated labels — recomputed on every pan/zoom so
   // clusters stay in sync with what's actually on screen.

@@ -10,7 +10,28 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { EventDaysManager } from "@/components/event-days-manager";
 import { TopSearchesCard } from "@/components/top-searches-card";
+import { SearchActivityChart } from "@/components/search-activity-chart";
+import { ActivityStatsChart, type ActivityStatsPoint } from "@/components/activity-stats-chart";
 import { ExportEventPdfButton } from "@/components/export-event-pdf-button";
+import { getSearchActivityByDay } from "@/actions/search-log";
+import { getIncidentStats } from "@/actions/incidents";
+import { getBroadcastStats } from "@/actions/broadcasts";
+
+/** Merges two {day, count} series (incidents, broadcasts) into one chart-friendly series,
+ * filling in days that only appear in one of them with 0. */
+function mergeActivityStats(
+  incidents: { day: string; count: number }[],
+  broadcasts: { day: string; count: number }[],
+): ActivityStatsPoint[] {
+  const byDay = new Map<string, ActivityStatsPoint>();
+  for (const { day, count: c } of incidents) byDay.set(day, { day, incidents: c, broadcasts: 0 });
+  for (const { day, count: c } of broadcasts) {
+    const existing = byDay.get(day);
+    if (existing) existing.broadcasts = c;
+    else byDay.set(day, { day, incidents: 0, broadcasts: c });
+  }
+  return [...byDay.values()].sort((a, b) => a.day.localeCompare(b.day));
+}
 
 // A live-location row this recent counts as "currently on the map" — matches the 20s
 // upload interval in operational-map.tsx with generous slack for a missed beat or two.
@@ -37,6 +58,9 @@ export default async function EventOverviewPage({
     [{ value: openIncidentCount }],
     [{ value: activeLiveCount }],
     days,
+    searchActivity,
+    incidentStats,
+    broadcastStats,
   ] = await Promise.all([
     db.query.eventMap.findFirst({ where: eq(eventMap.eventId, ev.id) }),
     db.query.gridConfig.findFirst({ where: eq(gridConfig.eventId, ev.id) }),
@@ -58,7 +82,12 @@ export default async function EventOverviewPage({
           )
       : Promise.resolve([{ value: 0 }]),
     db.query.eventDay.findMany({ where: eq(eventDay.eventId, ev.id), orderBy: asc(eventDay.date) }),
+    access.isAdmin ? getSearchActivityByDay(ev.id) : Promise.resolve([]),
+    canViewIncidents ? getIncidentStats(ev.id) : Promise.resolve([]),
+    canViewIncidents ? getBroadcastStats(ev.id) : Promise.resolve([]),
   ]);
+
+  const activityStats = mergeActivityStats(incidentStats, broadcastStats);
 
   const [exportPois, exportCategories] = access.isAdmin
     ? await Promise.all([
@@ -175,7 +204,14 @@ export default async function EventOverviewPage({
 
       <EventDaysManager eventId={ev.id} eventSlug={eventSlug} days={days} />
 
-      {access.isAdmin && <TopSearchesCard eventId={ev.id} />}
+      {canViewIncidents && <ActivityStatsChart data={activityStats} />}
+
+      {access.isAdmin && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <SearchActivityChart data={searchActivity} />
+          <TopSearchesCard eventId={ev.id} />
+        </div>
+      )}
     </div>
   );
 }

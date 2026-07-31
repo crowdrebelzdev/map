@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, asc, desc, eq, gt, isNull, or } from "drizzle-orm";
+import { and, asc, count, desc, eq, gt, gte, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
 import { broadcast, eventMember, user } from "@/db/schema";
 import { requireAnyEventAccess, requireEventPermission } from "@/lib/event-access";
@@ -83,6 +83,21 @@ export async function getRecentBroadcasts(eventId: string, sinceIso?: string) {
     )
     .orderBy(asc(broadcast.createdAt))
     .limit(20);
+}
+
+/** Daily broadcast volume for an event's dashboard — same permission as `sendBroadcast`. */
+export async function getBroadcastStats(eventId: string, days = 14) {
+  await requireEventPermission(eventId, "manage_incidents");
+
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+  const day = sql<string>`to_char(${broadcast.createdAt}, 'YYYY-MM-DD')`;
+
+  return db
+    .select({ day, count: count() })
+    .from(broadcast)
+    .where(and(eq(broadcast.eventId, eventId), gte(broadcast.createdAt, since)))
+    .groupBy(day)
+    .orderBy(day);
 }
 
 /** Full recent message history for the "Berichten" sheet — same visibility rule as

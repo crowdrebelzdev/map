@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { logSearch } from "@/actions/search-log";
+import { logSearch, logPublicSearch } from "@/actions/search-log";
 import { distanceMeters, parseGridCode, type GridCell, type GridLabelOptions, type LatLng } from "@/lib/geo";
 import type { FlyToTarget, PoiSelectSignal } from "@/components/event-map-view";
 import type { gridConfig, poi } from "@/db/schema";
@@ -76,6 +76,7 @@ export function useMapSearch(opts: {
     setHighlightedCell(gridMatch);
     setQuery("");
     if (isStaff) logSearch(eventId, "grid", gridMatch.code).catch(() => {});
+    else logPublicSearch(eventId, "grid", gridMatch.code).catch(() => {});
   }
 
   function selectPoi(p: PoiRow) {
@@ -91,6 +92,7 @@ export function useMapSearch(opts: {
     setHighlightedCell(null);
     setQuery("");
     if (isStaff) logSearch(eventId, "poi", p.name).catch(() => {});
+    else logPublicSearch(eventId, "poi", p.name).catch(() => {});
   }
 
   return {

@@ -144,33 +144,31 @@ export function OperationalMap({
             ? t("offlineError")
             : t("offlineIdle");
     return (
-      <div className="pointer-events-none relative shrink-0">
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                variant="secondary"
-                size="icon"
-                className={cn(
-                  "pointer-events-auto shrink-0 shadow-md",
-                  offlineStatus === "done" && "text-emerald-600",
-                )}
-                disabled={offlineStatus === "downloading"}
-              />
-            }
-            onClick={offlineStatus === "downloading" || offlineStatus === "done" ? undefined : handleDownloadOffline}
-          >
-            {icon}
-            <span className="sr-only">{label}</span>
-          </TooltipTrigger>
-          <TooltipContent>{label}</TooltipContent>
-        </Tooltip>
-        {/* Permanent signal that the map is safe to use offline — the icon/tooltip above
-            only communicate that on hover, which isn't discoverable on a touch device. */}
-        {offlineStatus === "done" && (
-          <span className="pointer-events-none absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />
-        )}
-      </div>
+      <Tooltip>
+        <TooltipTrigger
+          render={
+            <Button
+              variant="secondary"
+              size="icon"
+              className={cn(
+                "pointer-events-auto relative shrink-0 shadow-md",
+                offlineStatus === "done" && "text-emerald-600",
+              )}
+              disabled={offlineStatus === "downloading"}
+            />
+          }
+          onClick={offlineStatus === "downloading" || offlineStatus === "done" ? undefined : handleDownloadOffline}
+        >
+          {icon}
+          <span className="sr-only">{label}</span>
+          {/* Permanent signal that the map is safe to use offline — the icon/tooltip above
+              only communicate that on hover, which isn't discoverable on a touch device. */}
+          {offlineStatus === "done" && (
+            <span className="pointer-events-none absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />
+          )}
+        </TooltipTrigger>
+        <TooltipContent>{label}</TooltipContent>
+      </Tooltip>
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offlineStatus, offlineProgress.done, offlineProgress.total, t]);
@@ -252,14 +250,15 @@ export function OperationalMap({
       />
 
       {/* Fixed to the real viewport (not the map container) so it stays put and fully
-          visible regardless of mobile browser chrome or device size — this is the
-          single most important piece of info for staff in the field, so it's sized and
-          colored to be unmissable rather than a subtle footnote. */}
-      {currentCell && !showGpsHint && (
-        <div
-          className="pointer-events-none fixed inset-x-0 top-0 z-20 flex justify-center px-16"
-          style={{ paddingTop: "max(0.875rem, env(safe-area-inset-top))" }}
-        >
+          visible regardless of mobile browser chrome or device size. A single top-anchored
+          stack (location pill, then GPS hint / offline banner / install prompt) so each item
+          sits directly under the previous one — no fixed offset that leaves a dead gap when
+          the item above it isn't shown. */}
+      <div
+        className="pointer-events-none fixed inset-x-0 top-0 z-20 flex flex-col items-center gap-1.5 px-16"
+        style={{ paddingTop: "max(0.875rem, env(safe-area-inset-top))" }}
+      >
+        {currentCell && !showGpsHint && (
           <div className="pointer-events-auto flex items-center gap-2.5 rounded-full bg-primary py-2 pr-4 pl-3 shadow-lg">
             <MapPin size={18} className="shrink-0 text-primary-foreground" />
             <span className="text-sm text-primary-foreground/90">{t("yourGridLocation")}</span>
@@ -270,19 +269,25 @@ export function OperationalMap({
               <span className="text-xs text-primary-foreground/70">{t("manual")}</span>
             )}
           </div>
-        </div>
-      )}
+        )}
 
-      {showGpsHint && (
-        <div
-          className="pointer-events-none fixed inset-x-0 top-0 z-20 flex justify-center px-16"
-          style={{ paddingTop: "max(0.875rem, env(safe-area-inset-top))" }}
-        >
-          <div className="flex items-center gap-1.5 rounded-full bg-foreground/80 px-3 py-1.5 text-xs font-medium text-background shadow-md backdrop-blur-sm">
+        {showGpsHint && (
+          <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-foreground/80 px-3 py-1.5 text-xs font-medium text-background shadow-md backdrop-blur-sm">
             {t(GPS_STATUS_MESSAGE_KEYS[gpsStatus])}
           </div>
-        </div>
-      )}
+        )}
+
+        {!isOnline ? (
+          <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1 text-xs font-medium text-white shadow-md">
+            <WifiOff size={13} />
+            {t("offlineBanner")}
+          </div>
+        ) : (
+          <div className="pointer-events-auto">
+            <InstallPromptBanner />
+          </div>
+        )}
+      </div>
 
       {/* Top-right icon toolbar — its own stack, mirroring the bottom-right manual-location
           stack below, so it never has to share a row with the (centered) grid-location pill. */}
@@ -301,26 +306,11 @@ export function OperationalMap({
           areas={areas}
         />
         <PoiSizeControl sizeMultiplier={poiSizeMultiplier} onChange={setPoiSizeMultiplier} />
-        {offlineDownloadButton}
         <LocaleToggle variant="secondary" size="icon" className="pointer-events-auto shrink-0 shadow-md" />
         <ThemeToggle variant="secondary" size="icon" className="pointer-events-auto shrink-0 shadow-md" />
+        {offlineDownloadButton}
         {isStaff && <PushSubscribeButton eventId={eventId} />}
       </div>
-
-      {!isOnline ? (
-        <div className="pointer-events-none fixed inset-x-0 top-16 z-10 flex justify-center px-16">
-          <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1 text-xs font-medium text-white shadow-md">
-            <WifiOff size={13} />
-            {t("offlineBanner")}
-          </div>
-        </div>
-      ) : (
-        <div className="pointer-events-none fixed inset-x-0 top-16 z-10 flex justify-center px-16">
-          <div className="pointer-events-auto">
-            <InstallPromptBanner />
-          </div>
-        </div>
-      )}
 
       {isStaff && <BroadcastListener eventId={eventId} />}
 

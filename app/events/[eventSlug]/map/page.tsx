@@ -5,8 +5,15 @@ import { areaCategory, eventDay, eventMap, gridConfig, mapArea, poi, poiCategory
 import { requireEventBySlug } from "@/lib/get-event";
 import { getServerSession } from "@/lib/get-session";
 import { getEventAccess, hasAnyEventAccess } from "@/lib/event-access";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { listMyMessages } from "@/actions/broadcasts";
 import { OperationalMap } from "@/components/operational-map";
+
+// Anonymous visitors have no session to hold accountable, and this page always runs a
+// handful of DB queries below — this caps how often one IP can repeat that for a single
+// event, without touching proxy.ts (which deliberately has no DB access, see its comment).
+const ANONYMOUS_VIEW_WINDOW_MS = 60_000;
+const ANONYMOUS_VIEW_MAX = 30;
 
 export default async function StaffEventMapPage({
   params,
@@ -25,7 +32,20 @@ export default async function StaffEventMapPage({
     if (ev.publicAccessMode === "members_only") {
       redirect(session ? "/events" : `/sign-in?redirect=/events/${eventSlug}/map`);
     }
-    // public_anonymous / public_named: let the visitor through as a read-only public viewer.
+    // public_anonymous / public_named: let the visitor through as a read-only public viewer,
+    // rate-limited per IP since there's no session to hold accountable.
+    const ip = await getClientIp();
+    const allowed = await checkRateLimit(`map-page:${ip}:${ev.id}`, {
+      windowMs: ANONYMOUS_VIEW_WINDOW_MS,
+      max: ANONYMOUS_VIEW_MAX,
+    });
+    if (!allowed) {
+      return (
+        <div className="flex h-dvh items-center justify-center p-4 text-center text-sm text-muted-foreground">
+          Te veel verzoeken. Probeer het over een minuut opnieuw.
+        </div>
+      );
+    }
   }
 
   const [map, grid, pois, categories, areas, areaCategories, days, messages] = await Promise.all([

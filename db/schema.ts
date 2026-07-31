@@ -457,6 +457,17 @@ export const rateLimit = pgTable(
   (table) => [index("rate_limit_key_idx").on(table.key)],
 );
 
+// Our own lightweight rate limiter for anonymous/public traffic (the public map page,
+// public search logging) — same database-backed fixed-window pattern as Better Auth's
+// `rateLimit` above (same reason: serverless, no shared in-memory state), kept as a
+// separate table so this feature stays independent of Better Auth's internals. See
+// `lib/rate-limit.ts`.
+export const publicRateLimit = pgTable("public_rate_limit", {
+  key: text("key").primaryKey(),
+  count: integer("count").notNull(),
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+});
+
 export const verification = pgTable(
   "verification",
   {

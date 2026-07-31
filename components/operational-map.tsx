@@ -1,11 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { MapPin, LocateFixed, X, Download, Check, WifiOff } from "lucide-react";
-import { toast } from "sonner";
-import { downloadMapForOffline, registerServiceWorker, type TileBounds } from "@/lib/offline";
-import { updateLiveLocation } from "@/actions/live-location";
-import { logSearch } from "@/actions/search-log";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -24,17 +20,13 @@ import {
   type EventMapArea,
   type EventMapAreaCategory,
   type EventMapPoiCategory,
-  type FlyToTarget,
-  type PoiSelectSignal,
 } from "@/components/event-map-view";
-import {
-  computeGridCellsFromQuad,
-  distanceMeters,
-  findGridCellInQuad,
-  parseGridCode,
-  type GridCell,
-  type LatLng,
-} from "@/lib/geo";
+import { useVisibilityFilter } from "@/hooks/use-visibility-filter";
+import { useGpsPosition, type GpsStatus } from "@/hooks/use-gps-position";
+import { useOfflineMap } from "@/hooks/use-offline-map";
+import { useLiveLocationSharing } from "@/hooks/use-live-location-sharing";
+import { useGridData } from "@/hooks/use-grid-data";
+import { useMapSearch } from "@/hooks/use-map-search";
 import type { listMyMessages } from "@/actions/broadcasts";
 import type { eventMap, gridConfig, poi, eventDay, PublicAccessMode } from "@/db/schema";
 
@@ -47,23 +39,6 @@ const ALL_DAYS_VALUE = "__all__";
 
 const visibleCategoriesKey = (eventId: string) => `visible-categories-${eventId}`;
 const visibleAreaCategoriesKey = (eventId: string) => `visible-area-categories-${eventId}`;
-
-/** Reads a JSON array of ids back out of localStorage (e.g. a saved category-visibility
- * filter) — falls back safely on the server (no `window`), a first-ever visit (nothing
- * stored yet), or corrupted/foreign data in that key. */
-function readStoredIds(key: string, fallback: string[]): string[] {
-  if (typeof window === "undefined") return fallback;
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) && parsed.every((v) => typeof v === "string") ? parsed : fallback;
-  } catch {
-    return fallback;
-  }
-}
-
-type GpsStatus = "locating" | "active" | "denied" | "unavailable" | "insecure" | "unsupported";
 
 const GPS_STATUS_MESSAGES: Record<Exclude<GpsStatus, "active">, string> = {
   locating: "Bezig met locatie zoeken...",
@@ -104,46 +79,16 @@ export function OperationalMap({
   eventDays: EventDayRow[];
   initialMessages: Awaited<ReturnType<typeof listMyMessages>>;
 }) {
-  const [query, setQuery] = useState("");
-  const [visibleCategories, setVisibleCategories] = useState<string[]>(() =>
-    readStoredIds(visibleCategoriesKey(eventId), categories.map((c) => c.id)),
+  const categoryIds = useMemo(() => categories.map((c) => c.id), [categories]);
+  const areaCategoryIds = useMemo(() => areaCategories.map((c) => c.id), [areaCategories]);
+  const { visibleIds: visibleCategories, toggle: toggleCategory } = useVisibilityFilter(
+    visibleCategoriesKey(eventId),
+    categoryIds,
   );
-  const [visibleAreaCategoryIds, setVisibleAreaCategoryIds] = useState<string[]>(() =>
-    readStoredIds(visibleAreaCategoriesKey(eventId), areaCategories.map((c) => c.id)),
+  const { visibleIds: visibleAreaCategoryIds, toggle: toggleAreaCategory } = useVisibilityFilter(
+    visibleAreaCategoriesKey(eventId),
+    areaCategoryIds,
   );
-
-  // A freshly created category isn't in `visibleCategories` yet — without this it'd default
-  // to hidden in the filters. Tracked against the ids seen on the *previous* render (not
-  // against `visibleCategories` itself), so a category the visitor deliberately hid isn't
-  // mistaken for a brand-new one and silently re-shown on every render/reload.
-  const knownCategoryIdsRef = useRef<Set<string>>(new Set(categories.map((c) => c.id)));
-  useEffect(() => {
-    const currentIds = categories.map((c) => c.id);
-    const newlyAppeared = currentIds.filter((id) => !knownCategoryIdsRef.current.has(id));
-    knownCategoryIdsRef.current = new Set(currentIds);
-    if (newlyAppeared.length === 0) return;
-    setVisibleCategories((prev) => [...prev, ...newlyAppeared.filter((id) => !prev.includes(id))]);
-  }, [categories]);
-
-  // Persist filter choices so a refresh (or coming back later) doesn't reset to "alles
-  // zichtbaar" — separate from the "auto-add new category" effect above, which still runs
-  // on top of whatever was restored here.
-  useEffect(() => {
-    localStorage.setItem(visibleCategoriesKey(eventId), JSON.stringify(visibleCategories));
-  }, [eventId, visibleCategories]);
-
-  useEffect(() => {
-    localStorage.setItem(visibleAreaCategoriesKey(eventId), JSON.stringify(visibleAreaCategoryIds));
-  }, [eventId, visibleAreaCategoryIds]);
-
-  const knownAreaCategoryIdsRef = useRef<Set<string>>(new Set(areaCategories.map((c) => c.id)));
-  useEffect(() => {
-    const currentIds = areaCategories.map((c) => c.id);
-    const newlyAppeared = currentIds.filter((id) => !knownAreaCategoryIdsRef.current.has(id));
-    knownAreaCategoryIdsRef.current = new Set(currentIds);
-    if (newlyAppeared.length === 0) return;
-    setVisibleAreaCategoryIds((prev) => [...prev, ...newlyAppeared.filter((id) => !prev.includes(id))]);
-  }, [areaCategories]);
 
   const [poiSizeMultiplier, setPoiSizeMultiplier] = useState(1);
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
@@ -162,129 +107,21 @@ export function OperationalMap({
       return nowHHMM >= p.startTime && nowHHMM <= p.endTime;
     });
   }, [pois, selectedDayId]);
-  const [flyToTarget, setFlyToTarget] = useState<FlyToTarget | null>(null);
-  const [selectPoiSignal, setSelectPoiSignal] = useState<PoiSelectSignal | null>(null);
-  // A POI search surfaced from a category that's currently filtered off — shown as a single
-  // exception (not its whole category) for as long as it's selected, see selectPoi and
-  // handleSelectedPoiIdChange below.
-  const [tempRevealedPoiId, setTempRevealedPoiId] = useState<string | null>(null);
-  const [highlightedCell, setHighlightedCell] = useState<GridCell | null>(null);
 
-  const [gpsPosition, setGpsPosition] = useState<LatLng | null>(null);
-  const [gpsStatus, setGpsStatus] = useState<GpsStatus>("locating");
-  const [manualPosition, setManualPosition] = useState<LatLng | null>(null);
-  const [placingManually, setPlacingManually] = useState(false);
-  // Latest *real* GPS fix, kept in a ref (not state) so the periodic live-location
-  // upload below can read it without re-running on every high-frequency GPS tick.
-  const latestGpsRef = useRef<LatLng | null>(null);
+  const {
+    gpsStatus,
+    userPosition,
+    usingManualPosition,
+    placingManually,
+    setPlacingManually,
+    latestGpsRef,
+    handleMapClickForManualLocation,
+    handleStopUsingManualLocation,
+  } = useGpsPosition();
 
-  useEffect(() => {
-    if (typeof window !== "undefined" && !window.isSecureContext) {
-      setGpsStatus("insecure");
-      return;
-    }
-    if (!("geolocation" in navigator)) {
-      setGpsStatus("unsupported");
-      return;
-    }
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        setGpsStatus("active");
-        const next = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setGpsPosition(next);
-        latestGpsRef.current = next;
-      },
-      (err) => {
-        setGpsStatus(err.code === err.PERMISSION_DENIED ? "denied" : "unavailable");
-        latestGpsRef.current = null;
-      },
-      { enableHighAccuracy: true, maximumAge: 5000, timeout: 15000 },
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
+  useLiveLocationSharing(eventId, isStaff, latestGpsRef);
 
-  // Automatically and periodically share the real GPS position while this page is open
-  // — powers the backoffice "live locations" view. Best-effort: a failed upload (flaky
-  // signal) is silently dropped rather than shown to the field user. Public (non-staff)
-  // visitors never share their location with the command center — the action requires a
-  // real account anyway, and would just fail for them.
-  useEffect(() => {
-    if (!isStaff) return;
-    const id = setInterval(() => {
-      const pos = latestGpsRef.current;
-      if (!pos) return;
-      updateLiveLocation(eventId, pos.lat, pos.lng, null).catch(() => {});
-    }, 20_000);
-    return () => clearInterval(id);
-  }, [eventId, isStaff]);
-
-  const [isOnline, setIsOnline] = useState(true);
-  const [offlineStatus, setOfflineStatus] = useState<"idle" | "downloading" | "done" | "error">(
-    "idle",
-  );
-  const [offlineProgress, setOfflineProgress] = useState({ done: 0, total: 0 });
-
-  useEffect(() => {
-    setIsOnline(navigator.onLine);
-    const goOnline = () => setIsOnline(true);
-    const goOffline = () => setIsOnline(false);
-    window.addEventListener("online", goOnline);
-    window.addEventListener("offline", goOffline);
-    return () => {
-      window.removeEventListener("online", goOnline);
-      window.removeEventListener("offline", goOffline);
-    };
-  }, []);
-
-  useEffect(() => {
-    registerServiceWorker();
-    if (map && localStorage.getItem(`offline-map-${map.eventId}`)) {
-      setOfflineStatus("done");
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map?.eventId]);
-
-  async function runOfflineDownload(mapRow: MapRow, silent: boolean) {
-    setOfflineStatus("downloading");
-    setOfflineProgress({ done: 0, total: 0 });
-    try {
-      const lats = [mapRow.cornerTlLat, mapRow.cornerTrLat, mapRow.cornerBrLat, mapRow.cornerBlLat];
-      const lngs = [mapRow.cornerTlLng, mapRow.cornerTrLng, mapRow.cornerBrLng, mapRow.cornerBlLng];
-      const bounds: TileBounds = {
-        minLat: Math.min(...lats),
-        maxLat: Math.max(...lats),
-        minLng: Math.min(...lngs),
-        maxLng: Math.max(...lngs),
-      };
-      await downloadMapForOffline(bounds, mapRow.imageUrl, (done, total) =>
-        setOfflineProgress({ done, total }),
-      );
-      localStorage.setItem(`offline-map-${mapRow.eventId}`, String(Date.now()));
-      setOfflineStatus("done");
-      if (!silent) toast.success("Kaart offline opgeslagen.");
-    } catch {
-      setOfflineStatus("error");
-      // A failed silent background refresh isn't user-actionable (probably just a
-      // flaky connection) and the existing offline copy still works fine, so only
-      // surface an error for an explicit, user-initiated download.
-      if (!silent) toast.error("Offline opslaan mislukt. Probeer het opnieuw.");
-    }
-  }
-
-  function handleDownloadOffline() {
-    if (!map) return;
-    runOfflineDownload(map, false);
-  }
-
-  // Whenever the device (re)gains connectivity, silently refresh the offline copy for
-  // events that were already saved for offline use — so it never goes stale, without
-  // requiring anyone to remember to press the button again.
-  useEffect(() => {
-    if (!map || !isOnline) return;
-    if (!localStorage.getItem(`offline-map-${map.eventId}`)) return;
-    runOfflineDownload(map, true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [map?.eventId, isOnline]);
+  const { isOnline, offlineStatus, offlineProgress, handleDownloadOffline } = useOfflineMap(map);
 
   const offlineDownloadButton = useMemo(() => {
     const icon =
@@ -328,137 +165,30 @@ export function OperationalMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offlineStatus, offlineProgress.done, offlineProgress.total]);
 
-  const userPosition = manualPosition ?? gpsPosition;
-  const usingManualPosition = manualPosition !== null;
+  const { gridCorners, gridLabelOptions, gridCells, currentCell } = useGridData(grid, userPosition);
 
-  const gridCorners = useMemo(() => {
-    if (!grid) return null;
-    return {
-      tl: { lat: grid.cornerTlLat, lng: grid.cornerTlLng },
-      tr: { lat: grid.cornerTrLat, lng: grid.cornerTrLng },
-      br: { lat: grid.cornerBrLat, lng: grid.cornerBrLng },
-      bl: { lat: grid.cornerBlLat, lng: grid.cornerBlLng },
-    };
-  }, [grid]);
-
-  const gridLabelOptions = useMemo(
-    () =>
-      grid
-        ? {
-            prefix: grid.labelPrefix,
-            letterStart: grid.labelLetterStart,
-            numberStart: grid.labelNumberStart,
-            letterGroupSize: grid.labelLetterGroupSize,
-          }
-        : undefined,
-    [grid],
-  );
-
-  const gridCells = useMemo(() => {
-    if (!grid || !gridCorners) return [];
-    return computeGridCellsFromQuad(
-      gridCorners,
-      grid.columns,
-      grid.rows,
-      grid.labelOrientation,
-      gridLabelOptions,
-    );
-  }, [grid, gridCorners, gridLabelOptions]);
-
-  const currentCell = useMemo(() => {
-    if (!grid || !gridCorners || !userPosition) return null;
-    return findGridCellInQuad(
-      gridCorners,
-      grid.columns,
-      grid.rows,
-      grid.labelOrientation,
-      userPosition,
-      gridLabelOptions,
-    );
-  }, [grid, gridCorners, userPosition, gridLabelOptions]);
-
-  const gridMatch = useMemo(() => {
-    if (!query.trim() || gridCells.length === 0 || !grid) return null;
-    const parsed = parseGridCode(query, grid.labelOrientation, gridLabelOptions);
-    if (!parsed) return null;
-    return gridCells.find((c) => c.col === parsed.col && c.row === parsed.row) ?? null;
-  }, [query, gridCells, grid, gridLabelOptions]);
-
-  const poiMatches = useMemo(() => {
-    if (!query.trim()) return [];
-    const q = query.trim().toLowerCase();
-    const matches = visiblePois.filter((p) => p.name.toLowerCase().includes(q));
-    // Closest-first when we know where the user is — falls back to source order (as before)
-    // once no position is available yet (GPS still starting up, permission denied, etc.).
-    if (userPosition) {
-      matches.sort(
-        (a, b) => distanceMeters(userPosition, a) - distanceMeters(userPosition, b),
-      );
-    }
-    return matches.slice(0, 6);
-  }, [query, visiblePois, userPosition]);
-
-  function toggleCategory(categoryId: string) {
-    setVisibleCategories((prev) =>
-      prev.includes(categoryId) ? prev.filter((c) => c !== categoryId) : [...prev, categoryId],
-    );
-  }
-
-  function handleSelectedPoiIdChange(poiId: string | null) {
-    // Selection cleared (panel closed, or the map background was tapped) — the single-POI
-    // exception from selectPoi below, if any, no longer applies.
-    if (poiId === null) setTempRevealedPoiId(null);
-  }
-
-  function toggleAreaCategory(categoryId: string) {
-    setVisibleAreaCategoryIds((prev) =>
-      prev.includes(categoryId) ? prev.filter((c) => c !== categoryId) : [...prev, categoryId],
-    );
-  }
-
-  function handleQueryChange(value: string) {
-    setQuery(value);
-    setHighlightedCell(null);
-  }
-
-  function selectGridCell() {
-    if (!gridMatch) return;
-    setFlyToTarget({
-      type: "bounds",
-      bounds: [
-        [gridMatch.latLngBounds.sw.lng, gridMatch.latLngBounds.sw.lat],
-        [gridMatch.latLngBounds.ne.lng, gridMatch.latLngBounds.ne.lat],
-      ],
-    });
-    setHighlightedCell(gridMatch);
-    setQuery("");
-    if (isStaff) logSearch(eventId, "grid", gridMatch.code).catch(() => {});
-  }
-
-  function selectPoi(p: PoiRow) {
-    setFlyToTarget({ type: "point", center: { lat: p.lat, lng: p.lng }, zoom: 19 });
-    // Search can surface a POI whose category is currently filtered off — show just this
-    // one POI as an exception (not its whole category) so there's something to select, via
-    // extraVisiblePoiId below; cleared again once the selection clears.
-    setTempRevealedPoiId(!visibleCategories.includes(p.categoryId) ? p.id : null);
-    // Opens the same detail panel a direct marker tap would, and — since the map dims every
-    // other POI while one is selected — puts this one in the spotlight until the visitor
-    // taps elsewhere on the map to clear the selection again.
-    setSelectPoiSignal({ id: p.id, token: Date.now() });
-    setHighlightedCell(null);
-    setQuery("");
-    if (isStaff) logSearch(eventId, "poi", p.name).catch(() => {});
-  }
-
-  function handleMapClickForManualLocation(latLng: LatLng) {
-    setManualPosition(latLng);
-    setPlacingManually(false);
-  }
-
-  function handleStopUsingManualLocation() {
-    setManualPosition(null);
-    setPlacingManually(false);
-  }
+  const {
+    query,
+    handleQueryChange,
+    flyToTarget,
+    selectPoiSignal,
+    tempRevealedPoiId,
+    highlightedCell,
+    gridMatch,
+    poiMatches,
+    handleSelectedPoiIdChange,
+    selectGridCell,
+    selectPoi,
+  } = useMapSearch({
+    eventId,
+    isStaff,
+    grid,
+    gridCells,
+    gridLabelOptions,
+    visiblePois,
+    visibleCategories,
+    userPosition,
+  });
 
   const needsNameGate = !isStaff && publicAccessMode === "public_named";
 

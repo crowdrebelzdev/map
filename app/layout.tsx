@@ -17,6 +17,16 @@ export async function generateMetadata(): Promise<Metadata> {
     title: platformName,
     description: "Kaart, grid en POI-beheer voor evenementen",
     manifest: "/manifest.json",
+    // iOS/Safari ignores the web manifest for "Add to Home Screen" — it needs these
+    // meta tags + a dedicated apple-touch-icon instead (Android reads the manifest).
+    appleWebApp: {
+      capable: true,
+      statusBarStyle: "default",
+      title: platformName,
+    },
+    icons: {
+      apple: "/icon-192.png",
+    },
   };
 }
 

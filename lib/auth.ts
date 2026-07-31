@@ -39,6 +39,15 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 24 * 30,
     updateAge: 60 * 60 * 24,
+    // Staff on the operational map poll 4 separate server actions every 8-20s, each of
+    // which calls getServerSession() — without this, that's a DB round trip per poll per
+    // person. A signed cookie cache answers most of those from the request itself instead.
+    // Trade-off: a role/permission change can take up to maxAge to take effect for someone
+    // already signed in — acceptable for this app's scale.
+    cookieCache: {
+      enabled: true,
+      maxAge: 60,
+    },
   },
   trustedOrigins: ["http://localhost:3000", "https://localhost:3000", ...extraTrustedOrigins],
   // Better Auth's built-in limiter already throttles /sign-in, /sign-up and
@@ -49,6 +58,18 @@ export const auth = betterAuth({
   rateLimit: {
     enabled: true,
     storage: "database",
+    // Amplify's compute sits behind at least one extra proxy hop, so `x-forwarded-for`
+    // arrives as more than one address. Without a known `trustedProxies` CIDR for that
+    // hop, Better Auth can't safely pick the real client IP out of the chain (confirmed
+    // in prod logs: "falling back to a single shared per-path bucket") — so every sign-in
+    // attempt from every visitor currently shares ONE counter. The default there is 3
+    // attempts per 10s, which a handful of crew signing in around the same time would
+    // trip for everyone. Raised only for sign-in, since that's the one staff actually hit
+    // around event start; still throttles a real brute-force loop, just not at "3 people
+    // signing in within 10s of each other".
+    customRules: {
+      "/sign-in/email": { window: 10, max: 20 },
+    },
   },
   plugins: [
     admin({

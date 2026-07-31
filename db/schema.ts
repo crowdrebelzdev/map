@@ -183,38 +183,42 @@ export const eventDay = pgTable(
 export const poiSizeValues = ["small", "medium", "large"] as const;
 export type PoiSize = (typeof poiSizeValues)[number];
 
-export const poi = pgTable("poi", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  eventId: uuid("event_id")
-    .notNull()
-    .references(() => event.id, { onDelete: "cascade" }),
-  categoryId: uuid("category_id")
-    .notNull()
-    .references(() => poiCategory.id, { onDelete: "restrict" }),
-  // Nullable: a POI without a day is visible on every day of a multi-day event. Set,
-  // it's only visible on that specific day. Single-day events never set this at all.
-  eventDayId: uuid("event_day_id").references(() => eventDay.id, { onDelete: "set null" }),
-  name: text("name").notNull(),
-  description: text("description"),
-  // Per-POI overrides — null falls back to the category's icon/color/default border.
-  icon: text("icon"),
-  fillColor: text("fill_color"),
-  borderColor: text("border_color"),
-  owner: text("owner"),
-  size: text("size").$type<PoiSize>().notNull().default("medium"),
-  // Optional "HH:MM" time-of-day window (both set or both null) — combines with
-  // eventDayId so a POI can be e.g. "Saturday only" AND "12:00-16:00 only".
-  startTime: text("start_time"),
-  endTime: text("end_time"),
-  // Labeled info rows — from the category's extraFields template and/or added freely
-  // on this POI directly. Each row carries its own label (see PoiExtraFieldValue).
-  extraFieldValues: jsonb("extra_field_values").$type<PoiExtraFieldValue[]>().notNull().default([]),
-  pixelX: doublePrecision("pixel_x").notNull(),
-  pixelY: doublePrecision("pixel_y").notNull(),
-  lat: doublePrecision("lat").notNull(),
-  lng: doublePrecision("lng").notNull(),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const poi = pgTable(
+  "poi",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => poiCategory.id, { onDelete: "restrict" }),
+    // Nullable: a POI without a day is visible on every day of a multi-day event. Set,
+    // it's only visible on that specific day. Single-day events never set this at all.
+    eventDayId: uuid("event_day_id").references(() => eventDay.id, { onDelete: "set null" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    // Per-POI overrides — null falls back to the category's icon/color/default border.
+    icon: text("icon"),
+    fillColor: text("fill_color"),
+    borderColor: text("border_color"),
+    owner: text("owner"),
+    size: text("size").$type<PoiSize>().notNull().default("medium"),
+    // Optional "HH:MM" time-of-day window (both set or both null) — combines with
+    // eventDayId so a POI can be e.g. "Saturday only" AND "12:00-16:00 only".
+    startTime: text("start_time"),
+    endTime: text("end_time"),
+    // Labeled info rows — from the category's extraFields template and/or added freely
+    // on this POI directly. Each row carries its own label (see PoiExtraFieldValue).
+    extraFieldValues: jsonb("extra_field_values").$type<PoiExtraFieldValue[]>().notNull().default([]),
+    pixelX: doublePrecision("pixel_x").notNull(),
+    pixelY: doublePrecision("pixel_y").notNull(),
+    lat: doublePrecision("lat").notNull(),
+    lng: doublePrecision("lng").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("poi_event_idx").on(table.eventId)],
+);
 
 export const areaCategory = pgTable(
   "area_category",
@@ -241,20 +245,24 @@ export const areaCategory = pgTable(
 /** A single lat/lng vertex of a free-form area outline. */
 export type AreaVertex = { lat: number; lng: number };
 
-export const mapArea = pgTable("map_area", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  eventId: uuid("event_id")
-    .notNull()
-    .references(() => event.id, { onDelete: "cascade" }),
-  categoryId: uuid("category_id")
-    .notNull()
-    .references(() => areaCategory.id, { onDelete: "restrict" }),
-  name: text("name").notNull(),
-  // Free-form polygon outline — at least 3 points, drawn/edited by dragging each vertex.
-  vertices: jsonb("vertices").$type<AreaVertex[]>().notNull().default([]),
-  extraFieldValues: jsonb("extra_field_values").$type<PoiExtraFieldValue[]>().notNull().default([]),
-  createdAt: timestamp("created_at").notNull().defaultNow(),
-});
+export const mapArea = pgTable(
+  "map_area",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    categoryId: uuid("category_id")
+      .notNull()
+      .references(() => areaCategory.id, { onDelete: "restrict" }),
+    name: text("name").notNull(),
+    // Free-form polygon outline — at least 3 points, drawn/edited by dragging each vertex.
+    vertices: jsonb("vertices").$type<AreaVertex[]>().notNull().default([]),
+    extraFieldValues: jsonb("extra_field_values").$type<PoiExtraFieldValue[]>().notNull().default([]),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [index("map_area_event_idx").on(table.eventId)],
+);
 
 export const searchLogTypeValues = ["grid", "poi"] as const;
 export type SearchLogType = (typeof searchLogTypeValues)[number];

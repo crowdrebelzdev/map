@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +18,7 @@ function storageKey(eventId: string) {
 export function VisitorNameGate({ eventId, children }: { eventId: string; children: React.ReactNode }) {
   const [unlocked, setUnlocked] = useState<boolean | null>(null);
   const [name, setName] = useState("");
+  const t = useTranslations("visitorNameGate");
 
   useEffect(() => {
     setUnlocked(sessionStorage.getItem(storageKey(eventId)) !== null);
@@ -39,13 +41,13 @@ export function VisitorNameGate({ eventId, children }: { eventId: string; childr
     <div className="flex h-full w-full items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle>Welkom</CardTitle>
-          <CardDescription>Vul je naam in om de kaart te bekijken.</CardDescription>
+          <CardTitle>{t("welcome")}</CardTitle>
+          <CardDescription>{t("description")}</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-3">
             <div className="space-y-1.5">
-              <Label htmlFor="visitor-name">Naam</Label>
+              <Label htmlFor="visitor-name">{t("nameLabel")}</Label>
               <Input
                 id="visitor-name"
                 value={name}
@@ -55,7 +57,7 @@ export function VisitorNameGate({ eventId, children }: { eventId: string; childr
               />
             </div>
             <Button type="submit" className="w-full" disabled={!name.trim()}>
-              Verder
+              {t("continue")}
             </Button>
           </form>
         </CardContent>

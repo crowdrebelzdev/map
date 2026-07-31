@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Maximize2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -20,22 +21,21 @@ export function PoiSizeControl({
   sizeMultiplier: number;
   onChange: (value: number) => void;
 }) {
+  const t = useTranslations("poiSize");
   return (
     <Sheet>
       <SheetTrigger
         render={<Button variant="secondary" size="icon" className="pointer-events-auto shrink-0 shadow-md" />}
       >
         <Maximize2 size={16} />
-        <span className="sr-only">Grootte van POI's aanpassen</span>
+        <span className="sr-only">{t("adjustSize")}</span>
       </SheetTrigger>
       <SheetContent side="right">
         <SheetHeader>
-          <SheetTitle>Grootte van POI&apos;s</SheetTitle>
+          <SheetTitle>{t("title")}</SheetTitle>
         </SheetHeader>
         <div className="space-y-3 px-4 pb-4">
-          <p className="text-sm text-muted-foreground">
-            Past de grootte van alle POI's op de kaart tegelijk aan.
-          </p>
+          <p className="text-sm text-muted-foreground">{t("description")}</p>
           <Slider
             min={0.5}
             max={2}

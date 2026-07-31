@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { downloadMapForOffline, registerServiceWorker, type TileBounds } from "@/lib/offline";
 import type { eventMap } from "@/db/schema";
@@ -12,6 +13,7 @@ type MapRow = typeof eventMap.$inferSelect;
  * device regains connectivity for an event that was already saved for offline use — so it
  * never goes stale without anyone having to remember to press the button again. */
 export function useOfflineMap(map: MapRow | null) {
+  const t = useTranslations("publicMap");
   const [isOnline, setIsOnline] = useState(true);
   const [offlineStatus, setOfflineStatus] = useState<"idle" | "downloading" | "done" | "error">("idle");
   const [offlineProgress, setOfflineProgress] = useState({ done: 0, total: 0 });
@@ -53,13 +55,13 @@ export function useOfflineMap(map: MapRow | null) {
       );
       localStorage.setItem(`offline-map-${mapRow.eventId}`, String(Date.now()));
       setOfflineStatus("done");
-      if (!silent) toast.success("Kaart offline opgeslagen.");
+      if (!silent) toast.success(t("offlineSaveSuccess"));
     } catch {
       setOfflineStatus("error");
       // A failed silent background refresh isn't user-actionable (probably just a
       // flaky connection) and the existing offline copy still works fine, so only
       // surface an error for an explicit, user-initiated download.
-      if (!silent) toast.error("Offline opslaan mislukt. Probeer het opnieuw.");
+      if (!silent) toast.error(t("offlineSaveError"));
     }
   }
 

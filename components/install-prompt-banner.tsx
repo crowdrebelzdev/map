@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Download, X } from "lucide-react";
 
 const DISMISS_KEY = "install-prompt-dismissed";
@@ -18,6 +19,7 @@ type BeforeInstallPromptEvent = Event & {
 export function InstallPromptBanner() {
   const [deferredEvent, setDeferredEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [dismissed, setDismissed] = useState(true);
+  const t = useTranslations("installPrompt");
 
   useEffect(() => {
     setDismissed(localStorage.getItem(DISMISS_KEY) === "1");
@@ -46,14 +48,14 @@ export function InstallPromptBanner() {
 
   return (
     <div className="flex items-center gap-2 rounded-full bg-foreground/90 py-1.5 pr-2 pl-3 text-xs font-medium text-background shadow-md backdrop-blur-sm">
-      <span>Installeer deze kaart als app</span>
+      <span>{t("message")}</span>
       <button
         type="button"
         onClick={handleInstall}
         className="flex items-center gap-1 rounded-full bg-background px-2 py-1 text-foreground"
       >
         <Download size={12} />
-        Installeren
+        {t("install")}
       </button>
       <button
         type="button"
@@ -61,7 +63,7 @@ export function InstallPromptBanner() {
         className="rounded-full p-1 text-background/70 hover:text-background"
       >
         <X size={13} />
-        <span className="sr-only">Sluiten</span>
+        <span className="sr-only">{t("close")}</span>
       </button>
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo } from "react";
+import { useTranslations } from "next-intl";
 import { SlidersHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -31,6 +32,7 @@ function countByCategory(rows: { categoryId: string | null }[] | undefined) {
 }
 
 function FilterSection<C extends { id: string; label: string; color: string }>({
+  id,
   title,
   shape,
   categories,
@@ -38,6 +40,7 @@ function FilterSection<C extends { id: string; label: string; color: string }>({
   counts,
   onToggle,
 }: {
+  id: string;
   title: string;
   shape: "circle" | "square";
   categories: C[];
@@ -45,6 +48,7 @@ function FilterSection<C extends { id: string; label: string; color: string }>({
   counts: Map<string, number>;
   onToggle: (categoryId: string) => void;
 }) {
+  const t = useTranslations("poiFilter");
   const allVisible = categories.every((c) => visibleIds.includes(c.id));
   const noneVisible = categories.every((c) => !visibleIds.includes(c.id));
 
@@ -60,7 +64,7 @@ function FilterSection<C extends { id: string; label: string; color: string }>({
   }
 
   return (
-    <AccordionItem value={title} className="rounded-lg border bg-muted/30 px-2 not-last:border-b">
+    <AccordionItem value={id} className="rounded-lg border bg-muted/30 px-2 not-last:border-b">
       <AccordionTrigger className="items-center py-2 text-sm font-medium hover:no-underline">
         {title}
       </AccordionTrigger>
@@ -73,7 +77,7 @@ function FilterSection<C extends { id: string; label: string; color: string }>({
             onClick={selectAll}
             disabled={allVisible}
           >
-            Alles
+            {t("all")}
           </Button>
           <span className="text-xs text-muted-foreground">·</span>
           <Button
@@ -83,7 +87,7 @@ function FilterSection<C extends { id: string; label: string; color: string }>({
             onClick={selectNone}
             disabled={noneVisible}
           >
-            Geen
+            {t("none")}
           </Button>
         </div>
         {categories.map((c) => (
@@ -128,6 +132,7 @@ export function PoiFilterSheet({
   onToggleArea?: (categoryId: string) => void;
   areas?: { categoryId: string | null }[];
 }) {
+  const t = useTranslations("poiFilter");
   const poiCounts = useMemo(() => countByCategory(pois), [pois]);
   const areaCounts = useMemo(() => countByCategory(areas), [areas]);
 
@@ -166,25 +171,26 @@ export function PoiFilterSheet({
             {activeFilterCount}
           </Badge>
         )}
-        <span className="sr-only">Categorieën filteren</span>
+        <span className="sr-only">{t("filterCategories")}</span>
       </SheetTrigger>
       <SheetContent side="right">
         <SheetHeader className="flex-row items-center justify-between space-y-0">
-          <SheetTitle>Filters</SheetTitle>
+          <SheetTitle>{t("filters")}</SheetTitle>
           {activeFilterCount > 0 && (
             <Button variant="ghost" size="xs" className="h-6 text-xs" onClick={resetAll}>
-              Wis filters
+              {t("clearFilters")}
             </Button>
           )}
         </SheetHeader>
         <div className="overflow-y-auto px-4 pb-4">
           {categories.length === 0 && (!areaCategories || areaCategories.length === 0) && (
-            <p className="text-sm text-muted-foreground">Geen categorieën ingesteld.</p>
+            <p className="text-sm text-muted-foreground">{t("noCategories")}</p>
           )}
-          <Accordion multiple defaultValue={["POI-categorieën", "Areas"]} className="gap-3">
+          <Accordion multiple defaultValue={["poi-categories", "areas"]} className="gap-3">
             {categories.length > 0 && (
               <FilterSection
-                title="POI-categorieën"
+                id="poi-categories"
+                title={t("poiCategories")}
                 shape="circle"
                 categories={categories}
                 visibleIds={visibleCategories}
@@ -194,7 +200,8 @@ export function PoiFilterSheet({
             )}
             {areaCategories && areaCategories.length > 0 && (
               <FilterSection
-                title="Areas"
+                id="areas"
+                title={t("areas")}
                 shape="square"
                 categories={areaCategories}
                 visibleIds={visibleAreaCategoryIds ?? []}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { MapPin, LocateFixed, X, Download, Check, WifiOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,7 @@ import { InstallPromptBanner } from "@/components/install-prompt-banner";
 import { PushSubscribeButton } from "@/components/push-subscribe-button";
 import { VisitorNameGate } from "@/components/visitor-name-gate";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LocaleToggle } from "@/components/locale-toggle";
 import { cn } from "@/lib/utils";
 import {
   EventMapView,
@@ -40,12 +42,12 @@ const ALL_DAYS_VALUE = "__all__";
 const visibleCategoriesKey = (eventId: string) => `visible-categories-${eventId}`;
 const visibleAreaCategoriesKey = (eventId: string) => `visible-area-categories-${eventId}`;
 
-const GPS_STATUS_MESSAGES: Record<Exclude<GpsStatus, "active">, string> = {
-  locating: "Bezig met locatie zoeken...",
-  denied: "Locatietoegang geweigerd.",
-  unavailable: "Locatie kon niet worden bepaald.",
-  insecure: "Locatie werkt alleen via HTTPS.",
-  unsupported: "Dit apparaat ondersteunt geen locatie.",
+const GPS_STATUS_MESSAGE_KEYS: Record<Exclude<GpsStatus, "active">, string> = {
+  locating: "gpsLocating",
+  denied: "gpsDenied",
+  unavailable: "gpsUnavailable",
+  insecure: "gpsInsecure",
+  unsupported: "gpsUnsupported",
 };
 
 export function OperationalMap({
@@ -79,6 +81,7 @@ export function OperationalMap({
   eventDays: EventDayRow[];
   initialMessages: Awaited<ReturnType<typeof listMyMessages>>;
 }) {
+  const t = useTranslations("publicMap");
   const categoryIds = useMemo(() => categories.map((c) => c.id), [categories]);
   const areaCategoryIds = useMemo(() => areaCategories.map((c) => c.id), [areaCategories]);
   const { visibleIds: visibleCategories, toggle: toggleCategory } = useVisibilityFilter(
@@ -134,12 +137,12 @@ export function OperationalMap({
       );
     const label =
       offlineStatus === "done"
-        ? "Kaart is offline beschikbaar"
+        ? t("offlineDone")
         : offlineStatus === "downloading"
-          ? `Kaart offline opslaan... ${offlineProgress.done}/${offlineProgress.total || "?"}`
+          ? t("offlineDownloading", { done: offlineProgress.done, total: offlineProgress.total || "?" })
           : offlineStatus === "error"
-            ? "Offline opslaan mislukt — klik om opnieuw te proberen"
-            : "Kaart offline opslaan";
+            ? t("offlineError")
+            : t("offlineIdle");
     return (
       <div className="pointer-events-none relative shrink-0">
         <Tooltip>
@@ -170,7 +173,7 @@ export function OperationalMap({
       </div>
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [offlineStatus, offlineProgress.done, offlineProgress.total]);
+  }, [offlineStatus, offlineProgress.done, offlineProgress.total, t]);
 
   const { gridCorners, gridLabelOptions, gridCells, currentCell } = useGridData(grid, userPosition);
 
@@ -200,11 +203,7 @@ export function OperationalMap({
   const needsNameGate = !isStaff && publicAccessMode === "public_named";
 
   if (!map) {
-    const empty = (
-      <div className="p-4 text-sm text-muted-foreground">
-        Voor dit evenement is nog geen kaart ingesteld.
-      </div>
-    );
+    const empty = <div className="p-4 text-sm text-muted-foreground">{t("noMapConfigured")}</div>;
     return needsNameGate ? <VisitorNameGate eventId={eventId}>{empty}</VisitorNameGate> : empty;
   }
 
@@ -263,12 +262,12 @@ export function OperationalMap({
         >
           <div className="pointer-events-auto flex items-center gap-2.5 rounded-full bg-primary py-2 pr-4 pl-3 shadow-lg">
             <MapPin size={18} className="shrink-0 text-primary-foreground" />
-            <span className="text-sm text-primary-foreground/90">Jouw grid-locatie</span>
+            <span className="text-sm text-primary-foreground/90">{t("yourGridLocation")}</span>
             <span className="rounded-full bg-primary-foreground px-3 py-1 text-lg leading-none font-bold text-primary">
               {currentCell.code}
             </span>
             {usingManualPosition && (
-              <span className="text-xs text-primary-foreground/70">(handmatig)</span>
+              <span className="text-xs text-primary-foreground/70">{t("manual")}</span>
             )}
           </div>
         </div>
@@ -280,7 +279,7 @@ export function OperationalMap({
           style={{ paddingTop: "max(0.875rem, env(safe-area-inset-top))" }}
         >
           <div className="flex items-center gap-1.5 rounded-full bg-foreground/80 px-3 py-1.5 text-xs font-medium text-background shadow-md backdrop-blur-sm">
-            {GPS_STATUS_MESSAGES[gpsStatus]}
+            {t(GPS_STATUS_MESSAGE_KEYS[gpsStatus])}
           </div>
         </div>
       )}
@@ -303,6 +302,7 @@ export function OperationalMap({
         />
         <PoiSizeControl sizeMultiplier={poiSizeMultiplier} onChange={setPoiSizeMultiplier} />
         {offlineDownloadButton}
+        <LocaleToggle variant="secondary" size="icon" className="pointer-events-auto shrink-0 shadow-md" />
         <ThemeToggle variant="secondary" size="icon" className="pointer-events-auto shrink-0 shadow-md" />
         {isStaff && <PushSubscribeButton eventId={eventId} />}
       </div>
@@ -311,7 +311,7 @@ export function OperationalMap({
         <div className="pointer-events-none fixed inset-x-0 top-16 z-10 flex justify-center px-16">
           <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1 text-xs font-medium text-white shadow-md">
             <WifiOff size={13} />
-            Je bent offline — kaart draait op opgeslagen data
+            {t("offlineBanner")}
           </div>
         </div>
       ) : (
@@ -327,7 +327,7 @@ export function OperationalMap({
       {placingManually && (
         <div className="pointer-events-none absolute inset-x-0 top-24 z-10 flex justify-center px-16">
           <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-foreground/90 px-3 py-1.5 text-xs font-medium text-background shadow-md">
-            Tik op de kaart om je locatie te zetten
+            {t("tapToSetLocation")}
             <button onClick={() => setPlacingManually(false)} className="opacity-80 hover:opacity-100">
               <X size={13} />
             </button>
@@ -353,7 +353,7 @@ export function OperationalMap({
                   onClick={handleStopUsingManualLocation}
                 >
                   <LocateFixed size={14} />
-                  Terug naar GPS
+                  {t("backToGps")}
                 </Button>
               )}
               {showManualLocationButton && (
@@ -364,7 +364,7 @@ export function OperationalMap({
                   onClick={() => setPlacingManually((v) => !v)}
                 >
                   <MapPin size={14} />
-                  Locatie handmatig zetten
+                  {t("setManualLocation")}
                 </Button>
               )}
             </div>
@@ -377,7 +377,7 @@ export function OperationalMap({
                     onClick={selectGridCell}
                     className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
                   >
-                    <span>Grid-cel</span>
+                    <span>{t("gridCell")}</span>
                     <Badge>{gridMatch.code}</Badge>
                   </button>
                 )}
@@ -409,7 +409,7 @@ export function OperationalMap({
                 className="shrink-0 shadow-md"
                 onClick={() => setSelectedDayId(ALL_DAYS_VALUE)}
               >
-                Alle dagen
+                {t("allDays")}
               </Button>
               {eventDays.map((d) => (
                 <Button
@@ -425,7 +425,7 @@ export function OperationalMap({
             </div>
           )}
           <Input
-            placeholder="Zoek grid-code (bv. C4) of locatie..."
+            placeholder={t("searchPlaceholder")}
             value={query}
             onChange={(e) => handleQueryChange(e.target.value)}
             className="h-12 bg-background text-base shadow-md dark:bg-background"

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
+import { useTranslations } from "next-intl";
 import { Moon, Sun } from "lucide-react";
 import { Button, type buttonVariants } from "@/components/ui/button";
 import {
@@ -23,6 +24,7 @@ export function ThemeToggle({
   className?: string;
 }) {
   const { setTheme } = useTheme();
+  const t = useTranslations("themeToggle");
   // Avoid rendering theme-dependent icon state before hydration confirms the real theme.
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
@@ -40,12 +42,12 @@ export function ThemeToggle({
         ) : (
           <Sun />
         )}
-        <span className="sr-only">Thema wisselen</span>
+        <span className="sr-only">{t("toggle")}</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => setTheme("light")}>Licht</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("dark")}>Donker</DropdownMenuItem>
-        <DropdownMenuItem onClick={() => setTheme("system")}>Systeem</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("light")}>{t("light")}</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("dark")}>{t("dark")}</DropdownMenuItem>
+        <DropdownMenuItem onClick={() => setTheme("system")}>{t("system")}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

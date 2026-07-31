@@ -1,0 +1,61 @@
+{
+  "publicMap": {
+    "gpsLocating": "Finding your location...",
+    "gpsDenied": "Location access denied.",
+    "gpsUnavailable": "Location could not be determined.",
+    "gpsInsecure": "Location only works over HTTPS.",
+    "gpsUnsupported": "This device doesn't support location.",
+    "noMapConfigured": "No map has been set up for this event yet.",
+    "yourGridLocation": "Your grid location",
+    "manual": "(manual)",
+    "offlineBanner": "You're offline — the map is running on saved data",
+    "tapToSetLocation": "Tap the map to set your location",
+    "backToGps": "Back to GPS",
+    "setManualLocation": "Set location manually",
+    "gridCell": "Grid cell",
+    "allDays": "All days",
+    "searchPlaceholder": "Search grid code (e.g. C4) or location...",
+    "offlineDone": "Map is available offline",
+    "offlineDownloading": "Saving map offline... {done}/{total}",
+    "offlineError": "Offline save failed — click to try again",
+    "offlineIdle": "Save map offline",
+    "offlineSaveSuccess": "Map saved offline.",
+    "offlineSaveError": "Offline save failed. Please try again."
+  },
+  "visitorNameGate": {
+    "welcome": "Welcome",
+    "description": "Enter your name to view the map.",
+    "nameLabel": "Name",
+    "continue": "Continue"
+  },
+  "poiFilter": {
+    "filterCategories": "Filter categories",
+    "filters": "Filters",
+    "clearFilters": "Clear filters",
+    "noCategories": "No categories set up.",
+    "poiCategories": "POI categories",
+    "areas": "Areas",
+    "all": "All",
+    "none": "None"
+  },
+  "poiSize": {
+    "adjustSize": "Adjust POI size",
+    "title": "POI size",
+    "description": "Scales every POI on the map at once."
+  },
+  "installPrompt": {
+    "message": "Install this map as an app",
+    "install": "Install",
+    "close": "Close"
+  },
+  "themeToggle": {
+    "toggle": "Toggle theme",
+    "light": "Light",
+    "dark": "Dark",
+    "system": "System"
+  },
+  "navBar": {
+    "signOut": "Sign out",
+    "signedOut": "Signed out."
+  }
+}

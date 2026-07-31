@@ -2,12 +2,14 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { LogOut } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useHeaderSlotContent } from "@/components/header-slot";
 import { ROLE_LABELS } from "@/lib/auth-roles";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LocaleToggle } from "@/components/locale-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -37,10 +39,11 @@ export function NavBar({
 }) {
   const router = useRouter();
   const headerSlotContent = useHeaderSlotContent();
+  const t = useTranslations("navBar");
 
   async function handleSignOut() {
     await authClient.signOut();
-    toast.success("Uitgelogd.");
+    toast.success(t("signedOut"));
     router.push("/sign-in");
     router.refresh();
   }
@@ -59,6 +62,7 @@ export function NavBar({
 
         <div className="flex items-center gap-2 sm:gap-3">
           {headerSlotContent}
+          <LocaleToggle />
           <ThemeToggle />
           <DropdownMenu>
             <DropdownMenuTrigger className="inline-flex items-center gap-2 rounded-full border bg-white px-3 py-2 hover:bg-accent dark:border-border dark:bg-card dark:hover:bg-muted">
@@ -79,7 +83,7 @@ export function NavBar({
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut}>
                 <LogOut />
-                Uitloggen
+                {t("signOut")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -8,6 +8,7 @@ import { authClient } from "@/lib/auth-client";
 import { ROLE_LABELS } from "@/lib/auth-roles";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { LocaleToggle } from "@/components/locale-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -160,6 +161,7 @@ export function AdminHeader({
             </DropdownMenu>
           ) : null}
 
+          <LocaleToggle />
           <ThemeToggle />
 
           <DropdownMenu>

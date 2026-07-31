@@ -1,0 +1,61 @@
+{
+  "publicMap": {
+    "gpsLocating": "Bezig met locatie zoeken...",
+    "gpsDenied": "Locatietoegang geweigerd.",
+    "gpsUnavailable": "Locatie kon niet worden bepaald.",
+    "gpsInsecure": "Locatie werkt alleen via HTTPS.",
+    "gpsUnsupported": "Dit apparaat ondersteunt geen locatie.",
+    "noMapConfigured": "Voor dit evenement is nog geen kaart ingesteld.",
+    "yourGridLocation": "Jouw grid-locatie",
+    "manual": "(handmatig)",
+    "offlineBanner": "Je bent offline — kaart draait op opgeslagen data",
+    "tapToSetLocation": "Tik op de kaart om je locatie te zetten",
+    "backToGps": "Terug naar GPS",
+    "setManualLocation": "Locatie handmatig zetten",
+    "gridCell": "Grid-cel",
+    "allDays": "Alle dagen",
+    "searchPlaceholder": "Zoek grid-code (bv. C4) of locatie...",
+    "offlineDone": "Kaart is offline beschikbaar",
+    "offlineDownloading": "Kaart offline opslaan... {done}/{total}",
+    "offlineError": "Offline opslaan mislukt — klik om opnieuw te proberen",
+    "offlineIdle": "Kaart offline opslaan",
+    "offlineSaveSuccess": "Kaart offline opgeslagen.",
+    "offlineSaveError": "Offline opslaan mislukt. Probeer het opnieuw."
+  },
+  "visitorNameGate": {
+    "welcome": "Welkom",
+    "description": "Vul je naam in om de kaart te bekijken.",
+    "nameLabel": "Naam",
+    "continue": "Verder"
+  },
+  "poiFilter": {
+    "filterCategories": "Categorieën filteren",
+    "filters": "Filters",
+    "clearFilters": "Wis filters",
+    "noCategories": "Geen categorieën ingesteld.",
+    "poiCategories": "POI-categorieën",
+    "areas": "Areas",
+    "all": "Alles",
+    "none": "Geen"
+  },
+  "poiSize": {
+    "adjustSize": "Grootte van POI's aanpassen",
+    "title": "Grootte van POI's",
+    "description": "Past de grootte van alle POI's op de kaart tegelijk aan."
+  },
+  "installPrompt": {
+    "message": "Installeer deze kaart als app",
+    "install": "Installeren",
+    "close": "Sluiten"
+  },
+  "themeToggle": {
+    "toggle": "Thema wisselen",
+    "light": "Licht",
+    "dark": "Donker",
+    "system": "Systeem"
+  },
+  "navBar": {
+    "signOut": "Uitloggen",
+    "signedOut": "Uitgelogd."
+  }
+}

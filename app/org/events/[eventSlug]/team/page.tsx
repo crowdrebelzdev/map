@@ -17,7 +17,7 @@ export default async function EventTeamPage({
   const session = await getServerSession();
 
   if (!session || !(await isOrgAdmin(session, ev.organizationId))) {
-    redirect("/admin/events");
+    redirect("/org/events");
   }
 
   const [memberRows, orgUsers] = await Promise.all([

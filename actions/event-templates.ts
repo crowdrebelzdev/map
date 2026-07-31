@@ -49,7 +49,7 @@ export async function saveEventAsTemplate(eventId: string, name: string) {
     }
   });
 
-  revalidatePath("/admin/events");
+  revalidatePath("/org/events");
 }
 
 export async function listEventTemplates() {
@@ -68,11 +68,11 @@ export async function deleteEventTemplate(templateId: string) {
     .delete(eventTemplate)
     .where(and(eq(eventTemplate.id, templateId), eq(eventTemplate.organizationId, organizationId)));
 
-  revalidatePath("/admin/events");
-  revalidatePath("/admin/templates");
+  revalidatePath("/org/events");
+  revalidatePath("/org/templates");
 }
 
-/** Standalone template management (`/admin/templates`) — lets an org admin build up a
+/** Standalone template management (`/org/templates`) — lets an org admin build up a
  * reusable category set from scratch, instead of the only other path (`saveEventAsTemplate`)
  * which requires first building out a whole real event to snapshot from. */
 export async function createEmptyTemplate(name: string) {
@@ -86,7 +86,7 @@ export async function createEmptyTemplate(name: string) {
 
   const [template] = await db.insert(eventTemplate).values({ organizationId, name: trimmedName }).returning();
 
-  revalidatePath("/admin/templates");
+  revalidatePath("/org/templates");
   return template;
 }
 
@@ -148,7 +148,7 @@ export async function addTemplateCategory(
     sortOrder: existing.length,
   });
 
-  revalidatePath("/admin/templates");
+  revalidatePath("/org/templates");
 }
 
 export async function updateTemplateCategory(
@@ -170,7 +170,7 @@ export async function updateTemplateCategory(
     .set({ label, color: input.color })
     .where(and(eq(eventTemplateCategory.id, categoryId), eq(eventTemplateCategory.templateId, templateId)));
 
-  revalidatePath("/admin/templates");
+  revalidatePath("/org/templates");
 }
 
 export async function deleteTemplateCategory(templateId: string, categoryId: string) {
@@ -182,5 +182,5 @@ export async function deleteTemplateCategory(templateId: string, categoryId: str
     .delete(eventTemplateCategory)
     .where(and(eq(eventTemplateCategory.id, categoryId), eq(eventTemplateCategory.templateId, templateId)));
 
-  revalidatePath("/admin/templates");
+  revalidatePath("/org/templates");
 }

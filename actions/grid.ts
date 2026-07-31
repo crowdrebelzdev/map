@@ -88,6 +88,6 @@ export async function saveGridConfig(input: {
 
   logActivity(input.eventId, session.user.id, "grid.update", `${session.user.name} heeft het grid aangepast.`);
 
-  revalidatePath(`/admin/events/${input.eventSlug}/map`);
+  revalidatePath(`/org/events/${input.eventSlug}/map`);
   revalidatePath(`/events/${input.eventSlug}/map`);
 }

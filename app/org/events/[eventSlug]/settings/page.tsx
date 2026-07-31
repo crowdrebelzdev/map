@@ -14,7 +14,7 @@ export default async function EventSettingsPage({
   const session = await getServerSession();
 
   if (!session || !(await isOrgAdmin(session, ev.organizationId))) {
-    redirect("/admin/events");
+    redirect("/org/events");
   }
 
   return <EventAccessSettings eventId={ev.id} eventSlug={eventSlug} currentMode={ev.publicAccessMode} />;

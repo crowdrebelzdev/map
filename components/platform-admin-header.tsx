@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, CalendarDays, Users as UsersIcon, LayoutTemplate, LogOut, ChevronDown, Check } from "lucide-react";
+import { LayoutDashboard, Building2, Users as UsersIcon, Settings, LogOut, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { ROLE_LABELS } from "@/lib/auth-roles";
@@ -11,6 +11,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleToggle } from "@/components/locale-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { buttonVariants } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,12 +36,9 @@ function initials(name: string) {
 
 const NAV_ITEMS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/events", label: "Evenementen", icon: CalendarDays },
-];
-
-const MANAGE_ITEMS = [
+  { href: "/admin/organizations", label: "Organisaties", icon: Building2 },
   { href: "/admin/users", label: "Gebruikers", icon: UsersIcon },
-  { href: "/admin/templates", label: "Sjablonen", icon: LayoutTemplate },
+  { href: "/admin/settings", label: "Instellingen", icon: Settings },
 ];
 
 function isRouteActive(pathname: string, href: string) {
@@ -53,24 +51,20 @@ const pillActive = "bg-slate-950 text-white dark:bg-white dark:text-slate-950";
 const pillInactive =
   "text-slate-600 hover:bg-slate-100 hover:text-slate-950 dark:text-muted-foreground dark:hover:bg-muted dark:hover:text-foreground";
 
-export function AdminHeader({
+/** Platform-wide admin chrome — deliberately no org-switcher (unlike `OrgHeader`), since
+ * this area is organization-independent. `hasOrgAccess` controls whether a shortcut to
+ * `/org` is shown, for a platform admin who's also a member of at least one organization. */
+export function PlatformAdminHeader({
   name,
   email,
-  role,
-  canManageOrg,
-  organizations,
-  activeOrganizationId,
+  hasOrgAccess,
 }: {
   name: string;
   email: string;
-  role: string;
-  canManageOrg: boolean;
-  organizations: { id: string; name: string }[];
-  activeOrganizationId: string | null;
+  hasOrgAccess: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
-  const activeOrg = organizations.find((o) => o.id === activeOrganizationId) ?? organizations[0];
 
   async function handleSignOut() {
     await authClient.signOut();
@@ -79,20 +73,14 @@ export function AdminHeader({
     router.refresh();
   }
 
-  async function handleSwitchOrg(organizationId: string) {
-    if (organizationId === activeOrg?.id) return;
-    await authClient.organization.setActive({ organizationId });
-    router.refresh();
-  }
-
   return (
-    <header className="border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 dark:bg-card/95 dark:supports-[backdrop-filter]:bg-card/85">
+    <header className="border-b bg-white/95 backdrop-blur supports-backdrop-filter:bg-white/85 dark:bg-card/95 dark:supports-backdrop-filter:bg-card/85">
       <div className="flex min-h-16 flex-wrap items-center gap-3 px-4 py-3 lg:px-6">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-black font-semibold text-white dark:bg-white dark:text-black">
             K
           </div>
-          <span className="truncate font-semibold">{activeOrg?.name ?? "Kaart"}</span>
+          <span className="truncate font-semibold">Platformbeheer</span>
         </div>
 
         <nav className="flex flex-1 flex-wrap items-center gap-1 lg:justify-center">
@@ -109,57 +97,15 @@ export function AdminHeader({
               </Link>
             );
           })}
-
-          {canManageOrg ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className={cn(
-                  pillBase,
-                  MANAGE_ITEMS.some((item) => isRouteActive(pathname, item.href)) ? pillActive : pillInactive
-                )}
-              >
-                Beheer
-                <ChevronDown className="h-4 w-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="min-w-56">
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel>Beheer</DropdownMenuLabel>
-                  {MANAGE_ITEMS.map((item) => (
-                    <Link key={item.href} href={item.href}>
-                      <DropdownMenuItem className="gap-2">
-                        <item.icon className="h-4 w-4" />
-                        {item.label}
-                      </DropdownMenuItem>
-                    </Link>
-                  ))}
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
         </nav>
 
         <div className="flex items-center gap-2 sm:gap-3">
-          {organizations.length > 1 ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger className={cn(pillBase, pillInactive, "border")}>
-                <span className="max-w-32 truncate">{activeOrg?.name ?? "Organisatie"}</span>
-                <ChevronDown className="h-4 w-4" />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuGroup>
-                  <DropdownMenuLabel className="font-normal text-muted-foreground">
-                    Organisaties
-                  </DropdownMenuLabel>
-                  {organizations.map((org) => (
-                    <DropdownMenuItem key={org.id} onClick={() => handleSwitchOrg(org.id)}>
-                      {org.name}
-                      {org.id === activeOrg?.id && <Check className="ml-auto size-4" />}
-                    </DropdownMenuItem>
-                  ))}
-                </DropdownMenuGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          ) : null}
+          {hasOrgAccess && (
+            <Link href="/org" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}>
+              Naar organisatiebeheer
+              <ArrowRight className="size-4" />
+            </Link>
+          )}
 
           <LocaleToggle />
           <ThemeToggle />
@@ -178,7 +124,7 @@ export function AdminHeader({
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex items-center gap-2">
                     <span className="truncate text-sm font-medium">{name}</span>
-                    <Badge variant="secondary">{ROLE_LABELS[role] ?? role}</Badge>
+                    <Badge variant="secondary">{ROLE_LABELS.admin}</Badge>
                   </div>
                   <div className="truncate text-xs text-muted-foreground">{email}</div>
                 </DropdownMenuLabel>

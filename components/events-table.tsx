@@ -68,7 +68,7 @@ export function EventsTable({ events, isAdmin }: { events: EventRow[]; isAdmin: 
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1.5">
                     <Link
-                      href={`/admin/events/${e.slug}/map`}
+                      href={`/org/events/${e.slug}/map`}
                       className={buttonVariants({ variant: "outline", size: "sm" })}
                     >
                       Beheren

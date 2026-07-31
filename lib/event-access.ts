@@ -59,22 +59,22 @@ export async function requireEventPermission(eventId: string, permission: EventM
  * chrome and by the fullscreen map/POI pages' own slim header, so the two stay in sync. */
 export function buildEventTabs(eventSlug: string, access: EventAccess) {
   return [
-    { href: `/admin/events/${eventSlug}`, label: "Overzicht" },
+    { href: `/org/events/${eventSlug}`, label: "Overzicht" },
     hasEventPermission(access, "edit_map") && {
-      href: `/admin/events/${eventSlug}/map`,
+      href: `/org/events/${eventSlug}/map`,
       label: "Kaart & Grid",
     },
     (hasEventPermission(access, "manage_pois") || hasEventPermission(access, "manage_categories")) && {
-      href: `/admin/events/${eventSlug}/pois`,
+      href: `/org/events/${eventSlug}/pois`,
       label: "POI's & Categorieën",
     },
     (hasEventPermission(access, "view_live_locations") || hasEventPermission(access, "manage_incidents")) && {
-      href: `/admin/events/${eventSlug}/live`,
+      href: `/org/events/${eventSlug}/live`,
       label: "Live locaties",
     },
-    access.isAdmin && { href: `/admin/events/${eventSlug}/team`, label: "Team" },
-    access.isAdmin && { href: `/admin/events/${eventSlug}/activity`, label: "Activiteit" },
-    access.isAdmin && { href: `/admin/events/${eventSlug}/settings`, label: "Instellingen" },
+    access.isAdmin && { href: `/org/events/${eventSlug}/team`, label: "Team" },
+    access.isAdmin && { href: `/org/events/${eventSlug}/activity`, label: "Activiteit" },
+    access.isAdmin && { href: `/org/events/${eventSlug}/settings`, label: "Instellingen" },
   ].filter((t): t is { href: string; label: string } => !!t);
 }
 

@@ -35,7 +35,7 @@ export async function createIncident(input: {
     lng: input.lng,
   });
 
-  revalidatePath(`/admin/events/${input.eventSlug}/live`);
+  revalidatePath(`/org/events/${input.eventSlug}/live`);
 }
 
 export async function listIncidents(eventId: string) {
@@ -83,5 +83,5 @@ export async function resolveIncident(eventId: string, eventSlug: string, incide
     .set({ status: "resolved", resolvedAt: new Date(), resolvedBy: session.user.id })
     .where(and(eq(incident.id, incidentId), eq(incident.eventId, eventId)));
 
-  revalidatePath(`/admin/events/${eventSlug}/live`);
+  revalidatePath(`/org/events/${eventSlug}/live`);
 }

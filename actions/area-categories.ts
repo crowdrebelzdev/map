@@ -85,7 +85,7 @@ export async function createAreaCategory(input: {
 
   logActivity(input.eventId, session.user.id, "category.create", `${session.user.name} heeft area-categorie "${input.label.trim()}" toegevoegd.`);
 
-  revalidatePath(`/admin/events/${input.eventSlug}/pois`);
+  revalidatePath(`/org/events/${input.eventSlug}/pois`);
   revalidatePath(`/events/${input.eventSlug}/map`);
 }
 
@@ -112,7 +112,7 @@ export async function updateAreaCategory(input: {
 
   logActivity(input.eventId, session.user.id, "category.update", `${session.user.name} heeft area-categorie "${input.label.trim()}" bijgewerkt.`);
 
-  revalidatePath(`/admin/events/${input.eventSlug}/pois`);
+  revalidatePath(`/org/events/${input.eventSlug}/pois`);
   revalidatePath(`/events/${input.eventSlug}/map`);
 }
 
@@ -137,6 +137,6 @@ export async function deleteAreaCategory(eventId: string, eventSlug: string, cat
     logActivity(eventId, session.user.id, "category.delete", `${session.user.name} heeft area-categorie "${existing.label}" verwijderd.`);
   }
 
-  revalidatePath(`/admin/events/${eventSlug}/pois`);
+  revalidatePath(`/org/events/${eventSlug}/pois`);
   revalidatePath(`/events/${eventSlug}/map`);
 }

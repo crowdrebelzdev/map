@@ -39,6 +39,17 @@ export async function isOrgAdmin(session: Session, organizationId: string): Prom
   return membership?.role === "owner";
 }
 
+/** Guard for the platform-wide `/admin` area — throws unless the caller is a super admin
+ * (`user.role === "admin"`). Unlike `requireOrgAdmin`, being an org owner is never enough
+ * here: this is specifically for cross-organization management. */
+export async function requirePlatformAdmin(session?: Session): Promise<Session> {
+  const s = session ?? (await requireSession());
+  if (s.user.role !== "admin") {
+    throw new Error("Niet toegestaan: alleen voor platformbeheerders.");
+  }
+  return s;
+}
+
 /** Server Action guard — throws unless the caller is a super admin or an org admin (owner) of `organizationId`. */
 export async function requireOrgAdmin(
   organizationId: string,

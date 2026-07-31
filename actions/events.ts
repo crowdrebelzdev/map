@@ -83,7 +83,7 @@ export async function createEvent(formData: FormData) {
     return ev;
   });
 
-  revalidatePath("/admin/events");
+  revalidatePath("/org/events");
   return created;
 }
 
@@ -237,23 +237,23 @@ export async function duplicateEvent(eventId: string) {
     }
   }
 
-  revalidatePath("/admin/events");
+  revalidatePath("/org/events");
   return created;
 }
 
 export async function archiveEvent(eventId: string) {
   await requireOrgAdminForEvent(eventId);
   await db.update(event).set({ archivedAt: new Date() }).where(eq(event.id, eventId));
-  revalidatePath("/admin/events");
-  revalidatePath("/admin");
+  revalidatePath("/org/events");
+  revalidatePath("/org");
   revalidatePath("/events");
 }
 
 export async function unarchiveEvent(eventId: string) {
   await requireOrgAdminForEvent(eventId);
   await db.update(event).set({ archivedAt: null }).where(eq(event.id, eventId));
-  revalidatePath("/admin/events");
-  revalidatePath("/admin");
+  revalidatePath("/org/events");
+  revalidatePath("/org");
   revalidatePath("/events");
 }
 
@@ -267,7 +267,7 @@ export async function updatePublicAccessMode(eventId: string, eventSlug: string,
 
   logActivity(eventId, session.user.id, "event.public_access_mode_update", `${session.user.name} heeft het publieke toegangsniveau gewijzigd.`);
 
-  revalidatePath(`/admin/events/${eventSlug}/settings`);
+  revalidatePath(`/org/events/${eventSlug}/settings`);
   revalidatePath(`/events/${eventSlug}/map`);
 }
 
@@ -282,5 +282,5 @@ export async function deleteEvent(eventId: string) {
   }
 
   await db.delete(event).where(eq(event.id, eventId));
-  revalidatePath("/admin/events");
+  revalidatePath("/org/events");
 }

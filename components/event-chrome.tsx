@@ -31,7 +31,7 @@ export function EventChrome({
   return (
     <div className="mx-auto max-w-7xl space-y-4">
       <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
-        <Link href="/admin/events" className="hover:text-foreground hover:underline">
+        <Link href="/org/events" className="hover:text-foreground hover:underline">
           Evenementen
         </Link>
         <ChevronRight className="size-3.5" />

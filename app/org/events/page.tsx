@@ -70,7 +70,7 @@ export default async function EventsPage({
         <CardTitle>Evenementen ({total})</CardTitle>
         <div className="flex items-center gap-2">
           <Link
-            href={`/admin/events?archived=${showArchived ? "0" : "1"}`}
+            href={`/org/events?archived=${showArchived ? "0" : "1"}`}
             className={buttonVariants({ variant: "outline", size: "sm" })}
           >
             {showArchived ? "Verberg gearchiveerd" : "Toon gearchiveerd"}
@@ -83,7 +83,7 @@ export default async function EventsPage({
         <PaginationControls
           page={page}
           totalPages={totalPages}
-          basePath={showArchived ? "/admin/events?archived=1" : "/admin/events"}
+          basePath={showArchived ? "/org/events?archived=1" : "/org/events"}
         />
       </CardContent>
     </Card>

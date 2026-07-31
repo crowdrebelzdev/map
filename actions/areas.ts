@@ -57,7 +57,7 @@ export async function createArea(input: {
 
   logActivity(input.eventId, session.user.id, "area.create", `${session.user.name} heeft area "${input.name.trim()}" toegevoegd.`);
 
-  revalidatePath(`/admin/events/${input.eventSlug}/pois`);
+  revalidatePath(`/org/events/${input.eventSlug}/pois`);
   revalidatePath(`/events/${input.eventSlug}/map`);
 }
 
@@ -96,7 +96,7 @@ export async function updateArea(input: {
 
   logActivity(input.eventId, session.user.id, "area.update", `${session.user.name} heeft area "${input.name.trim()}" bijgewerkt.`);
 
-  revalidatePath(`/admin/events/${input.eventSlug}/pois`);
+  revalidatePath(`/org/events/${input.eventSlug}/pois`);
   revalidatePath(`/events/${input.eventSlug}/map`);
 }
 
@@ -114,6 +114,6 @@ export async function deleteArea(eventId: string, eventSlug: string, areaId: str
     logActivity(eventId, session.user.id, "area.delete", `${session.user.name} heeft area "${existing.name}" verwijderd.`);
   }
 
-  revalidatePath(`/admin/events/${eventSlug}/pois`);
+  revalidatePath(`/org/events/${eventSlug}/pois`);
   revalidatePath(`/events/${eventSlug}/map`);
 }

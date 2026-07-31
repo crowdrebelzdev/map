@@ -24,8 +24,8 @@ export async function createEventDay(input: {
     label: input.label?.trim() || null,
   });
 
-  revalidatePath(`/admin/events/${input.eventSlug}`);
-  revalidatePath(`/admin/events/${input.eventSlug}/pois`);
+  revalidatePath(`/org/events/${input.eventSlug}`);
+  revalidatePath(`/org/events/${input.eventSlug}/pois`);
   revalidatePath(`/events/${input.eventSlug}/map`);
 }
 
@@ -34,7 +34,7 @@ export async function deleteEventDay(eventId: string, eventSlug: string, dayId: 
 
   await db.delete(eventDay).where(eq(eventDay.id, dayId));
 
-  revalidatePath(`/admin/events/${eventSlug}`);
-  revalidatePath(`/admin/events/${eventSlug}/pois`);
+  revalidatePath(`/org/events/${eventSlug}`);
+  revalidatePath(`/org/events/${eventSlug}/pois`);
   revalidatePath(`/events/${eventSlug}/map`);
 }

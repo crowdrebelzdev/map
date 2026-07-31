@@ -18,7 +18,7 @@ export default async function EventMapPage({
   const access = await getEventAccess(ev.id, { id: session!.user.id, role: session!.user.role ?? null });
 
   if (!hasEventPermission(access, "edit_map")) {
-    redirect("/admin/events");
+    redirect("/org/events");
   }
 
   const [existingMap, existingGrid] = await Promise.all([

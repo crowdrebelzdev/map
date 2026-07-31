@@ -7,11 +7,11 @@ import { TemplateManager } from "@/components/template-manager";
 export default async function TemplatesPage() {
   const session = await getServerSession();
   if (!session) {
-    redirect("/sign-in?redirect=/admin/templates");
+    redirect("/sign-in?redirect=/org/templates");
   }
   const { organizationId } = await requireActiveOrganizationId();
   if (!(await isOrgAdmin(session, organizationId))) {
-    redirect("/admin/events");
+    redirect("/org/events");
   }
 
   const templates = await listTemplatesWithCategories();

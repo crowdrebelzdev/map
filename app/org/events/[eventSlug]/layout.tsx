@@ -17,7 +17,7 @@ export default async function EventLayout({
   const access = await getEventAccess(ev.id, { id: session!.user.id, role: session!.user.role ?? null });
 
   if (!hasAnyEventAccess(access)) {
-    redirect("/admin/events");
+    redirect("/org/events");
   }
 
   const tabs = buildEventTabs(eventSlug, access);

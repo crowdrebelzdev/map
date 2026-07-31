@@ -28,7 +28,7 @@ export async function uploadMapImage(
 
   logActivity(eventId, session.user.id, "map.upload", `${session.user.name} heeft een nieuwe plattegrond geüpload.`);
 
-  revalidatePath(`/admin/events/${eventSlug}/map`);
+  revalidatePath(`/org/events/${eventSlug}/map`);
   return { imageUrl, imageWidth, imageHeight };
 }
 
@@ -76,7 +76,7 @@ export async function saveMapCorners(input: {
 
   logActivity(input.eventId, session.user.id, "map.corners_update", `${session.user.name} heeft de kaartplaatsing aangepast.`);
 
-  revalidatePath(`/admin/events/${input.eventSlug}`);
+  revalidatePath(`/org/events/${input.eventSlug}`);
 }
 
 export async function listMapVersions(eventId: string) {
@@ -115,6 +115,6 @@ export async function restoreMapVersion(eventId: string, eventSlug: string, vers
 
   logActivity(eventId, session.user.id, "map.version_restore", `${session.user.name} heeft een eerdere plattegrond hersteld.`);
 
-  revalidatePath(`/admin/events/${eventSlug}`);
-  revalidatePath(`/admin/events/${eventSlug}/map`);
+  revalidatePath(`/org/events/${eventSlug}`);
+  revalidatePath(`/org/events/${eventSlug}/map`);
 }

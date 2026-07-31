@@ -47,7 +47,7 @@ export async function sendBroadcast(
     body: trimmed,
   }).catch(() => {});
 
-  revalidatePath(`/admin/events/${eventSlug}/live`);
+  revalidatePath(`/org/events/${eventSlug}/live`);
 }
 
 /** Event members a message can be targeted at — the same pool as team assignment, since

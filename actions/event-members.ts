@@ -31,8 +31,8 @@ export async function setEventMemberPermissions(
     `${session.user.name} heeft de rechten van ${target?.name ?? "een teamlid"} aangepast.`,
   );
 
-  revalidatePath(`/admin/events/${eventSlug}/team`);
-  revalidatePath("/admin/events");
+  revalidatePath(`/org/events/${eventSlug}/team`);
+  revalidatePath("/org/events");
   revalidatePath("/events");
 }
 
@@ -52,7 +52,7 @@ export async function removeEventMember(eventId: string, eventSlug: string, user
     `${session.user.name} heeft ${target?.name ?? "een teamlid"} uit het team verwijderd.`,
   );
 
-  revalidatePath(`/admin/events/${eventSlug}/team`);
-  revalidatePath("/admin/events");
+  revalidatePath(`/org/events/${eventSlug}/team`);
+  revalidatePath("/org/events");
   revalidatePath("/events");
 }

@@ -21,7 +21,7 @@ export function EventFullscreenHeader({
   return (
     <div className="flex shrink-0 items-center gap-3 overflow-x-auto border-b bg-background px-3 py-2">
       <Link
-        href={`/admin/events/${eventSlug}`}
+        href={`/org/events/${eventSlug}`}
         className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
       >
         <ArrowLeft />

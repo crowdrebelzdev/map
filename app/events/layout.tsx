@@ -2,7 +2,7 @@ import { getServerSession } from "@/lib/get-session";
 import { NavBar } from "@/components/nav-bar";
 import { HeaderSlotProvider } from "@/components/header-slot";
 
-/** Not session-gated here (unlike the /admin layout) — `/events/[eventSlug]/map` is reachable
+/** Not session-gated here (unlike the /admin or /org layouts) — `/events/[eventSlug]/map` is reachable
  * by anonymous/public visitors when an event's `publicAccessMode` allows it (see that page's
  * own access logic). Only the staff chrome (NavBar/logout) requires a session; pages under
  * this layout that DO need a session (e.g. `/events` itself) check for one individually. */

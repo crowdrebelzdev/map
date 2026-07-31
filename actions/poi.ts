@@ -125,7 +125,7 @@ export async function createPoi(input: {
 
   logActivity(input.eventId, session.user.id, "poi.create", `${session.user.name} heeft POI "${input.name.trim()}" toegevoegd.`);
 
-  revalidatePath(`/admin/events/${input.eventSlug}/pois`);
+  revalidatePath(`/org/events/${input.eventSlug}/pois`);
   revalidatePath(`/events/${input.eventSlug}/map`);
 }
 
@@ -184,7 +184,7 @@ export async function updatePoi(input: {
 
   logActivity(input.eventId, session.user.id, "poi.update", `${session.user.name} heeft POI "${input.name.trim()}" bijgewerkt.`);
 
-  revalidatePath(`/admin/events/${input.eventSlug}/pois`);
+  revalidatePath(`/org/events/${input.eventSlug}/pois`);
   revalidatePath(`/events/${input.eventSlug}/map`);
 }
 
@@ -203,7 +203,7 @@ export async function movePoi(eventId: string, eventSlug: string, poiId: string,
 
   logActivity(eventId, session.user.id, "poi.update", `${session.user.name} heeft POI "${existing.name}" verplaatst.`);
 
-  revalidatePath(`/admin/events/${eventSlug}/pois`);
+  revalidatePath(`/org/events/${eventSlug}/pois`);
   revalidatePath(`/events/${eventSlug}/map`);
 }
 
@@ -221,7 +221,7 @@ export async function deletePoi(eventId: string, eventSlug: string, poiId: strin
     logActivity(eventId, session.user.id, "poi.delete", `${session.user.name} heeft POI "${existing.name}" verwijderd.`);
   }
 
-  revalidatePath(`/admin/events/${eventSlug}/pois`);
+  revalidatePath(`/org/events/${eventSlug}/pois`);
   revalidatePath(`/events/${eventSlug}/map`);
 }
 
@@ -261,7 +261,7 @@ export async function bulkMovePois(
     `${session.user.name} heeft ${poiIds.length} POI('s) in bulk verplaatst.`,
   );
 
-  revalidatePath(`/admin/events/${eventSlug}/pois`);
+  revalidatePath(`/org/events/${eventSlug}/pois`);
   revalidatePath(`/events/${eventSlug}/map`);
 }
 
@@ -278,7 +278,7 @@ export async function bulkDeletePois(eventId: string, eventSlug: string, poiIds:
     `${session.user.name} heeft ${poiIds.length} POI('s) in bulk verwijderd.`,
   );
 
-  revalidatePath(`/admin/events/${eventSlug}/pois`);
+  revalidatePath(`/org/events/${eventSlug}/pois`);
   revalidatePath(`/events/${eventSlug}/map`);
 }
 
@@ -411,7 +411,7 @@ export async function importPoisCsv(
       "poi.bulk_import",
       `${session.user.name} heeft ${values.length} POI('s) geïmporteerd via CSV.`,
     );
-    revalidatePath(`/admin/events/${eventSlug}/pois`);
+    revalidatePath(`/org/events/${eventSlug}/pois`);
     revalidatePath(`/events/${eventSlug}/map`);
   }
 

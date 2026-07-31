@@ -90,7 +90,7 @@ export function LiveOpsView({
       <header className="flex items-center justify-between gap-2 border-b px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
           <Link
-            href={`/admin/events/${eventSlug}`}
+            href={`/org/events/${eventSlug}`}
             className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
           >
             <ArrowLeft />

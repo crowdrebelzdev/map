@@ -9,7 +9,7 @@ export function PaginationControls({
 }: {
   page: number;
   totalPages: number;
-  /** Path, optionally with an existing query string (e.g. "/admin/events" or "/admin/events?archived=1") — this component adds a page param. */
+  /** Path, optionally with an existing query string (e.g. "/org/events" or "/org/events?archived=1") — this component adds a page param. */
   basePath: string;
 }) {
   if (totalPages <= 1) return null;

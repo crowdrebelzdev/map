@@ -15,7 +15,7 @@ export default async function EventActivityPage({
   const session = await getServerSession();
 
   if (!session || !(await isOrgAdmin(session, ev.organizationId))) {
-    redirect("/admin/events");
+    redirect("/org/events");
   }
 
   const entries = await listActivity(ev.id);

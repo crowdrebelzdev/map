@@ -15,5 +15,5 @@ export default async function Home() {
 
   const organizationId = await resolveActiveOrganizationId(session);
   const canManageOrg = organizationId ? await isOrgAdmin(session, organizationId) : false;
-  redirect(canManageOrg ? "/admin" : "/events");
+  redirect(canManageOrg ? "/org" : "/events");
 }

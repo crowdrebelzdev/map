@@ -34,7 +34,7 @@ function SignInForm() {
         return;
       }
 
-      // "/" dispatches to /admin/events or /events based on role — avoids hardcoding a
+      // "/" dispatches to /admin, /org, or /events based on role — avoids hardcoding a
       // destination here that would be wrong for a plain "user" account.
       router.push(searchParams.get("redirect") ?? "/");
       router.refresh();

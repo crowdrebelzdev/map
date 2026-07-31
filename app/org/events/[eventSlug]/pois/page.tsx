@@ -1,17 +1,14 @@
-import { asc, count, desc, eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { areaCategory, eventMap, gridConfig, mapArea, poi, poiCategory, searchLog } from "@/db/schema";
+import { areaCategory, eventDay, eventMap, gridConfig, mapArea, poi, poiCategory } from "@/db/schema";
 import { requireEventBySlug } from "@/lib/get-event";
 import { getServerSession } from "@/lib/get-session";
-import { getEventAccess, hasEventPermission } from "@/lib/event-access";
-import { getLiveLocations } from "@/actions/live-location";
-import { listIncidents } from "@/actions/incidents";
-import { listEventRecipients } from "@/actions/broadcasts";
+import { getEventAccess, hasEventPermission, buildEventTabs } from "@/lib/event-access";
 import { computeGridCellsFromQuad } from "@/lib/geo";
-import { LiveOpsView } from "@/components/live-ops-view";
+import { PoiWorkspace } from "@/components/poi-workspace";
 
-export default async function EventLivePage({
+export default async function EventPoisPage({
   params,
 }: {
   params: Promise<{ eventSlug: string }>;
@@ -21,13 +18,14 @@ export default async function EventLivePage({
   const session = await getServerSession();
   const access = await getEventAccess(ev.id, { id: session!.user.id, role: session!.user.role ?? null });
 
-  const canViewLive = hasEventPermission(access, "view_live_locations");
-  const canManageIncidents = hasEventPermission(access, "manage_incidents");
-  if (!canViewLive && !canManageIncidents) {
-    redirect("/admin/events");
+  const canManagePois = hasEventPermission(access, "manage_pois");
+  const canManageCategories = hasEventPermission(access, "manage_categories");
+  const canManageAreas = hasEventPermission(access, "manage_pois");
+  if (!canManagePois && !canManageCategories) {
+    redirect("/org/events");
   }
 
-  const [map, grid, pois, categories, areas, areaCategories, liveUsers, topSearches, incidents, recipients] = await Promise.all([
+  const [map, grid, pois, categories, areas, areaCategories, days] = await Promise.all([
     db.query.eventMap.findFirst({ where: eq(eventMap.eventId, ev.id) }),
     db.query.gridConfig.findFirst({ where: eq(gridConfig.eventId, ev.id) }),
     db.query.poi.findMany({ where: eq(poi.eventId, ev.id) }),
@@ -40,16 +38,7 @@ export default async function EventLivePage({
       where: eq(areaCategory.eventId, ev.id),
       orderBy: asc(areaCategory.sortOrder),
     }),
-    canViewLive ? getLiveLocations(ev.id) : Promise.resolve([]),
-    db
-      .select({ type: searchLog.type, term: searchLog.term, count: count() })
-      .from(searchLog)
-      .where(eq(searchLog.eventId, ev.id))
-      .groupBy(searchLog.type, searchLog.term)
-      .orderBy(desc(count()))
-      .limit(10),
-    canManageIncidents ? listIncidents(ev.id) : Promise.resolve([]),
-    canManageIncidents ? listEventRecipients(ev.id) : Promise.resolve([]),
+    db.query.eventDay.findMany({ where: eq(eventDay.eventId, ev.id), orderBy: asc(eventDay.date) }),
   ]);
 
   const gridCells = grid
@@ -73,27 +62,22 @@ export default async function EventLivePage({
     : [];
 
   return (
-    <LiveOpsView
+    <PoiWorkspace
       eventId={ev.id}
       eventSlug={eventSlug}
       eventName={ev.name}
+      tabs={buildEventTabs(eventSlug, access)}
       map={map ?? null}
+      grid={grid ?? null}
       gridCells={gridCells}
       pois={pois}
       categories={categories}
       areas={areas}
       areaCategories={areaCategories}
-      canViewLive={canViewLive}
-      canManageIncidents={canManageIncidents}
-      initialLiveUsers={liveUsers.map((r) => ({
-        userId: r.userId,
-        userName: r.userName,
-        lat: r.lat,
-        lng: r.lng,
-      }))}
-      initialIncidents={incidents}
-      topSearches={topSearches}
-      recipients={recipients}
+      eventDays={days}
+      canManagePois={canManagePois}
+      canManageCategories={canManageCategories}
+      canManageAreas={canManageAreas}
     />
   );
 }

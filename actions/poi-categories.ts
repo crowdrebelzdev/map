@@ -104,7 +104,7 @@ export async function createPoiCategory(input: {
 
   logActivity(input.eventId, session.user.id, "category.create", `${session.user.name} heeft categorie "${input.label.trim()}" toegevoegd.`);
 
-  revalidatePath(`/admin/events/${input.eventSlug}/pois`);
+  revalidatePath(`/org/events/${input.eventSlug}/pois`);
   revalidatePath(`/events/${input.eventSlug}/map`);
 }
 
@@ -142,7 +142,7 @@ export async function updatePoiCategory(input: {
 
   logActivity(input.eventId, session.user.id, "category.update", `${session.user.name} heeft categorie "${input.label.trim()}" bijgewerkt.`);
 
-  revalidatePath(`/admin/events/${input.eventSlug}/pois`);
+  revalidatePath(`/org/events/${input.eventSlug}/pois`);
   revalidatePath(`/events/${input.eventSlug}/map`);
 }
 
@@ -167,6 +167,6 @@ export async function deletePoiCategory(eventId: string, eventSlug: string, cate
     logActivity(eventId, session.user.id, "category.delete", `${session.user.name} heeft categorie "${existing.label}" verwijderd.`);
   }
 
-  revalidatePath(`/admin/events/${eventSlug}/pois`);
+  revalidatePath(`/org/events/${eventSlug}/pois`);
   revalidatePath(`/events/${eventSlug}/map`);
 }

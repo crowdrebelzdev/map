@@ -66,7 +66,7 @@ export function CreateEventForm({
         toast.success(`"${created.name}" aangemaakt.`);
         setOpen(false);
         setTemplateId(NO_TEMPLATE_VALUE);
-        router.push(`/admin/events/${created.slug}/map`);
+        router.push(`/org/events/${created.slug}/map`);
       } catch (err) {
         toast.error(err instanceof Error ? err.message : "Aanmaken mislukt.");
       }

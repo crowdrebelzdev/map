@@ -100,47 +100,47 @@ export default async function EventOverviewPage({
     {
       label: "Plattegrond geüpload en ankerpunten ingesteld",
       done: !!map,
-      href: `/admin/events/${eventSlug}/map`,
+      href: `/org/events/${eventSlug}/map`,
     },
     {
       label: "Grid ingesteld",
       done: !!grid,
-      href: `/admin/events/${eventSlug}/map`,
+      href: `/org/events/${eventSlug}/map`,
     },
     {
       label: "Categorieën aangemaakt",
       done: categoryCount > 0,
-      href: `/admin/events/${eventSlug}/pois`,
+      href: `/org/events/${eventSlug}/pois`,
     },
     {
       label: "POI's geplaatst",
       done: poiCount > 0,
-      href: `/admin/events/${eventSlug}/pois`,
+      href: `/org/events/${eventSlug}/pois`,
     },
     {
       label: "Team toegewezen",
       done: memberCount > 0,
-      href: `/admin/events/${eventSlug}/team`,
+      href: `/org/events/${eventSlug}/team`,
     },
   ];
 
   const doneCount = items.filter((i) => i.done).length;
 
   const stats = [
-    { label: "POI's", value: poiCount, icon: MapPin, href: `/admin/events/${eventSlug}/pois` },
-    { label: "Teamleden", value: memberCount, icon: Users, href: `/admin/events/${eventSlug}/team` },
+    { label: "POI's", value: poiCount, icon: MapPin, href: `/org/events/${eventSlug}/pois` },
+    { label: "Teamleden", value: memberCount, icon: Users, href: `/org/events/${eventSlug}/team` },
     canViewIncidents && {
       label: "Open meldingen",
       value: openIncidentCount,
       icon: ShieldAlert,
-      href: `/admin/events/${eventSlug}/live`,
+      href: `/org/events/${eventSlug}/live`,
       alert: openIncidentCount > 0,
     },
     canViewLive && {
       label: "Live op de kaart",
       value: activeLiveCount,
       icon: Radio,
-      href: `/admin/events/${eventSlug}/live`,
+      href: `/org/events/${eventSlug}/live`,
     },
   ].filter((s): s is Exclude<typeof s, false> => !!s);
 

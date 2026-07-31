@@ -20,7 +20,10 @@
     "offlineError": "Offline opslaan mislukt — klik om opnieuw te proberen",
     "offlineIdle": "Kaart offline opslaan",
     "offlineSaveSuccess": "Kaart offline opgeslagen.",
-    "offlineSaveError": "Offline opslaan mislukt. Probeer het opnieuw."
+    "offlineSaveError": "Offline opslaan mislukt. Probeer het opnieuw.",
+    "offlineTipMessage": "Tip: download deze kaart, dan werkt hij ook zonder bereik.",
+    "offlineTipDownload": "Download nu",
+    "offlineTipDismiss": "Sluiten"
   },
   "visitorNameGate": {
     "welcome": "Welkom",

@@ -123,7 +123,8 @@ export function OperationalMap({
 
   useLiveLocationSharing(eventId, isStaff, latestGpsRef);
 
-  const { isOnline, offlineStatus, offlineProgress, handleDownloadOffline } = useOfflineMap(map);
+  const { isOnline, offlineStatus, offlineProgress, handleDownloadOffline, showOfflineTip, dismissOfflineTip } =
+    useOfflineMap(map);
 
   const offlineDownloadButton = useMemo(() => {
     const icon =
@@ -280,6 +281,26 @@ export function OperationalMap({
           <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1 text-xs font-medium text-white shadow-md">
             <WifiOff size={13} />
             {t("offlineBanner")}
+          </div>
+        )}
+
+        {isOnline && showOfflineTip && (
+          <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-foreground/90 py-1.5 pr-2 pl-3 text-xs font-medium text-background shadow-md backdrop-blur-sm">
+            <Download size={13} className="shrink-0" />
+            <span>{t("offlineTipMessage")}</span>
+            <button
+              onClick={handleDownloadOffline}
+              className="shrink-0 rounded-full bg-background px-2 py-1 text-foreground"
+            >
+              {t("offlineTipDownload")}
+            </button>
+            <button
+              onClick={dismissOfflineTip}
+              className="shrink-0 rounded-full p-1 text-background/70 hover:text-background"
+            >
+              <X size={13} />
+              <span className="sr-only">{t("offlineTipDismiss")}</span>
+            </button>
           </div>
         )}
       </div>

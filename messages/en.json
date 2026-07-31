@@ -20,7 +20,10 @@
     "offlineError": "Offline save failed — click to try again",
     "offlineIdle": "Save map offline",
     "offlineSaveSuccess": "Map saved offline.",
-    "offlineSaveError": "Offline save failed. Please try again."
+    "offlineSaveError": "Offline save failed. Please try again.",
+    "offlineTipMessage": "Tip: download this map so it also works without signal.",
+    "offlineTipDownload": "Download now",
+    "offlineTipDismiss": "Dismiss"
   },
   "visitorNameGate": {
     "welcome": "Welcome",

@@ -17,6 +17,10 @@ export function useOfflineMap(map: MapRow | null) {
   const [isOnline, setIsOnline] = useState(true);
   const [offlineStatus, setOfflineStatus] = useState<"idle" | "downloading" | "done" | "error">("idle");
   const [offlineProgress, setOfflineProgress] = useState({ done: 0, total: 0 });
+  // Hidden by default until the mount effect below confirms (from localStorage) that this
+  // visitor hasn't already dismissed it for this event — avoids a one-frame flash of the tip
+  // for returning visitors.
+  const [tipDismissed, setTipDismissed] = useState(true);
 
   useEffect(() => {
     setIsOnline(navigator.onLine);
@@ -35,8 +39,20 @@ export function useOfflineMap(map: MapRow | null) {
     if (map && localStorage.getItem(`offline-map-${map.eventId}`)) {
       setOfflineStatus("done");
     }
+    if (map && !localStorage.getItem(`offline-tip-dismissed-${map.eventId}`)) {
+      setTipDismissed(false);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map?.eventId]);
+
+  function dismissOfflineTip() {
+    if (map) localStorage.setItem(`offline-tip-dismissed-${map.eventId}`, "1");
+    setTipDismissed(true);
+  }
+
+  // Only while nothing has happened yet (no download in progress, none saved, no failed
+  // attempt still lingering) — once the visitor has engaged with it either way, don't nag.
+  const showOfflineTip = !tipDismissed && offlineStatus === "idle";
 
   async function runOfflineDownload(mapRow: MapRow, silent: boolean) {
     setOfflineStatus("downloading");
@@ -77,5 +93,5 @@ export function useOfflineMap(map: MapRow | null) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map?.eventId, isOnline]);
 
-  return { isOnline, offlineStatus, offlineProgress, handleDownloadOffline };
+  return { isOnline, offlineStatus, offlineProgress, handleDownloadOffline, showOfflineTip, dismissOfflineTip };
 }

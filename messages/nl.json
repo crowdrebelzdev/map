@@ -43,11 +43,6 @@
     "title": "Grootte van POI's",
     "description": "Past de grootte van alle POI's op de kaart tegelijk aan."
   },
-  "installPrompt": {
-    "message": "Installeer deze kaart als app",
-    "install": "Installeren",
-    "close": "Sluiten"
-  },
   "themeToggle": {
     "toggle": "Thema wisselen",
     "light": "Licht",

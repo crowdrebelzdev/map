@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import { asc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
@@ -15,19 +14,6 @@ import { OperationalMap } from "@/components/operational-map";
 // event, without touching proxy.ts (which deliberately has no DB access, see its comment).
 const ANONYMOUS_VIEW_WINDOW_MS = 60_000;
 const ANONYMOUS_VIEW_MAX = 30;
-
-// Points this specific page at its own per-event manifest (see the sibling manifest.ts)
-// instead of the app-wide /manifest.json — so "Add to Home Screen" from here always
-// launches straight back into this event's map, not the global "/" (which requires a
-// session and would strand an anonymous visitor on the sign-in screen).
-export async function generateMetadata({
-  params,
-}: {
-  params: Promise<{ eventSlug: string }>;
-}): Promise<Metadata> {
-  const { eventSlug } = await params;
-  return { manifest: `/events/${eventSlug}/manifest.webmanifest` };
-}
 
 export default async function StaffEventMapPage({
   params,

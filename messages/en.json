@@ -43,11 +43,6 @@
     "title": "POI size",
     "description": "Scales every POI on the map at once."
   },
-  "installPrompt": {
-    "message": "Install this map as an app",
-    "install": "Install",
-    "close": "Close"
-  },
   "themeToggle": {
     "toggle": "Toggle theme",
     "light": "Light",

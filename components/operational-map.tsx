@@ -11,7 +11,6 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { PoiFilterSheet } from "@/components/poi-filter-sheet";
 import { PoiSizeControl } from "@/components/poi-size-control";
 import { BroadcastListener } from "@/components/broadcast-listener";
-import { InstallPromptBanner } from "@/components/install-prompt-banner";
 import { PushSubscribeButton } from "@/components/push-subscribe-button";
 import { VisitorNameGate } from "@/components/visitor-name-gate";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -277,14 +276,10 @@ export function OperationalMap({
           </div>
         )}
 
-        {!isOnline ? (
+        {!isOnline && (
           <div className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-amber-500 px-3 py-1 text-xs font-medium text-white shadow-md">
             <WifiOff size={13} />
             {t("offlineBanner")}
-          </div>
-        ) : (
-          <div className="pointer-events-auto">
-            <InstallPromptBanner />
           </div>
         )}
       </div>

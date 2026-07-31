@@ -141,26 +141,33 @@ export function OperationalMap({
             ? "Offline opslaan mislukt — klik om opnieuw te proberen"
             : "Kaart offline opslaan";
     return (
-      <Tooltip>
-        <TooltipTrigger
-          render={
-            <Button
-              variant="secondary"
-              size="icon"
-              className={cn(
-                "pointer-events-auto shrink-0 shadow-md",
-                offlineStatus === "done" && "text-emerald-600",
-              )}
-              disabled={offlineStatus === "downloading"}
-            />
-          }
-          onClick={offlineStatus === "downloading" || offlineStatus === "done" ? undefined : handleDownloadOffline}
-        >
-          {icon}
-          <span className="sr-only">{label}</span>
-        </TooltipTrigger>
-        <TooltipContent>{label}</TooltipContent>
-      </Tooltip>
+      <div className="pointer-events-none relative shrink-0">
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                variant="secondary"
+                size="icon"
+                className={cn(
+                  "pointer-events-auto shrink-0 shadow-md",
+                  offlineStatus === "done" && "text-emerald-600",
+                )}
+                disabled={offlineStatus === "downloading"}
+              />
+            }
+            onClick={offlineStatus === "downloading" || offlineStatus === "done" ? undefined : handleDownloadOffline}
+          >
+            {icon}
+            <span className="sr-only">{label}</span>
+          </TooltipTrigger>
+          <TooltipContent>{label}</TooltipContent>
+        </Tooltip>
+        {/* Permanent signal that the map is safe to use offline — the icon/tooltip above
+            only communicate that on hover, which isn't discoverable on a touch device. */}
+        {offlineStatus === "done" && (
+          <span className="pointer-events-none absolute -right-0.5 -top-0.5 size-2.5 rounded-full bg-emerald-500 ring-2 ring-background" />
+        )}
+      </div>
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [offlineStatus, offlineProgress.done, offlineProgress.total]);

@@ -119,3 +119,42 @@ export async function listUserOrganizations(userId: string) {
     .where(eq(member.userId, userId))
     .orderBy(desc(member.createdAt));
 }
+
+export async function updateUserProfile(userId: string, input: { name: string; email: string }) {
+  await requirePlatformAdmin();
+
+  const name = input.name.trim();
+  const email = input.email.trim();
+  if (!name) throw new Error("Naam is verplicht.");
+  if (!email) throw new Error("E-mail is verplicht.");
+
+  await auth.api.adminUpdateUser({
+    headers: await headers(),
+    body: { userId, data: { name, email } },
+  });
+
+  revalidatePath(`/admin/users/${userId}`);
+  revalidatePath("/admin/users");
+}
+
+export async function setUserPasswordAdmin(userId: string, newPassword: string) {
+  await requirePlatformAdmin();
+
+  await auth.api.setUserPassword({
+    headers: await headers(),
+    body: { userId, newPassword },
+  });
+}
+
+/** Deletes the user's account, sessions and linked accounts — cannot be undone. Better
+ * Auth's own endpoint additionally refuses to let a platform admin remove themselves. */
+export async function deleteUser(userId: string) {
+  await requirePlatformAdmin();
+
+  await auth.api.removeUser({
+    headers: await headers(),
+    body: { userId },
+  });
+
+  revalidatePath("/admin/users");
+}

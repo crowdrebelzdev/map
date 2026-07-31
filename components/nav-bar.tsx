@@ -8,6 +8,7 @@ import { LogOut } from "lucide-react";
 import { authClient } from "@/lib/auth-client";
 import { useHeaderSlotContent } from "@/components/header-slot";
 import { ROLE_LABELS } from "@/lib/auth-roles";
+import { useBranding } from "@/components/branding-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleToggle } from "@/components/locale-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -40,6 +41,7 @@ export function NavBar({
   const router = useRouter();
   const headerSlotContent = useHeaderSlotContent();
   const t = useTranslations("navBar");
+  const { logoInitial, brandColor } = useBranding();
 
   async function handleSignOut() {
     await authClient.signOut();
@@ -52,8 +54,11 @@ export function NavBar({
     <header className="border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 dark:bg-card/95 dark:supports-[backdrop-filter]:bg-card/85">
       <div className="flex items-center justify-between gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-black font-semibold text-white dark:bg-white dark:text-black">
-            K
+          <div
+            className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg font-semibold text-white"
+            style={{ backgroundColor: brandColor }}
+          >
+            {logoInitial}
           </div>
           <Link href={href} className="truncate font-semibold">
             {title}

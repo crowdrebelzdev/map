@@ -1,27 +1,16 @@
-import { Settings } from "lucide-react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
+import { getPlatformSettings } from "@/lib/platform-settings";
+import { PlatformSettingsForm } from "@/components/platform-settings-form";
 
-export default function PlatformSettingsPage() {
+export default async function PlatformSettingsPage() {
+  const settings = await getPlatformSettings();
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Platform-instellingen</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Empty className="border-0 p-0">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <Settings />
-            </EmptyMedia>
-            <EmptyTitle>Nog geen platform-instellingen</EmptyTitle>
-            <EmptyDescription>
-              Er is op dit moment geen platform-brede configuratie om hier te tonen. Deze pagina
-              staat klaar voor zodra dat verandert.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      </CardContent>
-    </Card>
+    <div className="mx-auto max-w-2xl space-y-4">
+      <div>
+        <h1 className="text-2xl font-semibold">Platform-instellingen</h1>
+        <p className="text-sm text-muted-foreground">Geldt voor de hele app, over alle organisaties heen.</p>
+      </div>
+      <PlatformSettingsForm settings={settings} />
+    </div>
   );
 }

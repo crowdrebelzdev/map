@@ -1,6 +1,7 @@
 import { getServerSession } from "@/lib/get-session";
 import { NavBar } from "@/components/nav-bar";
 import { HeaderSlotProvider } from "@/components/header-slot";
+import { getPlatformSettings } from "@/lib/platform-settings";
 
 /** Not session-gated here (unlike the /admin or /org layouts) — `/events/[eventSlug]/map` is reachable
  * by anonymous/public visitors when an event's `publicAccessMode` allows it (see that page's
@@ -11,7 +12,7 @@ export default async function EventsLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const session = await getServerSession();
+  const [session, { platformName }] = await Promise.all([getServerSession(), getPlatformSettings()]);
 
   if (!session) {
     return (
@@ -25,7 +26,7 @@ export default async function EventsLayout({
     <div className="flex h-dvh flex-col overflow-hidden">
       <HeaderSlotProvider>
         <NavBar
-          title="Kaart"
+          title={platformName}
           href="/events"
           email={session.user.email}
           role={session.user.role ?? "user"}

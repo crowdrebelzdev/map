@@ -6,6 +6,7 @@ import { LayoutDashboard, CalendarDays, Users as UsersIcon, LayoutTemplate, LogO
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { ROLE_LABELS } from "@/lib/auth-roles";
+import { useBranding } from "@/components/branding-provider";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleToggle } from "@/components/locale-toggle";
@@ -70,6 +71,7 @@ export function OrgHeader({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { platformName, logoInitial, brandColor } = useBranding();
   const activeOrg = organizations.find((o) => o.id === activeOrganizationId) ?? organizations[0];
 
   async function handleSignOut() {
@@ -89,10 +91,13 @@ export function OrgHeader({
     <header className="border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/85 dark:bg-card/95 dark:supports-[backdrop-filter]:bg-card/85">
       <div className="flex min-h-16 flex-wrap items-center gap-3 px-4 py-3 lg:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-black font-semibold text-white dark:bg-white dark:text-black">
-            K
+          <div
+            className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg font-semibold text-white"
+            style={{ backgroundColor: brandColor }}
+          >
+            {logoInitial}
           </div>
-          <span className="truncate font-semibold">{activeOrg?.name ?? "Kaart"}</span>
+          <span className="truncate font-semibold">{activeOrg?.name ?? platformName}</span>
         </div>
 
         <nav className="flex flex-1 flex-wrap items-center gap-1 lg:justify-center">

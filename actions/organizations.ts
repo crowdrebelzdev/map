@@ -2,9 +2,9 @@
 
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { count, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
-import { organization, member, event } from "@/db/schema";
+import { organization, member, event, user } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { requirePlatformAdmin } from "@/lib/org-access";
 
@@ -74,4 +74,95 @@ export async function createOrganization(input: { name: string }) {
 
   revalidatePath("/admin/organizations");
   return created;
+}
+
+export async function getOrganization(organizationId: string) {
+  await requirePlatformAdmin();
+
+  const org = await db.query.organization.findFirst({ where: eq(organization.id, organizationId) });
+  if (!org) {
+    throw new Error("Organisatie niet gevonden.");
+  }
+  return org;
+}
+
+export async function listOrganizationMembers(organizationId: string) {
+  await requirePlatformAdmin();
+
+  return db
+    .select({ id: user.id, name: user.name, email: user.email, role: member.role })
+    .from(member)
+    .innerJoin(user, eq(user.id, member.userId))
+    .where(eq(member.organizationId, organizationId))
+    .orderBy(desc(member.createdAt));
+}
+
+export async function listOrganizationEvents(organizationId: string) {
+  await requirePlatformAdmin();
+
+  return db.query.event.findMany({
+    where: eq(event.organizationId, organizationId),
+    orderBy: desc(event.createdAt),
+  });
+}
+
+/** Direct Drizzle update rather than `auth.api.updateOrganization` — that API resolves the
+ * organization via the caller's own membership and checks their org-role permission, so it
+ * rejects a platform admin who isn't personally a member of the target org. Slug is left
+ * untouched: events have their own unique slug, not org-prefixed, so renaming has no wider
+ * routing impact. */
+export async function renameOrganization(organizationId: string, name: string) {
+  await requirePlatformAdmin();
+
+  const trimmed = name.trim();
+  if (!trimmed) {
+    throw new Error("Naam is verplicht.");
+  }
+
+  await db.update(organization).set({ name: trimmed }).where(eq(organization.id, organizationId));
+  revalidatePath(`/admin/organizations/${organizationId}`);
+  revalidatePath("/admin/organizations");
+}
+
+async function countOwners(organizationId: string, excludingUserId?: string) {
+  const conditions = [eq(member.organizationId, organizationId), eq(member.role, "owner")];
+  if (excludingUserId) conditions.push(ne(member.userId, excludingUserId));
+  const [{ value }] = await db
+    .select({ value: count() })
+    .from(member)
+    .where(and(...conditions));
+  return value;
+}
+
+/** Same reasoning as `renameOrganization` for using a raw update instead of
+ * `auth.api.updateMemberRole`. Refuses to demote the organization's last remaining owner —
+ * that would leave it with no one able to manage it from the /org side. */
+export async function updateOrgMemberRole(organizationId: string, userId: string, role: "owner" | "member") {
+  await requirePlatformAdmin();
+
+  if (role === "member" && (await countOwners(organizationId, userId)) === 0) {
+    throw new Error("Kan de laatste organisatiebeheerder niet degraderen.");
+  }
+
+  await db
+    .update(member)
+    .set({ role })
+    .where(and(eq(member.organizationId, organizationId), eq(member.userId, userId)));
+  revalidatePath(`/admin/organizations/${organizationId}`);
+}
+
+/** Same reasoning as `renameOrganization` for using a raw delete instead of
+ * `auth.api.removeMember`. Refuses to remove the organization's last remaining owner. */
+export async function removeOrgMember(organizationId: string, userId: string) {
+  await requirePlatformAdmin();
+
+  const targetMember = await db.query.member.findFirst({
+    where: and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
+  });
+  if (targetMember?.role === "owner" && (await countOwners(organizationId, userId)) === 0) {
+    throw new Error("Kan de laatste organisatiebeheerder niet verwijderen.");
+  }
+
+  await db.delete(member).where(and(eq(member.organizationId, organizationId), eq(member.userId, userId)));
+  revalidatePath(`/admin/organizations/${organizationId}`);
 }

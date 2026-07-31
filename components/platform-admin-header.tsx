@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LayoutDashboard, Building2, Users as UsersIcon, Settings, LogOut, ArrowRight } from "lucide-react";
+import { LayoutDashboard, Building2, CalendarDays, Users as UsersIcon, Settings, LogOut, ArrowRight } from "lucide-react";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth-client";
 import { ROLE_LABELS } from "@/lib/auth-roles";
+import { useBranding } from "@/components/branding-provider";
 import { cn } from "@/lib/utils";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleToggle } from "@/components/locale-toggle";
@@ -37,6 +38,7 @@ function initials(name: string) {
 const NAV_ITEMS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/organizations", label: "Organisaties", icon: Building2 },
+  { href: "/admin/events", label: "Evenementen", icon: CalendarDays },
   { href: "/admin/users", label: "Gebruikers", icon: UsersIcon },
   { href: "/admin/settings", label: "Instellingen", icon: Settings },
 ];
@@ -65,6 +67,7 @@ export function PlatformAdminHeader({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { logoInitial, brandColor } = useBranding();
 
   async function handleSignOut() {
     await authClient.signOut();
@@ -77,8 +80,11 @@ export function PlatformAdminHeader({
     <header className="border-b bg-white/95 backdrop-blur supports-backdrop-filter:bg-white/85 dark:bg-card/95 dark:supports-backdrop-filter:bg-card/85">
       <div className="flex min-h-16 flex-wrap items-center gap-3 px-4 py-3 lg:px-6">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg bg-black font-semibold text-white dark:bg-white dark:text-black">
-            K
+          <div
+            className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-lg font-semibold text-white"
+            style={{ backgroundColor: brandColor }}
+          >
+            {logoInitial}
           </div>
           <span className="truncate font-semibold">Platformbeheer</span>
         </div>

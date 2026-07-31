@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -61,7 +62,11 @@ export function OrganizationsTable({ organizations }: { organizations: Organizat
           <TableBody>
             {filtered.map((o) => (
               <TableRow key={o.id}>
-                <TableCell className="font-medium">{o.name}</TableCell>
+                <TableCell className="font-medium">
+                  <Link href={`/admin/organizations/${o.id}`} className="hover:underline">
+                    {o.name}
+                  </Link>
+                </TableCell>
                 <TableCell className="text-muted-foreground">{o.slug}</TableCell>
                 <TableCell>
                   <Badge variant="secondary">{o.memberCount}</Badge>

@@ -468,6 +468,21 @@ export const publicRateLimit = pgTable("public_rate_limit", {
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
 
+// Single-row platform-wide configuration, managed from /admin/settings — see
+// lib/platform-settings.ts. `id` is always the fixed string "platform"; there is
+// deliberately no multi-row support here.
+export const platformSettings = pgTable("platform_settings", {
+  id: text("id").primaryKey(),
+  maintenanceMode: boolean("maintenance_mode").notNull().default(false),
+  maintenanceMessage: text("maintenance_message"),
+  allowOrgSelfRegistration: boolean("allow_org_self_registration").notNull().default(false),
+  defaultEventAccessMode: text("default_event_access_mode").$type<PublicAccessMode>().notNull().default("members_only"),
+  platformName: text("platform_name").notNull().default("Eventkaart"),
+  logoInitial: text("logo_initial").notNull().default("K"),
+  brandColor: text("brand_color").notNull().default("#2563eb"),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
 export const verification = pgTable(
   "verification",
   {

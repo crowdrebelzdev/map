@@ -4,6 +4,7 @@ import { admin, organization } from "better-auth/plugins";
 import { db } from "@/db";
 import { ac, authRoles } from "@/lib/auth-roles";
 import { sendEmail } from "@/lib/email";
+import { getPlatformSettings } from "@/lib/platform-settings";
 
 // Extra origins to trust besides BETTER_AUTH_URL — needed when testing over the LAN
 // (e.g. https://192.168.x.x:3000 for mobile GPS testing). Set TRUSTED_ORIGINS in
@@ -56,10 +57,11 @@ export const auth = betterAuth({
       defaultRole: "user",
     }),
     // Multi-tenancy: an "organization" represents one client/company. Org creation is
-    // deliberately restricted — this app has no self-serve signup, so new orgs only ever
-    // come from a deliberate decision (a new client), not a user action.
+    // restricted by default (no self-serve signup, so new orgs are normally a deliberate
+    // decision, not a user action) — but platform admins can flip this on/off at runtime
+    // via /admin/settings, hence the function instead of a static `false`.
     organization({
-      allowUserToCreateOrganization: false,
+      allowUserToCreateOrganization: async () => (await getPlatformSettings()).allowOrgSelfRegistration,
       creatorRole: "owner",
     }),
   ],

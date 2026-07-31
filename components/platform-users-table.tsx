@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Search } from "lucide-react";
 import { ROLE_LABELS } from "@/lib/auth-roles";
 import { Badge } from "@/components/ui/badge";
@@ -66,7 +67,11 @@ export function PlatformUsersTable({ users }: { users: PlatformUserRow[] }) {
               const banned = !!u.banned;
               return (
                 <TableRow key={u.id} className={cn(banned && "opacity-60")}>
-                  <TableCell className="font-medium">{u.name}</TableCell>
+                  <TableCell className="font-medium">
+                    <Link href={`/admin/users/${u.id}`} className="hover:underline">
+                      {u.name}
+                    </Link>
+                  </TableCell>
                   <TableCell className="text-muted-foreground">{u.email}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1.5">

@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { asc, eq } from "drizzle-orm";
+import { asc, count, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import {
   areaCategory,
@@ -12,14 +12,21 @@ import {
   eventTemplateCategory,
   gridConfig,
   mapArea,
+  organization,
   poi,
   poiCategory,
   publicAccessModeValues,
   type PublicAccessMode,
 } from "@/db/schema";
-import { requireActiveOrganizationId, requireOrgAdmin, requireOrgAdminForEvent } from "@/lib/org-access";
+import {
+  requireActiveOrganizationId,
+  requireOrgAdmin,
+  requireOrgAdminForEvent,
+  requirePlatformAdmin,
+} from "@/lib/org-access";
 import { copyMapImage, deleteMapImage } from "@/lib/storage";
 import { logActivity } from "@/lib/activity-log";
+import { getPlatformSettings } from "@/lib/platform-settings";
 
 function slugify(name: string) {
   return name
@@ -55,6 +62,8 @@ export async function createEvent(formData: FormData) {
     slug = `${slug}-${Date.now().toString(36)}`;
   }
 
+  const { defaultEventAccessMode } = await getPlatformSettings();
+
   let categoriesToInsert: { key: string; label: string; color: string; sortOrder: number }[] =
     DEFAULT_POI_CATEGORIES.map((c, i) => ({ ...c, sortOrder: i }));
 
@@ -78,7 +87,10 @@ export async function createEvent(formData: FormData) {
   }
 
   const created = await db.transaction(async (tx) => {
-    const [ev] = await tx.insert(event).values({ name, slug, organizationId }).returning();
+    const [ev] = await tx
+      .insert(event)
+      .values({ name, slug, organizationId, publicAccessMode: defaultEventAccessMode })
+      .returning();
     await tx.insert(poiCategory).values(categoriesToInsert.map((c) => ({ eventId: ev.id, ...c })));
     return ev;
   });
@@ -283,4 +295,37 @@ export async function deleteEvent(eventId: string) {
 
   await db.delete(event).where(eq(event.id, eventId));
   revalidatePath("/org/events");
+}
+
+const PLATFORM_EVENTS_PAGE_SIZE = 15;
+
+/** All events platform-wide, regardless of organization — for `/admin/events`. Each row
+ * links straight into the existing full event admin at `/org/events/[slug]/...`, which
+ * already accepts a platform admin regardless of organization membership (see
+ * `lib/org-access.ts`'s `isOrgAdmin`) — no separate event-management UI needed here. */
+export async function listAllEvents({ page = 1 }: { page?: number } = {}) {
+  await requirePlatformAdmin();
+
+  const offset = (Math.max(1, page) - 1) * PLATFORM_EVENTS_PAGE_SIZE;
+
+  const [[{ total }], rows] = await Promise.all([
+    db.select({ total: count() }).from(event),
+    db
+      .select({
+        id: event.id,
+        name: event.name,
+        slug: event.slug,
+        createdAt: event.createdAt,
+        archivedAt: event.archivedAt,
+        organizationId: organization.id,
+        organizationName: organization.name,
+      })
+      .from(event)
+      .innerJoin(organization, eq(organization.id, event.organizationId))
+      .orderBy(desc(event.createdAt))
+      .limit(PLATFORM_EVENTS_PAGE_SIZE)
+      .offset(offset),
+  ]);
+
+  return { events: rows, total, totalPages: Math.max(1, Math.ceil(total / PLATFORM_EVENTS_PAGE_SIZE)) };
 }

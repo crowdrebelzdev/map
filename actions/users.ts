@@ -2,9 +2,9 @@
 
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
-import { count, desc } from "drizzle-orm";
+import { count, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
-import { user } from "@/db/schema";
+import { user, member, organization } from "@/db/schema";
 import { auth } from "@/lib/auth";
 import { requireActiveOrganizationId, requireOrgAdmin, requirePlatformAdmin } from "@/lib/org-access";
 
@@ -94,4 +94,28 @@ export async function unbanUser(userId: string) {
   });
 
   revalidatePath("/admin/users");
+}
+
+export async function getUser(userId: string) {
+  await requirePlatformAdmin();
+
+  const found = await db.query.user.findFirst({ where: eq(user.id, userId) });
+  if (!found) {
+    throw new Error("Gebruiker niet gevonden.");
+  }
+  return found;
+}
+
+/** Which organizations this user belongs to and with what role — for `/admin/users/[userId]`.
+ * Read-only here; membership changes happen from the organization's own detail page (a
+ * single place that mutates `member` rows, not two). */
+export async function listUserOrganizations(userId: string) {
+  await requirePlatformAdmin();
+
+  return db
+    .select({ id: organization.id, name: organization.name, slug: organization.slug, role: member.role })
+    .from(member)
+    .innerJoin(organization, eq(organization.id, member.organizationId))
+    .where(eq(member.userId, userId))
+    .orderBy(desc(member.createdAt));
 }

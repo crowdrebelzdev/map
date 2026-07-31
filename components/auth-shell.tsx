@@ -1,6 +1,14 @@
-import { MapPin } from "lucide-react";
+"use client";
 
+import { MapPin } from "lucide-react";
+import { useBranding } from "@/components/branding-provider";
+
+// Every caller (sign-in, forgot-password, reset-password) is itself a client component, so
+// this reads branding from context (populated once in the root layout) rather than fetching
+// server-side — a client component can't render an async server component inline.
 export function AuthShell({ children }: { children: React.ReactNode }) {
+  const { platformName } = useBranding();
+
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
       <div className="flex items-center justify-center p-4 sm:p-8">
@@ -20,7 +28,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
             <MapPin className="size-8" />
           </div>
           <div className="text-center">
-            <p className="text-xl font-semibold">Eventkaart</p>
+            <p className="text-xl font-semibold">{platformName}</p>
             <p className="mt-1 text-sm text-background/60">
               Kaart, grid en POI-beheer voor evenementen
             </p>

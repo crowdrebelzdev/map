@@ -33,6 +33,7 @@ export function LiveOpsView({
   eventSlug,
   eventName,
   map,
+  tileUrlTemplate,
   gridCells,
   pois,
   categories,
@@ -49,6 +50,9 @@ export function LiveOpsView({
   eventSlug: string;
   eventName: string;
   map: MapRow | null;
+  /** Resolved (S3 or local) tile URL template for `map.tileVersion` — see the same prop on
+   * OperationalMap for why this is computed server-side instead of derived here. */
+  tileUrlTemplate: string | null;
   gridCells: GridCell[];
   pois: PoiRow[];
   categories: EventMapPoiCategory[];
@@ -126,6 +130,10 @@ export function LiveOpsView({
                 br: { lat: map.cornerBrLat, lng: map.cornerBrLng },
                 bl: { lat: map.cornerBlLat, lng: map.cornerBlLng },
               },
+              tiles:
+                tileUrlTemplate && map.tileMinZoom != null && map.tileMaxZoom != null
+                  ? { urlTemplate: tileUrlTemplate, minZoom: map.tileMinZoom, maxZoom: map.tileMaxZoom }
+                  : null,
             }}
             gridCells={gridCells}
             pois={pois}

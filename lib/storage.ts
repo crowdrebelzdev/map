@@ -1,6 +1,14 @@
 import { writeFile, mkdir, rm, copyFile } from "fs/promises";
 import path from "path";
-import { S3Client, PutObjectCommand, DeleteObjectCommand, CopyObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  PutObjectCommand,
+  DeleteObjectCommand,
+  DeleteObjectsCommand,
+  ListObjectsV2Command,
+  CopyObjectCommand,
+} from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const UPLOADS_DIR = path.join(process.cwd(), "public", "uploads");
 
@@ -14,7 +22,12 @@ const ALLOWED_MAP_IMAGE_TYPES: Record<string, string> = {
   "image/jpeg": "jpg",
   "image/webp": "webp",
 };
-const MAX_MAP_IMAGE_BYTES = 20 * 1024 * 1024;
+// Kept in sync with next.config.ts's serverActions.bodySizeLimit / middlewareClientMaxBodySize
+// (see the comment there) — raised from 20MB alongside map-image-editor's "Hoog"/"Maximaal"
+// quality presets, which intentionally rasterize a PDF at up to 16000px to keep small printed
+// text legible once tiled, and can produce a source PNG close to this size for a large/detailed
+// plattegrond.
+const MAX_MAP_IMAGE_BYTES = 40 * 1024 * 1024;
 
 // None of these are named with the AWS_ prefix on purpose: AWS Amplify Hosting
 // (and the Lambda runtime its SSR compute runs on) reserves that whole prefix
@@ -120,4 +133,103 @@ export async function deleteMapImage(eventId: string, imageUrl: string): Promise
   }
 
   await rm(path.join(UPLOADS_DIR, eventId), { recursive: true, force: true });
+}
+
+// --- Plattegrond tegels (raster tile pyramid) ---
+//
+// Same S3-vs-local dual mode as the plain map image above, but tile sets can run into the
+// thousands of small files, so the upload path is different: the browser (which does the
+// warping/tiling itself, off the main thread — see lib/tile-worker.ts) either uploads each
+// tile directly to S3 via a short-lived presigned URL (production), or hands batches of
+// tiles to `saveMapTilesLocal` to write straight to the filesystem (zero-setup local dev,
+// mirroring `saveMapImage`'s existing fallback exactly).
+
+function tileKey(eventId: string, versionId: string, z: number, x: number, y: number): string {
+  return `uploads/tiles/${eventId}/${versionId}/${z}/${x}/${y}.png`;
+}
+
+/** The public URL template (with literal `{z}`/`{x}`/`{y}` placeholders) a maplibre-gl
+ * raster source can fetch this event's tiles from — S3 or local, whichever backend the
+ * tiles were actually written to. */
+export function mapTileUrlTemplate(eventId: string, versionId: string): string {
+  const relative = `uploads/tiles/${eventId}/${versionId}/{z}/{x}/{y}.png`;
+  if (s3Client && s3Bucket) {
+    return `https://${s3Bucket}.s3.${s3Region}.amazonaws.com/${relative}`;
+  }
+  return `/${relative}`;
+}
+
+export type TileUploadPlan =
+  | { mode: "s3"; uploads: { z: number; x: number; y: number; url: string }[] }
+  | { mode: "local" };
+
+/**
+ * Prepares the client to upload a batch of tiles: presigned S3 PUT URLs when S3 storage is
+ * configured, so tile bytes go straight from the browser to S3 without passing through the
+ * Next.js server at all (a tile set can be thousands of small files — routing that through a
+ * server action would multiply Lambda invocations for no benefit). Returns a "local" signal
+ * instead when S3 isn't configured, telling the caller to use `saveMapTilesLocal`.
+ */
+export async function getMapTileUploadPlan(
+  eventId: string,
+  versionId: string,
+  tiles: { z: number; x: number; y: number }[],
+): Promise<TileUploadPlan> {
+  if (!s3Client || !s3Bucket) {
+    return { mode: "local" };
+  }
+
+  const uploads = await Promise.all(
+    tiles.map(async ({ z, x, y }) => {
+      const url = await getSignedUrl(
+        s3Client,
+        new PutObjectCommand({ Bucket: s3Bucket, Key: tileKey(eventId, versionId, z, x, y), ContentType: "image/png" }),
+        { expiresIn: 15 * 60 },
+      );
+      return { z, x, y, url };
+    }),
+  );
+
+  return { mode: "s3", uploads };
+}
+
+/** Local-filesystem fallback for `getMapTileUploadPlan`'s "local" mode. */
+export async function saveMapTilesLocal(
+  eventId: string,
+  versionId: string,
+  tiles: { z: number; x: number; y: number; file: File }[],
+): Promise<void> {
+  for (const { z, x, y, file } of tiles) {
+    const filePath = path.join(process.cwd(), "public", tileKey(eventId, versionId, z, x, y));
+    await mkdir(path.dirname(filePath), { recursive: true });
+    await writeFile(filePath, Buffer.from(await file.arrayBuffer()));
+  }
+}
+
+/** Deletes a version's whole tile set — called when a map is re-uploaded (the previous
+ * tiles are now orphaned) or the event is deleted. Best-effort, same as `deleteMapImage`.
+ * S3 listing+deletion is paged since a tile set can run into the thousands of objects. */
+export async function deleteMapTiles(eventId: string, versionId: string): Promise<void> {
+  if (s3Client && s3Bucket) {
+    const prefix = `uploads/tiles/${eventId}/${versionId}/`;
+    let continuationToken: string | undefined;
+    do {
+      const listed = await s3Client.send(
+        new ListObjectsV2Command({ Bucket: s3Bucket, Prefix: prefix, ContinuationToken: continuationToken }),
+      );
+      const objects = (listed.Contents ?? [])
+        .map((o) => (o.Key ? { Key: o.Key } : null))
+        .filter((o): o is { Key: string } => o !== null);
+      if (objects.length > 0) {
+        await s3Client.send(new DeleteObjectsCommand({ Bucket: s3Bucket, Delete: { Objects: objects } }));
+      }
+      continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+    } while (continuationToken);
+    return;
+  }
+
+  await rm(path.join(process.cwd(), "public", "uploads", "tiles", eventId, versionId), {
+    recursive: true,
+    force: true,
+  });
 }

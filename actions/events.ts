@@ -24,7 +24,7 @@ import {
   requireOrgAdminForEvent,
   requirePlatformAdmin,
 } from "@/lib/org-access";
-import { copyMapImage, deleteMapImage } from "@/lib/storage";
+import { copyMapImage, deleteMapImage, deleteMapTiles } from "@/lib/storage";
 import { logActivity } from "@/lib/activity-log";
 import { getPlatformSettings } from "@/lib/platform-settings";
 
@@ -229,6 +229,14 @@ export async function duplicateEvent(eventId: string) {
   if (sourceMap) {
     try {
       const imageUrl = await copyMapImage(eventId, created.id, sourceMap.imageUrl);
+      // Deliberately not copying the source map's tile set (see eventMap.tileVersion):
+      // tile keys are namespaced by eventId (uploads/tiles/{eventId}/{versionId}/...), so
+      // copying just the version id here without also copying every tile object in S3 would
+      // point the new event at tiles that don't exist under its own prefix — worse than no
+      // tiles. Leaving tileVersion unset makes the duplicated event fall back to rendering
+      // `imageUrl` directly, exactly like any map that hasn't been tiled yet; an admin
+      // re-saving the (already-correct, copied) placement on the new event regenerates tiles
+      // for it same as any other placement save.
       await db.insert(eventMap).values({
         eventId: created.id,
         imageUrl,
@@ -291,6 +299,11 @@ export async function deleteEvent(eventId: string) {
     await deleteMapImage(eventId, map.imageUrl).catch(() => {
       // Best-effort: an orphaned file in storage shouldn't block deleting the event.
     });
+    if (map.tileVersion) {
+      await deleteMapTiles(eventId, map.tileVersion).catch(() => {
+        // Best-effort, same reasoning — an orphaned tile set costs storage, not correctness.
+      });
+    }
   }
 
   await db.delete(event).where(eq(event.id, eventId));

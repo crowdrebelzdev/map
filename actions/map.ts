@@ -6,7 +6,13 @@ import { db } from "@/db";
 import { eventMap, eventMapVersion } from "@/db/schema";
 import { requireEventPermission } from "@/lib/event-access";
 import { logActivity } from "@/lib/activity-log";
-import { saveMapImage } from "@/lib/storage";
+import {
+  saveMapImage,
+  getMapTileUploadPlan,
+  saveMapTilesLocal,
+  deleteMapTiles,
+  type TileUploadPlan,
+} from "@/lib/storage";
 import type { CornerSet } from "@/lib/geo";
 
 export async function uploadMapImage(
@@ -117,4 +123,79 @@ export async function restoreMapVersion(eventId: string, eventSlug: string, vers
 
   revalidatePath(`/org/events/${eventSlug}`);
   revalidatePath(`/org/events/${eventSlug}/map`);
+}
+
+// --- Plattegrond tegels ---
+//
+// Generated client-side (warping + tiling happens in the browser, off the main thread — see
+// lib/tile-worker.ts) after an admin finalizes a corner placement via saveMapCorners above.
+// These actions only hand out upload targets and record the result; the actual pixel work
+// never touches the server. Deliberately separate from saveMapCorners itself: corner-dragging
+// stays exactly as fast/responsive as it is today, and a tile run that fails or never
+// finishes simply leaves eventMap.tileVersion pointing at whatever tiles (or none) already
+// existed — the live map falls back to those, never a broken state.
+
+/** Hands the client either presigned S3 PUT URLs or a "local" signal for a batch of tiles
+ * it's about to upload — see getMapTileUploadPlan for which. */
+export async function prepareMapTileUpload(
+  eventId: string,
+  versionId: string,
+  tiles: { z: number; x: number; y: number }[],
+): Promise<TileUploadPlan> {
+  await requireEventPermission(eventId, "edit_map");
+  return getMapTileUploadPlan(eventId, versionId, tiles);
+}
+
+/** Local-dev fallback for prepareMapTileUpload's "local" plan — receives actual tile bytes
+ * instead of the client PUTting them straight to S3. Called once per (client-chosen) batch,
+ * not once per tile, to keep the number of server-action round trips reasonable. */
+export async function uploadMapTilesLocalBatch(eventId: string, versionId: string, formData: FormData) {
+  await requireEventPermission(eventId, "edit_map");
+
+  const tiles: { z: number; x: number; y: number; file: File }[] = [];
+  for (const [key, value] of formData.entries()) {
+    if (!(value instanceof File)) continue;
+    const [z, x, y] = key.split(":").map(Number);
+    if ([z, x, y].some((n) => !Number.isFinite(n))) continue;
+    tiles.push({ z, x, y, file: value });
+  }
+
+  await saveMapTilesLocal(eventId, versionId, tiles);
+}
+
+/**
+ * Marks a tile set as ready to use once every tile in it has finished uploading — the
+ * live map only switches over once this has run, so a partially-uploaded tile set is never
+ * shown to a visitor. Cleans up the previous tile set (if any), same as how a re-uploaded
+ * image doesn't keep the old file around.
+ */
+export async function finalizeMapTiles(
+  eventId: string,
+  eventSlug: string,
+  versionId: string,
+  minZoom: number,
+  maxZoom: number,
+) {
+  const { session } = await requireEventPermission(eventId, "edit_map");
+
+  const current = await db.query.eventMap.findFirst({ where: eq(eventMap.eventId, eventId) });
+  if (!current) {
+    throw new Error("Plattegrond niet gevonden.");
+  }
+
+  await db
+    .update(eventMap)
+    .set({ tileVersion: versionId, tileMinZoom: minZoom, tileMaxZoom: maxZoom })
+    .where(eq(eventMap.eventId, eventId));
+
+  if (current.tileVersion && current.tileVersion !== versionId) {
+    await deleteMapTiles(eventId, current.tileVersion).catch(() => {
+      // Best-effort — an orphaned old tile set costs storage, not correctness.
+    });
+  }
+
+  logActivity(eventId, session.user.id, "map.tiles_ready", `${session.user.name} heeft tegels gegenereerd voor de plattegrond.`);
+
+  revalidatePath(`/org/events/${eventSlug}/map`);
+  revalidatePath(`/events/${eventSlug}/map`);
 }

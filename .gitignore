@@ -44,3 +44,7 @@ certificates
 
 # locally uploaded map images (dev-only fallback storage; production uses S3)
 /public/uploads
+
+# built by `npm run build:worker` (see prebuild/predev in package.json) — not committed,
+# regenerated from lib/tile-worker.ts on every dev/build run
+/public/tile-worker.js

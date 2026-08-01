@@ -7,6 +7,7 @@ import { getServerSession } from "@/lib/get-session";
 import { getEventAccess, hasAnyEventAccess } from "@/lib/event-access";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { listMyMessages } from "@/actions/broadcasts";
+import { mapTileUrlTemplate } from "@/lib/storage";
 import { OperationalMap } from "@/components/operational-map";
 
 // Anonymous visitors have no session to hold accountable, and this page always runs a
@@ -73,6 +74,7 @@ export default async function StaffEventMapPage({
       isStaff={isStaff}
       publicAccessMode={ev.publicAccessMode}
       map={map ?? null}
+      tileUrlTemplate={map?.tileVersion ? mapTileUrlTemplate(ev.id, map.tileVersion) : null}
       grid={grid ?? null}
       pois={pois}
       categories={categories}

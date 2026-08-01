@@ -51,6 +51,15 @@ export const eventMap = pgTable("event_map", {
   cornerBrLng: doublePrecision("corner_br_lng").notNull(),
   cornerBlLat: doublePrecision("corner_bl_lat").notNull(),
   cornerBlLng: doublePrecision("corner_bl_lng").notNull(),
+  // Raster tile pyramid for this plattegrond (see lib/map-tiling.ts) — generated client-side
+  // at upload time, alongside (not instead of) `imageUrl` above, which stays in use for PDF
+  // export and as the fallback rendering when tiles aren't available yet (older maps
+  // uploaded before this existed, or a tile generation that failed/was skipped). Null
+  // `tileVersion` means "no tiles for this map, render `imageUrl` directly" — the live map
+  // view branches on this rather than assuming tiles always exist.
+  tileVersion: text("tile_version"),
+  tileMinZoom: integer("tile_min_zoom"),
+  tileMaxZoom: integer("tile_max_zoom"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -76,6 +85,12 @@ export const eventMapVersion = pgTable(
     cornerBrLng: doublePrecision("corner_br_lng").notNull(),
     cornerBlLat: doublePrecision("corner_bl_lat").notNull(),
     cornerBlLng: doublePrecision("corner_bl_lng").notNull(),
+    // Mirrors eventMap's tile fields (see the comment there) so restoring a snapshotted
+    // version via restoreMapVersion also restores which tile set (if any) it had — the
+    // restore action just spreads these columns back onto eventMap unchanged.
+    tileVersion: text("tile_version"),
+    tileMinZoom: integer("tile_min_zoom"),
+    tileMaxZoom: integer("tile_max_zoom"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [index("event_map_version_event_idx").on(table.eventId, table.createdAt)],

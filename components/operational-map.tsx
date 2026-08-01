@@ -56,6 +56,7 @@ export function OperationalMap({
   isStaff,
   publicAccessMode,
   map,
+  tileUrlTemplate,
   grid,
   pois,
   categories,
@@ -72,6 +73,10 @@ export function OperationalMap({
   isStaff: boolean;
   publicAccessMode: PublicAccessMode;
   map: MapRow | null;
+  /** Resolved (S3 or local) tile URL template for `map.tileVersion` — computed server-side in
+   * the page component, since it depends on env vars (S3 bucket/region) not available to
+   * client code. Null when the plattegrond has no tile set yet (see EventMapImage["tiles"]). */
+  tileUrlTemplate: string | null;
   grid: GridRow | null;
   pois: PoiRow[];
   categories: EventMapPoiCategory[];
@@ -124,7 +129,7 @@ export function OperationalMap({
   useLiveLocationSharing(eventId, isStaff, latestGpsRef);
 
   const { isOnline, offlineStatus, offlineProgress, handleDownloadOffline, showOfflineTip, dismissOfflineTip } =
-    useOfflineMap(map);
+    useOfflineMap(map, tileUrlTemplate);
 
   const offlineDownloadButton = useMemo(() => {
     const icon =
@@ -223,6 +228,10 @@ export function OperationalMap({
             br: { lat: map.cornerBrLat, lng: map.cornerBrLng },
             bl: { lat: map.cornerBlLat, lng: map.cornerBlLng },
           },
+          tiles:
+            tileUrlTemplate && map.tileMinZoom != null && map.tileMaxZoom != null
+              ? { urlTemplate: tileUrlTemplate, minZoom: map.tileMinZoom, maxZoom: map.tileMaxZoom }
+              : null,
         }}
         gridCells={gridCells}
         gridTransformInput={

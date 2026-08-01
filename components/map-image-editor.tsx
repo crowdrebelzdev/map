@@ -23,11 +23,36 @@ import { saveGridConfig } from "@/actions/grid";
 import { rasterizePdfToImageFile } from "@/lib/pdf-to-image";
 import { resizeImageFile } from "@/lib/resize-image";
 import { getContrastCasingColor } from "@/lib/grid-style";
+import { useMapTileGeneration } from "@/hooks/use-map-tile-generation";
 import { formatGridCode, type CornerSet, type GridLabelOrientation } from "@/lib/geo";
 import type { eventMap, gridConfig } from "@/db/schema";
 
 type ExistingMap = typeof eventMap.$inferSelect;
 type ExistingGrid = typeof gridConfig.$inferSelect;
+
+/**
+ * How much detail to keep from the uploaded plattegrond, before it's warped/tiled. This is
+ * the resolution the *source* is rasterized/kept at — not a tile-encoding quality knob (tiles
+ * are already lossless PNG, see lib/tile-worker.ts) — so it's the one setting that actually
+ * controls whether small printed text ends up legible when zoomed in: a PDF's own page size
+ * can make `maxLongSide` the binding constraint rather than `targetDpi`, silently rasterizing
+ * *below* the requested DPI for a large-format (e.g. A0/A1 poster) plattegrond.
+ * `imageMaxDimension` is the equivalent cap for a direct image upload (photo/scan), passed to
+ * resizeImageFile instead.
+ *
+ * Higher tiers mean a larger upload and longer client-side processing — "maximaal" can
+ * approach the 40MB upload ceiling (see MAX_MAP_IMAGE_BYTES in lib/storage.ts) for a large
+ * source. That ceiling is configured in this app, but AWS's own infrastructure in production
+ * (Lambda/API Gateway, fronting the Amplify deploy) may impose its own lower payload limit
+ * that only shows up once actually deployed — test an upload at the chosen tier in production
+ * before relying on it for a live event, not just locally.
+ */
+const MAP_QUALITY_PRESETS = {
+  standaard: { label: "Standaard", pdfDpi: 200, pdfMaxLongSide: 8000, imageMaxDimension: 2400 },
+  hoog: { label: "Hoog (aanbevolen voor tekst)", pdfDpi: 300, pdfMaxLongSide: 12000, imageMaxDimension: 4000 },
+  maximaal: { label: "Maximaal", pdfDpi: 400, pdfMaxLongSide: 16000, imageMaxDimension: 6000 },
+} as const;
+type MapQualityPreset = keyof typeof MAP_QUALITY_PRESETS;
 
 function cornersFromExisting(existing: ExistingMap | null): CornerSet | null {
   if (!existing) return null;
@@ -78,9 +103,15 @@ export function MapImageEditor({
   );
   const [corners, setCorners] = useState<CornerSet | null>(cornersFromExisting(existingMap));
   const [opacity, setOpacity] = useState(0.85);
+  const [quality, setQuality] = useState<MapQualityPreset>("hoog");
   const [uploading, setUploading] = useState(false);
   const [savingPlacement, setSavingPlacement] = useState(false);
   const [savingGrid, setSavingGrid] = useState(false);
+  // Tegels genereren gebeurt op de achtergrond, ná een geslaagde saveMapCorners — zie de
+  // aanroepen in handleFileChange/handleSavePlacement hieronder. Nooit blokkerend voor die
+  // bestaande opslag-flow: een mislukte/onderbroken tegel-run laat de kaart gewoon op de
+  // vorige tegels (of de platte afbeelding) staan.
+  const tileGeneration = useMapTileGeneration(eventId, eventSlug);
   const [mode, setMode] = useState<EditMode>("image");
 
   const [gridCorners, setGridCorners] = useState<CornerSet | null>(
@@ -132,12 +163,15 @@ export function MapImageEditor({
 
     setUploading(true);
     try {
+      const preset = MAP_QUALITY_PRESETS[quality];
       const isPdf =
         rawFile.type === "application/pdf" || rawFile.name.toLowerCase().endsWith(".pdf");
-      const rasterized = isPdf ? await rasterizePdfToImageFile(rawFile) : rawFile;
-      // PDFs are already rasterized at a sane target size — only resize direct
+      const rasterized = isPdf
+        ? await rasterizePdfToImageFile(rawFile, { targetDpi: preset.pdfDpi, maxLongSide: preset.pdfMaxLongSide })
+        : rawFile;
+      // PDFs are already rasterized at the chosen target size above — only resize direct
       // image uploads, which can be arbitrarily large (phone photos, scans).
-      const file = isPdf ? rasterized : await resizeImageFile(rasterized);
+      const file = isPdf ? rasterized : await resizeImageFile(rasterized, preset.imageMaxDimension);
 
       const dims = await new Promise<{ width: number; height: number }>((resolve, reject) => {
         const img = new Image();
@@ -168,6 +202,11 @@ export function MapImageEditor({
         });
         router.refresh();
         toast.success("Plattegrond bijgewerkt — plaatsing is ongewijzigd gebleven.");
+        // Achtergrondtaak, niet blokkerend — zie de toelichting bij useMapTileGeneration
+        // hierboven. Eigen foutmelding, apart van de hoofd-opslag-foutafhandeling.
+        tileGeneration.generate(result.imageUrl, result.imageWidth, result.imageHeight, corners).catch((err) => {
+          toast.error(err instanceof Error ? `Tegels genereren mislukt: ${err.message}` : "Tegels genereren mislukt.");
+        });
       } else {
         toast.success("Plattegrond geüpload. Plaats 'm op de kaart en pas 'm passend.");
       }
@@ -192,6 +231,11 @@ export function MapImageEditor({
       });
       toast.success("Plattegrond-plaatsing opgeslagen.");
       router.refresh();
+      // Achtergrondtaak, niet blokkerend — zie de toelichting bij useMapTileGeneration
+      // hierboven. Eigen foutmelding, apart van de hoofd-opslag-foutafhandeling.
+      tileGeneration.generate(image.imageUrl, image.imageWidth, image.imageHeight, corners).catch((err) => {
+        toast.error(err instanceof Error ? `Tegels genereren mislukt: ${err.message}` : "Tegels genereren mislukt.");
+      });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Opslaan mislukt.");
     } finally {
@@ -234,21 +278,42 @@ export function MapImageEditor({
         <CardTitle>Plattegrond</CardTitle>
         {existingMap && <MapVersionHistoryDialog eventId={eventId} eventSlug={eventSlug} />}
       </CardHeader>
-      <CardContent className="space-y-2">
-        <Label htmlFor="map-image">
-          {image ? "Andere plattegrond uploaden" : "Plattegrond uploaden"}
-        </Label>
-        <Input
-          id="map-image"
-          type="file"
-          accept="image/png,image/jpeg,image/webp,.pdf,application/pdf"
-          onChange={handleFileChange}
-          disabled={uploading}
-        />
-        <p className="text-xs text-muted-foreground">
-          PNG, JPG of PDF. Bij een PDF wordt de eerste pagina gebruikt.
-        </p>
-        {uploading && <p className="text-xs text-muted-foreground">Bezig met verwerken...</p>}
+      <CardContent className="space-y-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="map-quality">Detailniveau</Label>
+          <Select value={quality} onValueChange={(v) => setQuality(v as MapQualityPreset)} disabled={uploading}>
+            <SelectTrigger id="map-quality" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(MAP_QUALITY_PRESETS).map(([key, p]) => (
+                <SelectItem key={key} value={key}>
+                  {p.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-muted-foreground">
+            Hoger detailniveau geeft scherpere tekst bij inzoomen, maar een groter bestand en
+            langere verwerkingstijd. Geldt voor de eerstvolgende upload.
+          </p>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="map-image">
+            {image ? "Andere plattegrond uploaden" : "Plattegrond uploaden"}
+          </Label>
+          <Input
+            id="map-image"
+            type="file"
+            accept="image/png,image/jpeg,image/webp,.pdf,application/pdf"
+            onChange={handleFileChange}
+            disabled={uploading}
+          />
+          <p className="text-xs text-muted-foreground">
+            PNG, JPG of PDF. Bij een PDF wordt de eerste pagina gebruikt.
+          </p>
+          {uploading && <p className="text-xs text-muted-foreground">Bezig met verwerken...</p>}
+        </div>
       </CardContent>
     </Card>
   );
@@ -330,6 +395,19 @@ export function MapImageEditor({
                   >
                     {savingPlacement ? "Bezig..." : "Plaatsing opslaan"}
                   </Button>
+                  {/* Losstaand van bovenstaande knop/opslag — deze tegels worden op de
+                      achtergrond gegenereerd, zie useMapTileGeneration hierboven. */}
+                  {(tileGeneration.status === "warping" || tileGeneration.status === "uploading") && (
+                    <p className="text-xs text-muted-foreground">
+                      Tegels {tileGeneration.status === "warping" ? "voorbereiden" : "uploaden"}
+                      {tileGeneration.progress.total > 0
+                        ? ` (${tileGeneration.progress.done}/${tileGeneration.progress.total})...`
+                        : "..."}
+                    </p>
+                  )}
+                  {tileGeneration.status === "done" && (
+                    <p className="text-xs text-muted-foreground">Tegels zijn bijgewerkt.</p>
+                  )}
                 </CardContent>
               </Card>
             )}

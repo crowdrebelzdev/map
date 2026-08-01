@@ -89,6 +89,12 @@ export type EventMapArea = {
 export type EventMapImage = {
   imageUrl: string;
   corners: { tl: LatLng; tr: LatLng; br: LatLng; bl: LatLng };
+  /** Present once the plattegrond has a generated tile pyramid (see lib/map-tiling.ts) —
+   * rendered instead of the single `imageUrl` overlay below when set, since it's the same
+   * plattegrond at every zoom level without the multi-megabyte single-image download. Absent
+   * (or the tiles not loading for some other reason) falls back to `imageUrl` exactly as
+   * before — the two are never both absent, so the map is never left with nothing to show. */
+  tiles?: { urlTemplate: string; minZoom: number; maxZoom: number } | null;
 };
 
 /** A not-yet-saved POI, rendered with the exact same pill styling as a real marker so what
@@ -557,7 +563,21 @@ export default function EventMapView({
         />
       )}
 
-      {loaded && mapImage && (
+      {loaded && mapImage && mapImage.tiles && (
+        <Source
+          id="event-map-tiles"
+          type="raster"
+          tiles={[mapImage.tiles.urlTemplate]}
+          tileSize={256}
+          minzoom={mapImage.tiles.minZoom}
+          maxzoom={mapImage.tiles.maxZoom}
+          bounds={cornersToBounds(mapImage.corners).flat() as [number, number, number, number]}
+        >
+          <Layer id="event-map-tiles-layer" type="raster" paint={{ "raster-opacity": 1 }} />
+        </Source>
+      )}
+
+      {loaded && mapImage && !mapImage.tiles && (
         <Source
           id="event-map-image"
           type="image"

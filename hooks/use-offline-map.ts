@@ -11,8 +11,10 @@ type MapRow = typeof eventMap.$inferSelect;
 /** Offline-availability state for the operational map: connectivity detection, the
  * download-for-offline flow (with progress), and a silent background refresh whenever the
  * device regains connectivity for an event that was already saved for offline use — so it
- * never goes stale without anyone having to remember to press the button again. */
-export function useOfflineMap(map: MapRow | null) {
+ * never goes stale without anyone having to remember to press the button again.
+ * `tileUrlTemplate` mirrors the same prop threaded into EventMapImage["tiles"] — null falls
+ * back to downloading the flat image exactly as before tiles existed. */
+export function useOfflineMap(map: MapRow | null, tileUrlTemplate: string | null) {
   const t = useTranslations("publicMap");
   const [isOnline, setIsOnline] = useState(true);
   const [offlineStatus, setOfflineStatus] = useState<"idle" | "downloading" | "done" | "error">("idle");
@@ -66,7 +68,11 @@ export function useOfflineMap(map: MapRow | null) {
         minLng: Math.min(...lngs),
         maxLng: Math.max(...lngs),
       };
-      await downloadMapForOffline(bounds, mapRow.imageUrl, (done, total) =>
+      const plattegrondTiles =
+        tileUrlTemplate && mapRow.tileMinZoom != null && mapRow.tileMaxZoom != null
+          ? { urlTemplate: tileUrlTemplate, minZoom: mapRow.tileMinZoom, maxZoom: mapRow.tileMaxZoom }
+          : null;
+      await downloadMapForOffline(bounds, mapRow.imageUrl, plattegrondTiles, (done, total) =>
         setOfflineProgress({ done, total }),
       );
       localStorage.setItem(`offline-map-${mapRow.eventId}`, String(Date.now()));

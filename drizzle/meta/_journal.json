@@ -155,6 +155,13 @@
       "when": 1785525256904,
       "tag": "0021_flowery_imperial_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1785564525194,
+      "tag": "0022_careless_shard",
+      "breakpoints": true
     }
   ]
 }

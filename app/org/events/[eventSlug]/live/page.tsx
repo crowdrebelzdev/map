@@ -9,6 +9,7 @@ import { getLiveLocations } from "@/actions/live-location";
 import { listIncidents } from "@/actions/incidents";
 import { listEventRecipients } from "@/actions/broadcasts";
 import { computeGridCellsFromQuad } from "@/lib/geo";
+import { mapTileUrlTemplate } from "@/lib/storage";
 import { LiveOpsView } from "@/components/live-ops-view";
 
 export default async function EventLivePage({
@@ -78,6 +79,7 @@ export default async function EventLivePage({
       eventSlug={eventSlug}
       eventName={ev.name}
       map={map ?? null}
+      tileUrlTemplate={map?.tileVersion ? mapTileUrlTemplate(ev.id, map.tileVersion) : null}
       gridCells={gridCells}
       pois={pois}
       categories={categories}

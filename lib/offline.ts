@@ -47,12 +47,15 @@ const STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
  * offline: the map style, sprite, vector tiles covering the plattegrond's
  * bounds (up to the source's maxzoom — MapLibre reuses that tile for any
  * deeper zoom via "overzoom", so nothing beyond it is needed), and the
- * plattegrond image itself. Relies on the service worker (sw.js) to actually
- * persist each response in the Cache Storage as these requests pass through it.
+ * plattegrond itself — either its own tile pyramid (see lib/map-tiling.ts) if
+ * it has one, or the single flat image otherwise (unchanged from before tiles
+ * existed). Relies on the service worker (sw.js) to actually persist each
+ * response in the Cache Storage as these requests pass through it.
  */
 export async function downloadMapForOffline(
   bounds: TileBounds,
   imageUrl: string,
+  plattegrondTiles: { urlTemplate: string; minZoom: number; maxZoom: number } | null,
   onProgress: (done: number, total: number) => void,
 ): Promise<void> {
   await registerServiceWorker();
@@ -74,7 +77,8 @@ export async function downloadMapForOffline(
     .map((el) => ("src" in el ? el.src : el.href))
     .filter(Boolean);
 
-  const urls: string[] = [window.location.href, imageUrl, STYLE_URL, ...assetUrls];
+  const urls: string[] = [window.location.href, STYLE_URL, ...assetUrls];
+  if (!plattegrondTiles) urls.push(imageUrl);
   if (vectorSource?.url) urls.push(vectorSource.url);
   if (style.sprite) {
     const spriteBase: string = style.sprite;
@@ -87,6 +91,22 @@ export async function downloadMapForOffline(
       for (const tile of tilesForBoundsAtZoom(bounds, z)) {
         urls.push(
           tileUrlTemplate
+            .replace("{z}", String(tile.z))
+            .replace("{x}", String(tile.x))
+            .replace("{y}", String(tile.y)),
+        );
+      }
+    }
+  }
+
+  // The plattegrond's own tiles, if it has any — every zoom level it was generated at
+  // (unlike the curated subset above for the world-spanning vector basemap, this bounds is
+  // just the venue itself, so the tile count per level stays small regardless of zoom).
+  if (plattegrondTiles) {
+    for (let z = plattegrondTiles.minZoom; z <= plattegrondTiles.maxZoom; z++) {
+      for (const tile of tilesForBoundsAtZoom(bounds, z)) {
+        urls.push(
+          plattegrondTiles.urlTemplate
             .replace("{z}", String(tile.z))
             .replace("{x}", String(tile.x))
             .replace("{y}", String(tile.y)),

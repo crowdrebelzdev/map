@@ -18,7 +18,7 @@ import {
 import { ImageOverlayEditor, type EditMode } from "@/components/image-overlay-editor";
 import { EventFullscreenHeader } from "@/components/event-fullscreen-header";
 import { MapVersionHistoryDialog } from "@/components/map-version-history-dialog";
-import { uploadMapImage, saveMapCorners } from "@/actions/map";
+import { uploadMapImage, prepareMapImageUpload, confirmMapImageUpload, saveMapCorners } from "@/actions/map";
 import { saveGridConfig } from "@/actions/grid";
 import { rasterizePdfToImageFile } from "@/lib/pdf-to-image";
 import { resizeImageFile } from "@/lib/resize-image";
@@ -180,12 +180,35 @@ export function MapImageEditor({
         img.src = URL.createObjectURL(file);
       });
 
-      const formData = new FormData();
-      formData.set("file", file);
-      formData.set("imageWidth", String(dims.width));
-      formData.set("imageHeight", String(dims.height));
-
-      const result = await uploadMapImage(eventId, eventSlug, formData);
+      // Presigned direct-to-S3 upload when available (production): the file never passes
+      // through the Next.js server action at all, sidestepping a payload ceiling AWS's own
+      // infrastructure enforces in front of Amplify's SSR compute — well under what this
+      // app's own config allows, and only surfaced once actually deployed (see the comment
+      // on getMapImageUploadPlan in lib/storage.ts). Falls back to routing the file through
+      // uploadMapImage for zero-setup local dev, where there's no S3 to presign against.
+      const plan = await prepareMapImageUpload(eventId, file.type);
+      let result: { imageUrl: string; imageWidth: number; imageHeight: number };
+      if (plan.mode === "s3") {
+        const putRes = await fetch(plan.url, {
+          method: "PUT",
+          headers: { "Content-Type": file.type },
+          body: file,
+        });
+        if (!putRes.ok) {
+          throw new Error(`Uploaden naar opslag mislukt (${putRes.status}).`);
+        }
+        result = await confirmMapImageUpload(eventId, eventSlug, {
+          imageUrl: plan.publicUrl,
+          imageWidth: dims.width,
+          imageHeight: dims.height,
+        });
+      } else {
+        const formData = new FormData();
+        formData.set("file", file);
+        formData.set("imageWidth", String(dims.width));
+        formData.set("imageHeight", String(dims.height));
+        result = await uploadMapImage(eventId, eventSlug, formData);
+      }
       setImage(result);
 
       if (corners) {

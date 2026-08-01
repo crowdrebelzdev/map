@@ -48,11 +48,50 @@ const s3Client = s3Bucket
     })
   : null;
 
+export type MapImageUploadPlan =
+  | { mode: "s3"; url: string; publicUrl: string }
+  | { mode: "local" };
+
 /**
- * Saves an uploaded map image and returns its public URL. Uses S3 when
- * S3_BUCKET_NAME (+ S3_UPLOAD_REGION) are configured — required for any deploy
- * target without a persistent/shared filesystem — and falls back to the local
- * filesystem for zero-setup local development.
+ * Prepares a direct browser-to-S3 upload for the plattegrond image itself — the same
+ * presigned-URL approach getMapTileUploadPlan already uses for tiles, and for the same
+ * reason: a large (up to 40MB, see MAX_MAP_IMAGE_BYTES) file routed through the Next.js
+ * server action was getting silently rejected in production before it even reached the
+ * Lambda — AWS's own infrastructure in front of Amplify's SSR compute (API Gateway/
+ * CloudFront) has a payload ceiling well under what this app's own config allows, which
+ * only surfaced once actually deployed (a generic "unexpected response from the server" on
+ * the client, and no trace at all in the Lambda's own logs — the request never arrived).
+ * Returns a "local" signal instead when S3 isn't configured, telling the caller to use the
+ * existing `uploadMapImage` action (which still carries the file through the server) —
+ * zero-setup local dev has no such payload ceiling to work around.
+ */
+export async function getMapImageUploadPlan(eventId: string, contentType: string): Promise<MapImageUploadPlan> {
+  const ext = ALLOWED_MAP_IMAGE_TYPES[contentType];
+  if (!ext) {
+    throw new Error("Ongeldig bestandstype. Toegestaan: PNG, JPEG of WebP.");
+  }
+
+  if (!s3Client || !s3Bucket) {
+    return { mode: "local" };
+  }
+
+  // Same versioned-filename scheme as saveMapImage below, so a re-upload doesn't overwrite
+  // the previous file and eventMapVersion rows keep pointing at their own image.
+  const key = `uploads/${eventId}/map-${Date.now()}.${ext}`;
+  const url = await getSignedUrl(
+    s3Client,
+    new PutObjectCommand({ Bucket: s3Bucket, Key: key, ContentType: contentType }),
+    { expiresIn: 15 * 60 },
+  );
+
+  return { mode: "s3", url, publicUrl: `https://${s3Bucket}.s3.${s3Region}.amazonaws.com/${key}` };
+}
+
+/**
+ * Saves an uploaded map image and returns its public URL. Local-filesystem-only now (the S3
+ * path moved to the direct-upload flow above, via getMapImageUploadPlan) — kept as the
+ * zero-setup fallback for local development, where there's no S3 to presign against and no
+ * payload ceiling to route around in the first place.
  */
 export async function saveMapImage(eventId: string, file: File): Promise<string> {
   const ext = ALLOWED_MAP_IMAGE_TYPES[file.type];
@@ -60,26 +99,13 @@ export async function saveMapImage(eventId: string, file: File): Promise<string>
     throw new Error("Ongeldig bestandstype. Toegestaan: PNG, JPEG of WebP.");
   }
   if (file.size > MAX_MAP_IMAGE_BYTES) {
-    throw new Error("Bestand is te groot (max. 20 MB).");
+    throw new Error("Bestand is te groot (max. 40 MB).");
   }
 
   // Versioned filename (not a fixed `map.${ext}`) so a re-upload doesn't overwrite the
   // previous file — `eventMapVersion` rows keep pointing at their own image after this.
   const filename = `map-${Date.now()}.${ext}`;
-  const key = `uploads/${eventId}/${filename}`;
   const buffer = Buffer.from(await file.arrayBuffer());
-
-  if (s3Client && s3Bucket) {
-    await s3Client.send(
-      new PutObjectCommand({
-        Bucket: s3Bucket,
-        Key: key,
-        Body: buffer,
-        ContentType: file.type,
-      }),
-    );
-    return `https://${s3Bucket}.s3.${s3Region}.amazonaws.com/${key}`;
-  }
 
   const dir = path.join(UPLOADS_DIR, eventId);
   await mkdir(dir, { recursive: true });

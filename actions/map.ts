@@ -8,13 +8,19 @@ import { requireEventPermission } from "@/lib/event-access";
 import { logActivity } from "@/lib/activity-log";
 import {
   saveMapImage,
+  getMapImageUploadPlan,
   getMapTileUploadPlan,
   saveMapTilesLocal,
   deleteMapTiles,
+  type MapImageUploadPlan,
   type TileUploadPlan,
 } from "@/lib/storage";
 import type { CornerSet } from "@/lib/geo";
 
+/** Local-dev fallback path: still carries the file through the server action (see
+ * getMapImageUploadPlan's "local" mode) — zero-setup local dev has no S3 to presign against
+ * and no payload ceiling to route around. Production uses prepareMapImageUpload +
+ * confirmMapImageUpload instead (see the comment on getMapImageUploadPlan for why). */
 export async function uploadMapImage(
   eventId: string,
   eventSlug: string,
@@ -36,6 +42,30 @@ export async function uploadMapImage(
 
   revalidatePath(`/org/events/${eventSlug}/map`);
   return { imageUrl, imageWidth, imageHeight };
+}
+
+/** Hands the client either a presigned S3 PUT URL or a "local" signal for the plattegrond
+ * image it's about to upload — see getMapImageUploadPlan for which, and why this exists
+ * instead of always routing the file through uploadMapImage above. */
+export async function prepareMapImageUpload(eventId: string, contentType: string): Promise<MapImageUploadPlan> {
+  await requireEventPermission(eventId, "edit_map");
+  return getMapImageUploadPlan(eventId, contentType);
+}
+
+/** Records a plattegrond image the client already PUT directly to S3 (via
+ * prepareMapImageUpload's presigned URL) — the same bookkeeping uploadMapImage does after
+ * saveMapImage, just without carrying the file bytes through this action too. */
+export async function confirmMapImageUpload(
+  eventId: string,
+  eventSlug: string,
+  input: { imageUrl: string; imageWidth: number; imageHeight: number },
+): Promise<{ imageUrl: string; imageWidth: number; imageHeight: number }> {
+  const { session } = await requireEventPermission(eventId, "edit_map");
+
+  logActivity(eventId, session.user.id, "map.upload", `${session.user.name} heeft een nieuwe plattegrond geüpload.`);
+
+  revalidatePath(`/org/events/${eventSlug}/map`);
+  return input;
 }
 
 export async function saveMapCorners(input: {

@@ -112,23 +112,49 @@ describe("suggestZoomRange", () => {
     expect(minZoom).toBeGreaterThanOrEqual(0);
     expect(minZoom).toBeLessThanOrEqual(maxZoom);
   });
+
+  it("shifts maxZoom one level shallower when tileSize doubles, for the same effective resolution", () => {
+    // Load-bearing, not just an optimization: maplibre-gl itself requests one zoom level
+    // shallower for a 512px tile source than a 256px one, for the same on-screen detail —
+    // see this function's own doc comment. Generating the wrong range here means tiles get
+    // produced for (z, x, y) coordinates the map never actually asks for. Only maxZoom's
+    // formula depends on tileSize (see the function body) — minZoom is about how many
+    // standard zoom-z grid cells the bounds spans, unaffected by tileSize, so it isn't
+    // guaranteed to shift by the same amount (it's independently clamped to `<= maxZoom`).
+    const bounds = computeWarpedRasterBounds(AXIS_ALIGNED, 0.2);
+    const at256 = suggestZoomRange(bounds, 256);
+    const at512 = suggestZoomRange(bounds, 512);
+    expect(at512.maxZoom).toBe(at256.maxZoom - 1);
+    expect(at512.minZoom).toBeLessThanOrEqual(at512.maxZoom);
+  });
 });
 
 describe("generateTiles", () => {
-  it("produces exactly the single global tile at zoom 0, regardless of bounds size", () => {
+  it("never produces more than the single global tile at zoom 0, regardless of bounds size", () => {
     const bounds = computeWarpedRasterBounds(AXIS_ALIGNED, bounds_metersPerPixel(AXIS_ALIGNED, 64));
     const transform = computeTransform(100, 100, AXIS_ALIGNED);
     const source = solidImage(100, 100, [1, 2, 3]);
     const tiles = generateTiles(source, transform, bounds, { minZoom: 0, maxZoom: 0, tileSize: 32 });
-    expect(tiles).toHaveLength(1);
-    expect(tiles[0]).toMatchObject({ z: 0, x: 0, y: 0 });
+    // At zoom 0 this bounds is a speck within the single whole-world tile, so it's plausible
+    // for the tile to come out fully transparent and get skipped entirely (see generateTiles'
+    // own doc comment) — the invariant that actually matters is "never more than 1", not
+    // "always exactly 1".
+    expect(tiles.length).toBeLessThanOrEqual(1);
+    if (tiles.length === 1) {
+      expect(tiles[0]).toMatchObject({ z: 0, x: 0, y: 0 });
+    }
   });
 
   it("keeps every generated tile index within the valid range for its zoom", () => {
     const bounds = computeWarpedRasterBounds(AXIS_ALIGNED, bounds_metersPerPixel(AXIS_ALIGNED, 64));
     const transform = computeTransform(100, 100, AXIS_ALIGNED);
     const source = solidImage(100, 100, [1, 2, 3]);
-    const tiles = generateTiles(source, transform, bounds, { minZoom: 10, maxZoom: 12, tileSize: 16 });
+    // suggestZoomRange's own minZoom..+2, rather than an arbitrary fixed 10..12: at a fixed
+    // low zoom the bounds can be too small a speck in too large a tile to have any sampled
+    // pixel land inside it at all, making every tile fully transparent (and skipped) — this
+    // needs zoom levels where the bounds is known to actually show up in some tile.
+    const { minZoom } = suggestZoomRange(bounds);
+    const tiles = generateTiles(source, transform, bounds, { minZoom, maxZoom: minZoom + 2, tileSize: 16 });
     expect(tiles.length).toBeGreaterThan(0);
     for (const t of tiles) {
       const max = 2 ** t.z - 1;

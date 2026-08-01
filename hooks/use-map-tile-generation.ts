@@ -3,14 +3,21 @@
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { distanceMeters, type CornerSet } from "@/lib/geo";
-import { tileVersionFromImageUrl } from "@/lib/map-tiling";
+import { tileVersionFromImageUrl, DEFAULT_TILE_SIZE } from "@/lib/map-tiling";
 import { prepareMapTileUpload, uploadMapTilesLocalBatch, finalizeMapTiles } from "@/actions/map";
 import type { TileWorkerMessage, TileWorkerRequest } from "@/lib/tile-worker";
 
 export type TileGenerationStatus = "idle" | "warping" | "uploading" | "done" | "error";
 
-const UPLOAD_CONCURRENCY = 6;
+// Uploads go to S3, not this app's own origin, so they don't compete with the page's other
+// connections for the browser's per-origin limit — pushed well past a conservative default
+// since S3 comfortably handles far more concurrent PUTs than this app will ever throw at it.
+const UPLOAD_CONCURRENCY = 24;
 const LOCAL_BATCH_SIZE = 40;
+// Local dev's fallback path (see uploadTilesLocally) — separate from UPLOAD_CONCURRENCY
+// since each unit of work there is a whole batch of tiles through a server action, not one
+// direct PUT; kept modest since it's not the path that matters for the live event.
+const LOCAL_BATCH_CONCURRENCY = 4;
 
 // A fixed id so every status update (voorbereiden -> uploaden -> klaar/mislukt) replaces the
 // same toast instead of stacking a new one each time — this can run for a while (warping a
@@ -98,17 +105,28 @@ async function uploadTilesLocally(
   tiles: { z: number; x: number; y: number; buffer: ArrayBuffer }[],
   onProgress: (done: number) => void,
 ) {
-  let done = 0;
+  const batches: (typeof tiles)[] = [];
   for (let i = 0; i < tiles.length; i += LOCAL_BATCH_SIZE) {
-    const batch = tiles.slice(i, i + LOCAL_BATCH_SIZE);
-    const formData = new FormData();
-    for (const tile of batch) {
-      formData.set(`${tile.z}:${tile.x}:${tile.y}`, new Blob([tile.buffer], { type: "image/png" }));
-    }
-    await uploadMapTilesLocalBatch(eventId, versionId, formData);
-    done += batch.length;
-    onProgress(done);
+    batches.push(tiles.slice(i, i + LOCAL_BATCH_SIZE));
   }
+
+  let index = 0;
+  let done = 0;
+
+  async function worker() {
+    while (index < batches.length) {
+      const batch = batches[index++];
+      const formData = new FormData();
+      for (const tile of batch) {
+        formData.set(`${tile.z}:${tile.x}:${tile.y}`, new Blob([tile.buffer], { type: "image/png" }));
+      }
+      await uploadMapTilesLocalBatch(eventId, versionId, formData);
+      done += batch.length;
+      onProgress(done);
+    }
+  }
+
+  await Promise.all(Array.from({ length: LOCAL_BATCH_CONCURRENCY }, worker));
 }
 
 /**
@@ -153,7 +171,7 @@ export function useMapTileGeneration(eventId: string, eventSlug: string) {
         const metersPerPixel = Math.max(Math.min(...edgeMeters, ...edgeMetersV), 0.001);
 
         const { minZoom, maxZoom, tiles } = await runTileWorker(
-          { sourceImageData, imageWidth, imageHeight, corners, metersPerPixel },
+          { sourceImageData, imageWidth, imageHeight, corners, metersPerPixel, tileSize: DEFAULT_TILE_SIZE },
           (done, total) => {
             setProgress({ done, total });
             toast.loading(`Tegels voorbereiden${progressSuffix(done, total)}...`, { id: TOAST_ID });

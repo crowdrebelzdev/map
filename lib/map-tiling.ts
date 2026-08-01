@@ -146,17 +146,42 @@ export function tileLatLngBounds(z: number, x: number, y: number) {
 
 export type MapTile = { z: number; x: number; y: number; image: RgbaImage };
 
+// 512 rather than the more common 256: for the same ground coverage, a 512px tile is 4x
+// fewer HTTP requests than 256px ones — meaningful here since a lot of the upload time is
+// per-request overhead (connection + S3 processing), not raw bytes, for tiles this small
+// either way. Must match the `tileSize` the raster source is rendered with (see
+// event-map-view-inner.tsx) — a mismatch there would make maplibre-gl misinterpret each
+// tile's pixel dimensions.
+export const DEFAULT_TILE_SIZE = 512;
+
 /**
  * Suggests a sane [minZoom, maxZoom] for a warped raster: `maxZoom` is the highest zoom
  * whose native ground resolution doesn't exceed the raster's own `metersPerPixel` (no point
  * serving tiles sharper than the source data actually is — that's pure upsampled blur).
  * `minZoom` is the zoom at which the whole bounds fits inside roughly one tile.
+ *
+ * `tileSize` must be the same value passed to `generateTiles` and to the raster source's
+ * own `tileSize` at render time (see event-map-view-inner.tsx) — this isn't just a quality
+ * knob, it's load-bearing for which (z, x, y) tiles actually get requested. maplibre-gl
+ * picks which zoom to fetch based on how much screen detail a tile provides for its pixel
+ * size: a 512px tile at zoom Z already supplies what a 256px tile needs zoom Z+1 for, so a
+ * 512px source requests one zoom level *shallower* than a 256px one would for the same
+ * visual result. Generating tiles for the wrong zoom range here means maplibre-gl asks for
+ * (z, x, y) coordinates that were never generated — a blank/broken map, not just a
+ * suboptimal one.
  */
-export function suggestZoomRange(bounds: WarpedRasterBounds): { minZoom: number; maxZoom: number } {
-  // Web Mercator ground resolution (m/px) at zoom z, latitude `refLat`: the standard
-  // 156543.03392-m/px-at-zoom-0-at-the-equator constant, scaled by cos(lat) and 2^-z.
-  const metersPerPixelAtZoom = (z: number) =>
+export function suggestZoomRange(
+  bounds: WarpedRasterBounds,
+  tileSize: number = DEFAULT_TILE_SIZE,
+): { minZoom: number; maxZoom: number } {
+  // Web Mercator ground resolution (m/px) at zoom z, latitude `refLat`, for the *standard*
+  // 256px tile reference — the 156543.03392-m/px-at-zoom-0-at-the-equator constant, scaled
+  // by cos(lat) and 2^-z. A grid cell's geographic footprint at zoom z is always
+  // `standardMetersPerPixelAtZoom(z) * 256`, regardless of tileSize — tileSize only changes
+  // how many pixels represent that same fixed footprint (see effectiveMetersPerPixelAtZoom).
+  const standardMetersPerPixelAtZoom = (z: number) =>
     (156543.03392 * Math.cos((bounds.refLat * Math.PI) / 180)) / 2 ** z;
+  const effectiveMetersPerPixelAtZoom = (z: number) => standardMetersPerPixelAtZoom(z) * (256 / tileSize);
 
   // Stop at the first zoom whose own resolution already matches or exceeds the source's —
   // not the last one still coarser than it (an earlier version of this used `maxZoom + 1
@@ -166,11 +191,11 @@ export function suggestZoomRange(bounds: WarpedRasterBounds): { minZoom: number;
   // math but very visible on screen — it's exactly the zoom level someone lands on to read
   // text, so it's the worst possible place to be quietly serving less detail than uploaded.
   let maxZoom = 0;
-  while (maxZoom < 22 && metersPerPixelAtZoom(maxZoom) > bounds.metersPerPixel) maxZoom++;
+  while (maxZoom < 22 && effectiveMetersPerPixelAtZoom(maxZoom) > bounds.metersPerPixel) maxZoom++;
 
   const spanMeters = Math.max(bounds.maxEast - bounds.minEast, bounds.maxNorth - bounds.minNorth);
   let minZoom = 0;
-  while (minZoom < maxZoom && metersPerPixelAtZoom(minZoom) * 256 > spanMeters) minZoom++;
+  while (minZoom < maxZoom && standardMetersPerPixelAtZoom(minZoom) * 256 > spanMeters) minZoom++;
   minZoom = Math.max(0, minZoom - 1);
 
   return { minZoom, maxZoom };
@@ -194,7 +219,7 @@ export function generateTiles(
   bounds: WarpedRasterBounds,
   opts: { minZoom: number; maxZoom: number; tileSize?: number },
 ): MapTile[] {
-  const tileSize = opts.tileSize ?? 256;
+  const tileSize = opts.tileSize ?? DEFAULT_TILE_SIZE;
   const tiles: MapTile[] = [];
   const geo = warpedRasterLatLngBounds(bounds);
 
@@ -227,6 +252,19 @@ export function generateTiles(
             data[i + 3] = a;
           }
         }
+
+        // A rotated/skewed placement's bounding box is bigger than the quad itself (see
+        // computeWarpedRasterBounds), so some tiles at its edges can land entirely outside
+        // the actual plattegrond — fully transparent, nothing to show. Skip generating,
+        // encoding, and uploading those rather than shipping an empty PNG for no reason.
+        let isFullyTransparent = true;
+        for (let i = 3; i < data.length; i += 4) {
+          if (data[i] !== 0) {
+            isFullyTransparent = false;
+            break;
+          }
+        }
+        if (isFullyTransparent) continue;
 
         tiles.push({ z, x, y, image: { data, width: tileSize, height: tileSize } });
       }

@@ -1,5 +1,11 @@
 import { computeTransform, type CornerSet } from "./geo";
-import { computeWarpedRasterBounds, generateTiles, suggestZoomRange, type RgbaImage } from "./map-tiling";
+import {
+  computeWarpedRasterBounds,
+  generateTiles,
+  suggestZoomRange,
+  DEFAULT_TILE_SIZE,
+  type RgbaImage,
+} from "./map-tiling";
 
 /**
  * Runs the plattegrond warp + tile-cutting pipeline off the main thread, so a large upload
@@ -58,7 +64,8 @@ async function rgbaToPngBuffer(image: RgbaImage): Promise<ArrayBuffer> {
 
 workerSelf.onmessage = async (event: MessageEvent<TileWorkerRequest>) => {
   try {
-    const { sourceImageData, imageWidth, imageHeight, corners, metersPerPixel, tileSize = 256 } = event.data;
+    const { sourceImageData, imageWidth, imageHeight, corners, metersPerPixel, tileSize = DEFAULT_TILE_SIZE } =
+      event.data;
 
     const source: RgbaImage = {
       data: sourceImageData.data,
@@ -68,7 +75,7 @@ workerSelf.onmessage = async (event: MessageEvent<TileWorkerRequest>) => {
 
     const transform = computeTransform(imageWidth, imageHeight, corners);
     const bounds = computeWarpedRasterBounds(corners, metersPerPixel);
-    const { minZoom, maxZoom } = suggestZoomRange(bounds);
+    const { minZoom, maxZoom } = suggestZoomRange(bounds, tileSize);
     // Samples straight from `source` (not via an intermediate warped raster) — see
     // generateTiles' own doc comment for why that matters for quality.
     const rasterTiles = generateTiles(source, transform, bounds, { minZoom, maxZoom, tileSize });

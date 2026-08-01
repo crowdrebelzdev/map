@@ -18,6 +18,7 @@ import type { CornerSet, GridCell, LatLng } from "@/lib/geo";
 import { computeTransform, gridCellsToGeoJSON, isPointInPolygon, latLngToPixel, polygonsIntersect } from "@/lib/geo";
 import { cn } from "@/lib/utils";
 import { getPoiIcon, getShapeContainerStyle } from "@/lib/poi-icons";
+import { DEFAULT_TILE_SIZE } from "@/lib/map-tiling";
 import type { PoiExtraFieldDef, PoiExtraFieldValue } from "@/db/schema";
 
 const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
@@ -568,7 +569,7 @@ export default function EventMapView({
           id="event-map-tiles"
           type="raster"
           tiles={[mapImage.tiles.urlTemplate]}
-          tileSize={256}
+          tileSize={DEFAULT_TILE_SIZE}
           minzoom={mapImage.tiles.minZoom}
           maxzoom={mapImage.tiles.maxZoom}
           bounds={cornersToBounds(mapImage.corners).flat() as [number, number, number, number]}

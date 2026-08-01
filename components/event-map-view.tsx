@@ -3,6 +3,7 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { cn } from "@/lib/utils";
+import { Spinner } from "@/components/ui/spinner";
 import type { EventMapViewProps } from "./event-map-view-inner";
 
 // `ssr: false` below means Next.js can't inject its usual automatic
@@ -33,6 +34,11 @@ const EventMapViewInner = dynamic(() => import("./event-map-view-inner"), {
  * resized-down `displayImageUrl`, not the full-resolution `imageUrl` (which can be tens of
  * MB, see eventMap.displayImageUrl's schema comment) — using the full one here would make
  * the "instant" preview itself slow to load, defeating the point.
+ *
+ * Blurred, with a "Kaart laden..." pill on top: the plattegrond itself isn't the important
+ * part of this preview (the interactive map is) — the blur makes that priority obvious and
+ * doubles as a clear "this isn't final yet" signal, backed up by the pill so it never reads
+ * as finished/broken.
  */
 export function EventMapView({ mapImage, className, onMapReady, ...rest }: EventMapViewProps) {
   const [interactiveReady, setInteractiveReady] = useState(false);
@@ -40,12 +46,22 @@ export function EventMapView({ mapImage, className, onMapReady, ...rest }: Event
   return (
     <div className={cn("relative h-full w-full", className)}>
       {mapImage && !interactiveReady && (
-        <img
-          src={mapImage.displayImageUrl ?? mapImage.imageUrl}
-          alt=""
-          aria-hidden="true"
-          className="absolute inset-0 z-10 h-full w-full object-cover"
-        />
+        <>
+          <img
+            src={mapImage.displayImageUrl ?? mapImage.imageUrl}
+            alt=""
+            aria-hidden="true"
+            // Scaled up slightly so the blur's softened edges fall outside the visible
+            // area instead of showing as a lighter border around the image.
+            className="absolute inset-0 z-10 h-full w-full scale-105 object-cover blur-sm"
+          />
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+            <div className="flex items-center gap-1.5 rounded-full bg-foreground/80 px-3 py-1.5 text-xs font-medium text-background shadow-md backdrop-blur-sm">
+              <Spinner className="size-3.5" />
+              Kaart laden...
+            </div>
+          </div>
+        </>
       )}
       <EventMapViewInner
         mapImage={mapImage}

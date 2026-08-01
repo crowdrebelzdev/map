@@ -226,10 +226,9 @@ export function MapImageEditor({
         router.refresh();
         toast.success("Plattegrond bijgewerkt — plaatsing is ongewijzigd gebleven.");
         // Achtergrondtaak, niet blokkerend — zie de toelichting bij useMapTileGeneration
-        // hierboven. Eigen foutmelding, apart van de hoofd-opslag-foutafhandeling.
-        tileGeneration.generate(result.imageUrl, result.imageWidth, result.imageHeight, corners).catch((err) => {
-          toast.error(err instanceof Error ? `Tegels genereren mislukt: ${err.message}` : "Tegels genereren mislukt.");
-        });
+        // hierboven. De hook toont zijn eigen voortgangs-/foutmelding; hier alleen de
+        // rejection opvangen zodat er geen onbehandelde promise-fout in de console komt.
+        tileGeneration.generate(result.imageUrl, result.imageWidth, result.imageHeight, corners).catch(() => {});
       } else {
         toast.success("Plattegrond geüpload. Plaats 'm op de kaart en pas 'm passend.");
       }
@@ -255,10 +254,9 @@ export function MapImageEditor({
       toast.success("Plattegrond-plaatsing opgeslagen.");
       router.refresh();
       // Achtergrondtaak, niet blokkerend — zie de toelichting bij useMapTileGeneration
-      // hierboven. Eigen foutmelding, apart van de hoofd-opslag-foutafhandeling.
-      tileGeneration.generate(image.imageUrl, image.imageWidth, image.imageHeight, corners).catch((err) => {
-        toast.error(err instanceof Error ? `Tegels genereren mislukt: ${err.message}` : "Tegels genereren mislukt.");
-      });
+      // hierboven. De hook toont zijn eigen voortgangs-/foutmelding; hier alleen de
+      // rejection opvangen zodat er geen onbehandelde promise-fout in de console komt.
+      tileGeneration.generate(image.imageUrl, image.imageWidth, image.imageHeight, corners).catch(() => {});
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Opslaan mislukt.");
     } finally {
@@ -418,19 +416,6 @@ export function MapImageEditor({
                   >
                     {savingPlacement ? "Bezig..." : "Plaatsing opslaan"}
                   </Button>
-                  {/* Losstaand van bovenstaande knop/opslag — deze tegels worden op de
-                      achtergrond gegenereerd, zie useMapTileGeneration hierboven. */}
-                  {(tileGeneration.status === "warping" || tileGeneration.status === "uploading") && (
-                    <p className="text-xs text-muted-foreground">
-                      Tegels {tileGeneration.status === "warping" ? "voorbereiden" : "uploaden"}
-                      {tileGeneration.progress.total > 0
-                        ? ` (${tileGeneration.progress.done}/${tileGeneration.progress.total})...`
-                        : "..."}
-                    </p>
-                  )}
-                  {tileGeneration.status === "done" && (
-                    <p className="text-xs text-muted-foreground">Tegels zijn bijgewerkt.</p>
-                  )}
                 </CardContent>
               </Card>
             )}

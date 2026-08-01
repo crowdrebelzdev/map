@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { toast } from "sonner";
 import { distanceMeters, type CornerSet } from "@/lib/geo";
 import { tileVersionFromImageUrl } from "@/lib/map-tiling";
 import { prepareMapTileUpload, uploadMapTilesLocalBatch, finalizeMapTiles } from "@/actions/map";
@@ -10,6 +11,16 @@ export type TileGenerationStatus = "idle" | "warping" | "uploading" | "done" | "
 
 const UPLOAD_CONCURRENCY = 6;
 const LOCAL_BATCH_SIZE = 40;
+
+// A fixed id so every status update (voorbereiden -> uploaden -> klaar/mislukt) replaces the
+// same toast instead of stacking a new one each time — this can run for a while (warping a
+// large plattegrond, then uploading potentially hundreds of tiles), so it's meant to be the
+// one persistent, hard-to-miss signal that something is still happening in the background.
+const TOAST_ID = "map-tile-generation";
+
+function progressSuffix(done: number, total: number): string {
+  return total > 0 ? ` (${done}/${total})` : "";
+}
 
 async function decodeToImageData(imageUrl: string): Promise<ImageData> {
   const response = await fetch(imageUrl);
@@ -116,6 +127,10 @@ export function useMapTileGeneration(eventId: string, eventSlug: string) {
     async (imageUrl: string, imageWidth: number, imageHeight: number, corners: CornerSet) => {
       setStatus("warping");
       setProgress({ done: 0, total: 0 });
+      // `toast.loading` doesn't auto-dismiss (unlike toast.success/error), which is the
+      // point here — this can legitimately take a while (warping a large plattegrond, then
+      // uploading potentially hundreds of tiles), and should stay visible as long as it is.
+      toast.loading("Tegels voorbereiden...", { id: TOAST_ID });
 
       try {
         const sourceImageData = await decodeToImageData(imageUrl);
@@ -139,11 +154,15 @@ export function useMapTileGeneration(eventId: string, eventSlug: string) {
 
         const { minZoom, maxZoom, tiles } = await runTileWorker(
           { sourceImageData, imageWidth, imageHeight, corners, metersPerPixel },
-          (done, total) => setProgress({ done, total }),
+          (done, total) => {
+            setProgress({ done, total });
+            toast.loading(`Tegels voorbereiden${progressSuffix(done, total)}...`, { id: TOAST_ID });
+          },
         );
 
         setStatus("uploading");
         setProgress({ done: 0, total: tiles.length });
+        toast.loading(`Tegels uploaden${progressSuffix(0, tiles.length)}...`, { id: TOAST_ID });
 
         const versionId = tileVersionFromImageUrl(imageUrl);
         const plan = await prepareMapTileUpload(
@@ -152,16 +171,23 @@ export function useMapTileGeneration(eventId: string, eventSlug: string) {
           tiles.map((t) => ({ z: t.z, x: t.x, y: t.y })),
         );
 
+        const onUploadProgress = (done: number) => {
+          setProgress({ done, total: tiles.length });
+          toast.loading(`Tegels uploaden${progressSuffix(done, tiles.length)}...`, { id: TOAST_ID });
+        };
         if (plan.mode === "s3") {
-          await uploadTilesToS3(tiles, plan.uploads, (done) => setProgress({ done, total: tiles.length }));
+          await uploadTilesToS3(tiles, plan.uploads, onUploadProgress);
         } else {
-          await uploadTilesLocally(eventId, versionId, tiles, (done) => setProgress({ done, total: tiles.length }));
+          await uploadTilesLocally(eventId, versionId, tiles, onUploadProgress);
         }
 
         await finalizeMapTiles(eventId, eventSlug, versionId, minZoom, maxZoom);
         setStatus("done");
+        toast.success("Tegels zijn klaar en actief op de kaart.", { id: TOAST_ID });
       } catch (err) {
         setStatus("error");
+        const message = err instanceof Error ? err.message : "Onbekende fout.";
+        toast.error(`Tegels genereren mislukt: ${message}`, { id: TOAST_ID });
         throw err;
       }
     },

@@ -26,10 +26,13 @@ const EventMapViewInner = dynamic(() => import("./event-map-view-inner"), {
 /** Wraps the (lazy-loaded, client-only) real map. Maplibre-gl is ~1MB and, because it needs
  * `window` at import time, can't be server-rendered — so on a cold load the browser would
  * otherwise show nothing for this whole component until that download, parse and WebGL init
- * finishes (this was measured at ~7s on mobile for this page). Since the flat plattegrond
- * image is already sitting on the server and is tiny by comparison, show that immediately as
- * a plain `<img>` — real content the very first paint can include — and only swap to the
- * interactive map once it has actually finished rendering (`onMapReady`, not just started).
+ * finishes (this was measured at ~7s on mobile for this page). Since the plattegrond's
+ * display copy is already sitting on the server, show that immediately as a plain `<img>` —
+ * real content the very first paint can include — and only swap to the interactive map once
+ * it has actually finished rendering (`onMapReady`, not just started). Deliberately the
+ * resized-down `displayImageUrl`, not the full-resolution `imageUrl` (which can be tens of
+ * MB, see eventMap.displayImageUrl's schema comment) — using the full one here would make
+ * the "instant" preview itself slow to load, defeating the point.
  */
 export function EventMapView({ mapImage, className, onMapReady, ...rest }: EventMapViewProps) {
   const [interactiveReady, setInteractiveReady] = useState(false);
@@ -38,7 +41,7 @@ export function EventMapView({ mapImage, className, onMapReady, ...rest }: Event
     <div className={cn("relative h-full w-full", className)}>
       {mapImage && !interactiveReady && (
         <img
-          src={mapImage.imageUrl}
+          src={mapImage.displayImageUrl ?? mapImage.imageUrl}
           alt=""
           aria-hidden="true"
           className="absolute inset-0 z-10 h-full w-full object-cover"

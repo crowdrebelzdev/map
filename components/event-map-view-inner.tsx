@@ -89,6 +89,11 @@ export type EventMapArea = {
 
 export type EventMapImage = {
   imageUrl: string;
+  /** A resized-down copy of `imageUrl`, safe to load as a single WebGL texture on any
+   * device — see eventMap.displayImageUrl's schema comment. Used for the no-tiles fallback
+   * `Source` below and for event-map-view.tsx's instant-preview placeholder; falls back to
+   * `imageUrl` when absent (maps saved before this field existed). */
+  displayImageUrl?: string | null;
   corners: { tl: LatLng; tr: LatLng; br: LatLng; bl: LatLng };
   /** Present once the plattegrond has a generated tile pyramid (see lib/map-tiling.ts) —
    * rendered instead of the single `imageUrl` overlay below when set, since it's the same
@@ -600,7 +605,11 @@ export default function EventMapView({
         <Source
           id="event-map-image"
           type="image"
-          url={mapImage.imageUrl}
+          // The (capped) display copy, not the full-resolution `imageUrl` — loading this as
+          // one WebGL texture can exceed the max texture size on mobile GPUs otherwise. See
+          // eventMap.displayImageUrl's schema comment. Falls back to `imageUrl` for maps
+          // saved before that field existed.
+          url={mapImage.displayImageUrl ?? mapImage.imageUrl}
           coordinates={[
             [mapImage.corners.tl.lng, mapImage.corners.tl.lat],
             [mapImage.corners.tr.lng, mapImage.corners.tr.lat],

@@ -6,6 +6,7 @@ import { requireEventBySlug } from "@/lib/get-event";
 import { getServerSession } from "@/lib/get-session";
 import { getEventAccess, hasEventPermission, buildEventTabs } from "@/lib/event-access";
 import { computeGridCellsFromQuad } from "@/lib/geo";
+import { mapTileUrlTemplate } from "@/lib/storage";
 import { PoiWorkspace } from "@/components/poi-workspace";
 
 export default async function EventPoisPage({
@@ -68,6 +69,7 @@ export default async function EventPoisPage({
       eventName={ev.name}
       tabs={buildEventTabs(eventSlug, access)}
       map={map ?? null}
+      tileUrlTemplate={map?.tileVersion ? mapTileUrlTemplate(ev.id, map.tileVersion) : null}
       grid={grid ?? null}
       gridCells={gridCells}
       pois={pois}

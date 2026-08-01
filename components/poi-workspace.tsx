@@ -81,6 +81,7 @@ export function PoiWorkspace({
   eventName,
   tabs,
   map,
+  tileUrlTemplate,
   grid,
   gridCells,
   pois,
@@ -97,6 +98,7 @@ export function PoiWorkspace({
   eventName: string;
   tabs: { href: string; label: string }[];
   map: MapRow | null;
+  tileUrlTemplate: string | null;
   grid: GridRow | null;
   gridCells: GridCell[];
   pois: PoiRow[];
@@ -507,12 +509,17 @@ export function PoiWorkspace({
             map
               ? {
                   imageUrl: map.imageUrl,
+                  displayImageUrl: map.displayImageUrl,
                   corners: {
                     tl: { lat: map.cornerTlLat, lng: map.cornerTlLng },
                     tr: { lat: map.cornerTrLat, lng: map.cornerTrLng },
                     br: { lat: map.cornerBrLat, lng: map.cornerBrLng },
                     bl: { lat: map.cornerBlLat, lng: map.cornerBlLng },
                   },
+                  tiles:
+                    tileUrlTemplate && map.tileMinZoom != null && map.tileMaxZoom != null
+                      ? { urlTemplate: tileUrlTemplate, minZoom: map.tileMinZoom, maxZoom: map.tileMaxZoom }
+                      : null,
                 }
               : null
           }

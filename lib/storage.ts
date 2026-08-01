@@ -65,7 +65,14 @@ export type MapImageUploadPlan =
  * existing `uploadMapImage` action (which still carries the file through the server) —
  * zero-setup local dev has no such payload ceiling to work around.
  */
-export async function getMapImageUploadPlan(eventId: string, contentType: string): Promise<MapImageUploadPlan> {
+export async function getMapImageUploadPlan(
+  eventId: string,
+  contentType: string,
+  // Distinguishes the full-resolution upload from the display-resolution one generated
+  // alongside it (see map-image-editor.tsx) — both would otherwise race for the same
+  // `Date.now()`-based key when uploaded back to back.
+  variant: "full" | "display" = "full",
+): Promise<MapImageUploadPlan> {
   const ext = ALLOWED_MAP_IMAGE_TYPES[contentType];
   if (!ext) {
     throw new Error("Ongeldig bestandstype. Toegestaan: PNG, JPEG of WebP.");
@@ -77,7 +84,8 @@ export async function getMapImageUploadPlan(eventId: string, contentType: string
 
   // Same versioned-filename scheme as saveMapImage below, so a re-upload doesn't overwrite
   // the previous file and eventMapVersion rows keep pointing at their own image.
-  const key = `uploads/${eventId}/map-${Date.now()}.${ext}`;
+  const suffix = variant === "display" ? "-display" : "";
+  const key = `uploads/${eventId}/map-${Date.now()}${suffix}.${ext}`;
   const url = await getSignedUrl(
     s3Client,
     new PutObjectCommand({ Bucket: s3Bucket, Key: key, ContentType: contentType }),
@@ -93,7 +101,11 @@ export async function getMapImageUploadPlan(eventId: string, contentType: string
  * zero-setup fallback for local development, where there's no S3 to presign against and no
  * payload ceiling to route around in the first place.
  */
-export async function saveMapImage(eventId: string, file: File): Promise<string> {
+export async function saveMapImage(
+  eventId: string,
+  file: File,
+  variant: "full" | "display" = "full",
+): Promise<string> {
   const ext = ALLOWED_MAP_IMAGE_TYPES[file.type];
   if (!ext) {
     throw new Error("Ongeldig bestandstype. Toegestaan: PNG, JPEG of WebP.");
@@ -104,7 +116,9 @@ export async function saveMapImage(eventId: string, file: File): Promise<string>
 
   // Versioned filename (not a fixed `map.${ext}`) so a re-upload doesn't overwrite the
   // previous file — `eventMapVersion` rows keep pointing at their own image after this.
-  const filename = `map-${Date.now()}.${ext}`;
+  // See getMapImageUploadPlan's `variant` param for why the suffix is needed.
+  const suffix = variant === "display" ? "-display" : "";
+  const filename = `map-${Date.now()}${suffix}.${ext}`;
   const buffer = Buffer.from(await file.arrayBuffer());
 
   const dir = path.join(UPLOADS_DIR, eventId);

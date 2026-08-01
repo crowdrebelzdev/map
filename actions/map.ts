@@ -25,10 +25,15 @@ export async function uploadMapImage(
   eventId: string,
   eventSlug: string,
   formData: FormData,
-): Promise<{ imageUrl: string; imageWidth: number; imageHeight: number }> {
+): Promise<{ imageUrl: string; displayImageUrl: string; imageWidth: number; imageHeight: number }> {
   const { session } = await requireEventPermission(eventId, "edit_map");
 
   const file = formData.get("file");
+  // Same resized-down copy map-image-editor.tsx generates for S3 uploads — see
+  // eventMap.displayImageUrl's schema comment for why a second, smaller image is needed.
+  // Falls back to `file` itself when absent (kept optional so this action still works if a
+  // caller genuinely has nothing smaller to send) rather than failing the whole upload.
+  const displayFile = formData.get("displayFile");
   const imageWidth = Number(formData.get("imageWidth"));
   const imageHeight = Number(formData.get("imageHeight"));
 
@@ -36,20 +41,26 @@ export async function uploadMapImage(
     throw new Error("Ongeldige afbeelding.");
   }
 
-  const imageUrl = await saveMapImage(eventId, file);
+  const imageUrl = await saveMapImage(eventId, file, "full");
+  const displayImageUrl =
+    displayFile instanceof File ? await saveMapImage(eventId, displayFile, "display") : imageUrl;
 
   logActivity(eventId, session.user.id, "map.upload", `${session.user.name} heeft een nieuwe plattegrond geüpload.`);
 
   revalidatePath(`/org/events/${eventSlug}/map`);
-  return { imageUrl, imageWidth, imageHeight };
+  return { imageUrl, displayImageUrl, imageWidth, imageHeight };
 }
 
 /** Hands the client either a presigned S3 PUT URL or a "local" signal for the plattegrond
  * image it's about to upload — see getMapImageUploadPlan for which, and why this exists
  * instead of always routing the file through uploadMapImage above. */
-export async function prepareMapImageUpload(eventId: string, contentType: string): Promise<MapImageUploadPlan> {
+export async function prepareMapImageUpload(
+  eventId: string,
+  contentType: string,
+  variant: "full" | "display" = "full",
+): Promise<MapImageUploadPlan> {
   await requireEventPermission(eventId, "edit_map");
-  return getMapImageUploadPlan(eventId, contentType);
+  return getMapImageUploadPlan(eventId, contentType, variant);
 }
 
 /** Records a plattegrond image the client already PUT directly to S3 (via
@@ -58,8 +69,8 @@ export async function prepareMapImageUpload(eventId: string, contentType: string
 export async function confirmMapImageUpload(
   eventId: string,
   eventSlug: string,
-  input: { imageUrl: string; imageWidth: number; imageHeight: number },
-): Promise<{ imageUrl: string; imageWidth: number; imageHeight: number }> {
+  input: { imageUrl: string; displayImageUrl: string; imageWidth: number; imageHeight: number },
+): Promise<{ imageUrl: string; displayImageUrl: string; imageWidth: number; imageHeight: number }> {
   const { session } = await requireEventPermission(eventId, "edit_map");
 
   logActivity(eventId, session.user.id, "map.upload", `${session.user.name} heeft een nieuwe plattegrond geüpload.`);
@@ -72,6 +83,7 @@ export async function saveMapCorners(input: {
   eventId: string;
   eventSlug: string;
   imageUrl: string;
+  displayImageUrl: string;
   imageWidth: number;
   imageHeight: number;
   corners: CornerSet;
@@ -83,6 +95,7 @@ export async function saveMapCorners(input: {
   const values = {
     eventId: input.eventId,
     imageUrl: input.imageUrl,
+    displayImageUrl: input.displayImageUrl,
     imageWidth: input.imageWidth,
     imageHeight: input.imageHeight,
     cornerTlLat: corners.tl.lat,

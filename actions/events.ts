@@ -229,6 +229,11 @@ export async function duplicateEvent(eventId: string) {
   if (sourceMap) {
     try {
       const imageUrl = await copyMapImage(eventId, created.id, sourceMap.imageUrl);
+      // Same as imageUrl above — a map saved before displayImageUrl existed has nothing
+      // separate to copy, so it just points at the (already copied) imageUrl instead.
+      const displayImageUrl = sourceMap.displayImageUrl
+        ? await copyMapImage(eventId, created.id, sourceMap.displayImageUrl)
+        : imageUrl;
       // Deliberately not copying the source map's tile set (see eventMap.tileVersion):
       // tile keys are namespaced by eventId (uploads/tiles/{eventId}/{versionId}/...), so
       // copying just the version id here without also copying every tile object in S3 would
@@ -240,6 +245,7 @@ export async function duplicateEvent(eventId: string) {
       await db.insert(eventMap).values({
         eventId: created.id,
         imageUrl,
+        displayImageUrl,
         imageWidth: sourceMap.imageWidth,
         imageHeight: sourceMap.imageHeight,
         cornerTlLat: sourceMap.cornerTlLat,
@@ -299,6 +305,11 @@ export async function deleteEvent(eventId: string) {
     await deleteMapImage(eventId, map.imageUrl).catch(() => {
       // Best-effort: an orphaned file in storage shouldn't block deleting the event.
     });
+    if (map.displayImageUrl && map.displayImageUrl !== map.imageUrl) {
+      await deleteMapImage(eventId, map.displayImageUrl).catch(() => {
+        // Best-effort, same reasoning.
+      });
+    }
     if (map.tileVersion) {
       await deleteMapTiles(eventId, map.tileVersion).catch(() => {
         // Best-effort, same reasoning — an orphaned tile set costs storage, not correctness.

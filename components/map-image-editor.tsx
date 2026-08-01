@@ -54,6 +54,13 @@ const MAP_QUALITY_PRESETS = {
 } as const;
 type MapQualityPreset = keyof typeof MAP_QUALITY_PRESETS;
 
+// A source rasterized at up to 16000px (see pdfMaxLongSide above) is fine as input for tile
+// generation (each tile only ever samples a small piece of it) but exceeds the WebGL max
+// texture size on many mobile GPUs (commonly 4096-8192px) when loaded as one flat image —
+// which the corner-placement editor below always does. 4096 is a conservative floor that
+// stays safe even on older/budget devices. See eventMap.displayImageUrl's schema comment.
+const DISPLAY_MAX_DIMENSION = 4096;
+
 // Fixed id, same pattern as useMapTileGeneration's TOAST_ID — replaces the same toast
 // through voorbereiden/uploaden -> klaar/mislukt instead of stacking a new one each time.
 const UPLOAD_TOAST_ID = "map-image-upload";
@@ -95,11 +102,13 @@ export function MapImageEditor({
 }) {
   const router = useRouter();
   const [image, setImage] = useState<
-    { imageUrl: string; imageWidth: number; imageHeight: number } | null
+    { imageUrl: string; displayImageUrl: string; imageWidth: number; imageHeight: number } | null
   >(
     existingMap
       ? {
           imageUrl: existingMap.imageUrl,
+          // Maps saved before displayImageUrl existed fall back to the full image here.
+          displayImageUrl: existingMap.displayImageUrl ?? existingMap.imageUrl,
           imageWidth: existingMap.imageWidth,
           imageHeight: existingMap.imageHeight,
         }
@@ -177,6 +186,12 @@ export function MapImageEditor({
       // PDFs are already rasterized at the chosen target size above — only resize direct
       // image uploads, which can be arbitrarily large (phone photos, scans).
       const file = isPdf ? rasterized : await resizeImageFile(rasterized, preset.imageMaxDimension);
+      // Separate, smaller copy for every "show this as one flat image" use (corner editor,
+      // no-tiles fallback, instant preview) — see DISPLAY_MAX_DIMENSION above for why `file`
+      // itself can be too large for that. resizeImageFile returns `file` unchanged (same
+      // reference) when it's already within the cap, so the `!==` checks below skip a
+      // redundant second upload in that case.
+      const displayFile = await resizeImageFile(file, DISPLAY_MAX_DIMENSION);
 
       const dims = await new Promise<{ width: number; height: number }>((resolve, reject) => {
         const img = new Image();
@@ -192,7 +207,7 @@ export function MapImageEditor({
       // on getMapImageUploadPlan in lib/storage.ts). Falls back to routing the file through
       // uploadMapImage for zero-setup local dev, where there's no S3 to presign against.
       const plan = await prepareMapImageUpload(eventId, file.type);
-      let result: { imageUrl: string; imageWidth: number; imageHeight: number };
+      let result: { imageUrl: string; displayImageUrl: string; imageWidth: number; imageHeight: number };
       if (plan.mode === "s3") {
         const putRes = await fetch(plan.url, {
           method: "PUT",
@@ -202,14 +217,32 @@ export function MapImageEditor({
         if (!putRes.ok) {
           throw new Error(`Uploaden naar opslag mislukt (${putRes.status}).`);
         }
+        let displayImageUrl = plan.publicUrl;
+        if (displayFile !== file) {
+          const displayPlan = await prepareMapImageUpload(eventId, displayFile.type, "display");
+          if (displayPlan.mode !== "s3") {
+            throw new Error("Onverwachte uploadmodus voor de weergave-afbeelding.");
+          }
+          const displayPutRes = await fetch(displayPlan.url, {
+            method: "PUT",
+            headers: { "Content-Type": displayFile.type },
+            body: displayFile,
+          });
+          if (!displayPutRes.ok) {
+            throw new Error(`Uploaden naar opslag mislukt (${displayPutRes.status}).`);
+          }
+          displayImageUrl = displayPlan.publicUrl;
+        }
         result = await confirmMapImageUpload(eventId, eventSlug, {
           imageUrl: plan.publicUrl,
+          displayImageUrl,
           imageWidth: dims.width,
           imageHeight: dims.height,
         });
       } else {
         const formData = new FormData();
         formData.set("file", file);
+        if (displayFile !== file) formData.set("displayFile", displayFile);
         formData.set("imageWidth", String(dims.width));
         formData.set("imageHeight", String(dims.height));
         result = await uploadMapImage(eventId, eventSlug, formData);
@@ -224,6 +257,7 @@ export function MapImageEditor({
           eventId,
           eventSlug,
           imageUrl: result.imageUrl,
+          displayImageUrl: result.displayImageUrl,
           imageWidth: result.imageWidth,
           imageHeight: result.imageHeight,
           corners,
@@ -252,6 +286,7 @@ export function MapImageEditor({
         eventId,
         eventSlug,
         imageUrl: image.imageUrl,
+        displayImageUrl: image.displayImageUrl,
         imageWidth: image.imageWidth,
         imageHeight: image.imageHeight,
         corners,
@@ -617,7 +652,10 @@ export function MapImageEditor({
 
       <div className="min-w-0 flex-1">
         <ImageOverlayEditor
-          imageUrl={image.imageUrl}
+          // The display (capped) copy, not the full-resolution source — the corner editor
+          // needs no more pixels than a screen can show, and the full source can exceed the
+          // WebGL max texture size on mobile GPUs. See DISPLAY_MAX_DIMENSION above.
+          imageUrl={image.displayImageUrl}
           imageWidth={image.imageWidth}
           imageHeight={image.imageHeight}
           corners={corners}

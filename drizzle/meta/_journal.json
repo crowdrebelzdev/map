@@ -162,6 +162,13 @@
       "when": 1785564525194,
       "tag": "0022_careless_shard",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1785584562904,
+      "tag": "0023_bumpy_slyde",
+      "breakpoints": true
     }
   ]
 }

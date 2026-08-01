@@ -222,6 +222,7 @@ export function OperationalMap({
         className="absolute inset-0"
         mapImage={{
           imageUrl: map.imageUrl,
+          displayImageUrl: map.displayImageUrl,
           corners: {
             tl: { lat: map.cornerTlLat, lng: map.cornerTlLng },
             tr: { lat: map.cornerTrLat, lng: map.cornerTrLng },

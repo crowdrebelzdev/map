@@ -41,6 +41,16 @@ export const eventMap = pgTable("event_map", {
     .unique()
     .references(() => event.id, { onDelete: "cascade" }),
   imageUrl: text("image_url").notNull(),
+  // A resized-down (long side capped, see map-image-editor.tsx's DISPLAY_MAX_DIMENSION)
+  // copy of `imageUrl`, used everywhere the plattegrond is shown/loaded as a single flat
+  // image — the corner-placement editor, the "no tiles yet" fallback overlay, and the
+  // instant preview shown while the interactive map loads (see event-map-view.tsx). A
+  // source rasterized at up to 16000px (see MAP_QUALITY_PRESETS) exceeds the WebGL max
+  // texture size on many mobile GPUs (commonly 4096-8192px) when loaded as one texture —
+  // `imageUrl` itself stays untouched at full resolution for tile generation and PDF
+  // export, where that ceiling doesn't apply. Nullable: maps saved before this existed
+  // fall back to `imageUrl` directly at the call sites that read this field.
+  displayImageUrl: text("display_image_url"),
   imageWidth: integer("image_width").notNull(),
   imageHeight: integer("image_height").notNull(),
   cornerTlLat: doublePrecision("corner_tl_lat").notNull(),
@@ -75,6 +85,10 @@ export const eventMapVersion = pgTable(
       .notNull()
       .references(() => event.id, { onDelete: "cascade" }),
     imageUrl: text("image_url").notNull(),
+    // Mirrors eventMap.displayImageUrl (see the comment there) — snapshotted/restored
+    // alongside imageUrl so a restored version doesn't fall back to the full-resolution
+    // image everywhere the display copy is expected.
+    displayImageUrl: text("display_image_url"),
     imageWidth: integer("image_width").notNull(),
     imageHeight: integer("image_height").notNull(),
     cornerTlLat: doublePrecision("corner_tl_lat").notNull(),

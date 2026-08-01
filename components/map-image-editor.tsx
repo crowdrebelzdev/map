@@ -54,6 +54,10 @@ const MAP_QUALITY_PRESETS = {
 } as const;
 type MapQualityPreset = keyof typeof MAP_QUALITY_PRESETS;
 
+// Fixed id, same pattern as useMapTileGeneration's TOAST_ID — replaces the same toast
+// through voorbereiden/uploaden -> klaar/mislukt instead of stacking a new one each time.
+const UPLOAD_TOAST_ID = "map-image-upload";
+
 function cornersFromExisting(existing: ExistingMap | null): CornerSet | null {
   if (!existing) return null;
   return {
@@ -162,6 +166,7 @@ export function MapImageEditor({
     if (!rawFile) return;
 
     setUploading(true);
+    toast.loading("Bezig met verwerken...", { id: UPLOAD_TOAST_ID });
     try {
       const preset = MAP_QUALITY_PRESETS[quality];
       const isPdf =
@@ -224,16 +229,16 @@ export function MapImageEditor({
           corners,
         });
         router.refresh();
-        toast.success("Plattegrond bijgewerkt — plaatsing is ongewijzigd gebleven.");
+        toast.success("Plattegrond bijgewerkt — plaatsing is ongewijzigd gebleven.", { id: UPLOAD_TOAST_ID });
         // Achtergrondtaak, niet blokkerend — zie de toelichting bij useMapTileGeneration
-        // hierboven. De hook toont zijn eigen voortgangs-/foutmelding; hier alleen de
-        // rejection opvangen zodat er geen onbehandelde promise-fout in de console komt.
+        // hierboven. De hook toont zijn eigen voortgangs-/foutmelding (eigen toast-id); hier
+        // alleen de rejection opvangen zodat er geen onbehandelde promise-fout in de console komt.
         tileGeneration.generate(result.imageUrl, result.imageWidth, result.imageHeight, corners).catch(() => {});
       } else {
-        toast.success("Plattegrond geüpload. Plaats 'm op de kaart en pas 'm passend.");
+        toast.success("Plattegrond geüpload. Plaats 'm op de kaart en pas 'm passend.", { id: UPLOAD_TOAST_ID });
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Upload mislukt.");
+      toast.error(err instanceof Error ? err.message : "Upload mislukt.", { id: UPLOAD_TOAST_ID });
     } finally {
       setUploading(false);
     }
@@ -333,7 +338,6 @@ export function MapImageEditor({
           <p className="text-xs text-muted-foreground">
             PNG, JPG of PDF. Bij een PDF wordt de eerste pagina gebruikt.
           </p>
-          {uploading && <p className="text-xs text-muted-foreground">Bezig met verwerken...</p>}
         </div>
       </CardContent>
     </Card>

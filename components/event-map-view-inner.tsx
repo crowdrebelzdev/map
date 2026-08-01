@@ -176,6 +176,12 @@ export type EventMapViewProps = {
   userLocation?: LatLng | null;
   flyToTarget?: FlyToTarget | null;
   className?: string;
+  /** Fires once, the first time the map goes idle after loading (style ready *and* every
+   * source — including this event's plattegrond overlay — has finished loading its
+   * tiles/image, not just the style itself). Lets a parent swap away a static loading
+   * placeholder without a flash of the basemap showing through before the plattegrond has
+   * actually painted. */
+  onMapReady?: () => void;
 };
 
 /** The pill-shaped icon+name marker shared by real POI markers and the live create-POI
@@ -272,8 +278,10 @@ export default function EventMapView({
   userLocation,
   flyToTarget,
   className,
+  onMapReady,
 }: EventMapViewProps) {
   const mapRef = useRef<MapRef | null>(null);
+  const mapReadyFiredRef = useRef(false);
   const [loaded, setLoaded] = useState(false);
   const [selectedPoiId, setSelectedPoiId] = useState<string | null>(null);
   const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
@@ -549,6 +557,16 @@ export default function EventMapView({
           .getContainer()
           .querySelector(".maplibregl-ctrl-attrib")
           ?.classList.remove("maplibregl-compact-show");
+      }}
+      onIdle={() => {
+        // "idle" (unlike "load") only fires once every current source has actually
+        // finished loading its tiles/image — the right moment to hand control back to a
+        // parent waiting to swap away a static placeholder. Fires repeatedly over the
+        // map's lifetime (e.g. after every pan/zoom), so only forward the first one.
+        if (!mapReadyFiredRef.current) {
+          mapReadyFiredRef.current = true;
+          onMapReady?.();
+        }
       }}
       // Required by OpenStreetMap's ODbL license and OpenFreeMap's terms — can't be removed,
       // but `compact` collapses it to a small "i" icon instead of the full credit line.

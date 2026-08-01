@@ -68,7 +68,8 @@
     "vitest": "^4.1.10"
   },
   "browserslist": [
-    "defaults",
+    "last 2 years",
+    "not dead",
     "not OperaMini all",
     "not KaiOS >= 0",
     "not and_qq >= 0",

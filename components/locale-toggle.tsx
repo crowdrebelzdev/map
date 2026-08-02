@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { useLocale } from "next-intl";
 import { Languages } from "lucide-react";
@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { setLocale } from "@/actions/locale";
+import { useMounted } from "@/hooks/use-mounted";
 import type { Locale } from "@/i18n/request";
 import type { VariantProps } from "class-variance-authority";
 
@@ -32,8 +33,7 @@ export function LocaleToggle({
   const [isPending, startTransition] = useTransition();
   // Same hydration-safety pattern as ThemeToggle — avoids a flash of the wrong label
   // before the client has settled.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useMounted();
 
   function handleSelect(next: Locale) {
     startTransition(async () => {

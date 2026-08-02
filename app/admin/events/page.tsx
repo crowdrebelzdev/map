@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { listAllEvents } from "@/actions/events";
 import { PlatformEventsTable } from "@/components/platform-events-table";
 import { PaginationControls } from "@/components/pagination-controls";
@@ -8,6 +9,7 @@ export default async function PlatformEventsPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  const t = await getTranslations("platformEvents");
   const { page: pageParam } = await searchParams;
   const page = Math.max(1, Number(pageParam) || 1);
 
@@ -16,7 +18,7 @@ export default async function PlatformEventsPage({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Evenementen ({total})</CardTitle>
+        <CardTitle>{t("title", { count: total })}</CardTitle>
       </CardHeader>
       <CardContent>
         <PlatformEventsTable events={events} />

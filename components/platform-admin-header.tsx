@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   LayoutDashboard,
   Building2,
@@ -45,14 +46,6 @@ function initials(name: string) {
   );
 }
 
-const NAV_ITEMS = [
-  { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/admin/organizations", label: "Organisaties", icon: Building2 },
-  { href: "/admin/events", label: "Evenementen", icon: CalendarDays },
-  { href: "/admin/users", label: "Gebruikers", icon: UsersIcon },
-  { href: "/admin/settings", label: "Instellingen", icon: Settings },
-];
-
 function isRouteActive(pathname: string, href: string) {
   return href === "/admin" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -77,11 +70,22 @@ export function PlatformAdminHeader({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const t = useTranslations("nav");
+  const tNavBar = useTranslations("navBar");
+  const tHeader = useTranslations("platformAdminHeader");
   const { logoInitial, brandColor } = useBranding();
+
+  const NAV_ITEMS = [
+    { href: "/admin", label: t("dashboard"), icon: LayoutDashboard },
+    { href: "/admin/organizations", label: t("organizations"), icon: Building2 },
+    { href: "/admin/events", label: t("events"), icon: CalendarDays },
+    { href: "/admin/users", label: t("users"), icon: UsersIcon },
+    { href: "/admin/settings", label: t("settings"), icon: Settings },
+  ];
 
   async function handleSignOut() {
     await authClient.signOut();
-    toast.success("Uitgelogd.");
+    toast.success(tNavBar("signedOut"));
     router.push("/sign-in");
     router.refresh();
   }
@@ -96,7 +100,7 @@ export function PlatformAdminHeader({
           >
             {logoInitial}
           </div>
-          <span className="truncate font-semibold">Platformbeheer</span>
+          <span className="truncate font-semibold">{tHeader("title")}</span>
         </div>
 
         <nav className="hidden flex-wrap items-center gap-1 md:flex">
@@ -114,7 +118,7 @@ export function PlatformAdminHeader({
         <div className="hidden items-center gap-2 md:flex lg:gap-3">
           {hasOrgAccess && (
             <Link href="/org" className={cn(buttonVariants({ variant: "outline", size: "sm" }), "gap-1.5")}>
-              Naar organisatiebeheer
+              {tHeader("goToOrgManagement")}
               <ArrowRight className="size-4" />
             </Link>
           )}
@@ -144,7 +148,7 @@ export function PlatformAdminHeader({
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut}>
                 <LogOut />
-                Uitloggen
+                {tNavBar("signOut")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -154,11 +158,11 @@ export function PlatformAdminHeader({
         <Sheet>
           <SheetTrigger render={<Button variant="ghost" size="icon" className="md:hidden" />}>
             <Menu />
-            <span className="sr-only">Menu</span>
+            <span className="sr-only">{t("menu")}</span>
           </SheetTrigger>
           <SheetContent side="right" className="flex flex-col overflow-y-auto">
             <SheetHeader>
-              <SheetTitle>Platformbeheer</SheetTitle>
+              <SheetTitle>{tHeader("title")}</SheetTitle>
             </SheetHeader>
             <div className="flex flex-col gap-1 px-4">
               {NAV_ITEMS.map((item) => {
@@ -185,7 +189,7 @@ export function PlatformAdminHeader({
                   href="/org"
                   className={cn(buttonVariants({ variant: "outline" }), "w-full justify-center gap-1.5")}
                 >
-                  Naar organisatiebeheer
+                  {tHeader("goToOrgManagement")}
                   <ArrowRight className="size-4" />
                 </Link>
               )}
@@ -204,7 +208,7 @@ export function PlatformAdminHeader({
               </div>
               <Button variant="outline" className="w-full" onClick={handleSignOut}>
                 <LogOut />
-                Uitloggen
+                {tNavBar("signOut")}
               </Button>
             </div>
           </SheetContent>

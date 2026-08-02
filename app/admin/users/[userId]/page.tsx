@@ -1,3 +1,4 @@
+import { getLocale, getTranslations } from "next-intl/server";
 import { getUser, listUserOrganizations } from "@/actions/users";
 import { ROLE_LABELS } from "@/lib/auth-roles";
 import { SetPlatformRoleButton } from "@/components/set-platform-role-button";
@@ -14,7 +15,11 @@ export default async function PlatformUserDetailPage({
 }: {
   params: Promise<{ userId: string }>;
 }) {
-  const { userId } = await params;
+  const [t, locale, { userId }] = await Promise.all([
+    getTranslations("platformUserDetail"),
+    getLocale(),
+    params,
+  ]);
 
   const [user, organizations] = await Promise.all([getUser(userId), listUserOrganizations(userId)]);
   const isPlatformAdmin = user.role === "admin";
@@ -32,7 +37,7 @@ export default async function PlatformUserDetailPage({
             <Badge variant={isPlatformAdmin ? "default" : "secondary"}>
               {isPlatformAdmin ? ROLE_LABELS.admin : ROLE_LABELS.user}
             </Badge>
-            {banned && <Badge variant="destructive">Gebanned</Badge>}
+            {banned && <Badge variant="destructive">{t("banned")}</Badge>}
           </div>
         </CardHeader>
         <CardContent className="flex flex-wrap items-center gap-2">
@@ -42,17 +47,17 @@ export default async function PlatformUserDetailPage({
           <BanUserButton userId={user.id} userName={user.name} banned={banned} />
           <DeleteUserButton userId={user.id} userName={user.name} />
           {banned && user.banReason && (
-            <p className="w-full text-sm text-muted-foreground">Reden: {user.banReason}</p>
+            <p className="w-full text-sm text-muted-foreground">{t("banReason", { reason: user.banReason })}</p>
           )}
           <p className="w-full text-xs text-muted-foreground">
-            Aangemaakt op {user.createdAt.toLocaleDateString("nl-NL")}
+            {t("createdAt", { date: user.createdAt.toLocaleDateString(locale === "en" ? "en-US" : "nl-NL") })}
           </p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Organisaties ({organizations.length})</CardTitle>
+          <CardTitle>{t("organizations", { count: organizations.length })}</CardTitle>
         </CardHeader>
         <CardContent>
           <UserOrganizationsTable organizations={organizations} />

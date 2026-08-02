@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { History, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -34,6 +35,9 @@ type VersionRow = typeof eventMapVersion.$inferSelect;
  * undone instead of redone from scratch. */
 export function MapVersionHistoryDialog({ eventId, eventSlug }: { eventId: string; eventSlug: string }) {
   const router = useRouter();
+  const t = useTranslations("mapVersionHistoryDialog");
+  const tc = useTranslations("common");
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [versions, setVersions] = useState<VersionRow[] | null>(null);
@@ -47,7 +51,7 @@ export function MapVersionHistoryDialog({ eventId, eventSlug }: { eventId: strin
       try {
         setVersions(await listMapVersions(eventId));
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Laden mislukt.");
+        toast.error(err instanceof Error ? err.message : t("loadErrorFallback"));
       } finally {
         setLoading(false);
       }
@@ -58,11 +62,11 @@ export function MapVersionHistoryDialog({ eventId, eventSlug }: { eventId: strin
     setRestoringId(versionId);
     try {
       await restoreMapVersion(eventId, eventSlug, versionId);
-      toast.success("Eerdere plattegrond hersteld.");
+      toast.success(t("restoredToast"));
       setOpen(false);
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Herstellen mislukt.");
+      toast.error(err instanceof Error ? err.message : t("restoreErrorFallback"));
     } finally {
       setRestoringId(null);
     }
@@ -73,9 +77,9 @@ export function MapVersionHistoryDialog({ eventId, eventSlug }: { eventId: strin
     try {
       await deleteMapVersion(eventId, eventSlug, versionId);
       setVersions((prev) => prev?.filter((v) => v.id !== versionId) ?? prev);
-      toast.success("Versie verwijderd.");
+      toast.success(t("deletedToast"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
+      toast.error(err instanceof Error ? err.message : t("deleteErrorFallback"));
     } finally {
       setDeletingId(null);
     }
@@ -85,20 +89,17 @@ export function MapVersionHistoryDialog({ eventId, eventSlug }: { eventId: strin
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger render={<Button variant="outline" size="sm" className="gap-1.5" />}>
         <History className="size-3.5" />
-        Versiegeschiedenis
+        {t("trigger")}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Versiegeschiedenis</DialogTitle>
-          <DialogDescription>
-            Eerdere plattegronden — je kunt een versie terugzetten als een nieuwe upload of
-            plaatsing niet klopt.
-          </DialogDescription>
+          <DialogTitle>{t("trigger")}</DialogTitle>
+          <DialogDescription>{t("description")}</DialogDescription>
         </DialogHeader>
 
-        {loading && <p className="text-sm text-muted-foreground">Bezig met laden...</p>}
+        {loading && <p className="text-sm text-muted-foreground">{t("loading")}</p>}
         {!loading && versions && versions.length === 0 && (
-          <p className="text-sm text-muted-foreground">Nog geen eerdere versies.</p>
+          <p className="text-sm text-muted-foreground">{t("emptyVersions")}</p>
         )}
         {!loading && versions && versions.length > 0 && (
           <ul className="max-h-96 space-y-2 overflow-y-auto">
@@ -111,7 +112,7 @@ export function MapVersionHistoryDialog({ eventId, eventSlug }: { eventId: strin
                   className="h-12 w-16 shrink-0 rounded object-cover"
                 />
                 <span className="flex-1 text-sm text-muted-foreground">
-                  {new Date(v.createdAt).toLocaleString("nl-NL")}
+                  {new Date(v.createdAt).toLocaleString(locale === "en" ? "en-US" : "nl-NL")}
                 </span>
                 <Button
                   variant="outline"
@@ -119,7 +120,7 @@ export function MapVersionHistoryDialog({ eventId, eventSlug }: { eventId: strin
                   onClick={() => handleRestore(v.id)}
                   disabled={restoringId !== null || deletingId !== null}
                 >
-                  {restoringId === v.id ? "Bezig..." : "Herstellen"}
+                  {restoringId === v.id ? tc("saving") : t("restore")}
                 </Button>
                 <AlertDialog>
                   <AlertDialogTrigger
@@ -133,21 +134,17 @@ export function MapVersionHistoryDialog({ eventId, eventSlug }: { eventId: strin
                     }
                   >
                     <Trash2 className="size-3.5" />
-                    <span className="sr-only">Versie verwijderen</span>
+                    <span className="sr-only">{t("deleteVersionSr")}</span>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Deze versie verwijderen?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Verwijdert deze plattegrond-versie en de bijbehorende afbeelding/tegels
-                        definitief (tenzij die nog worden gebruikt door de huidige kaart of een
-                        andere versie). Dit kan niet ongedaan worden gemaakt.
-                      </AlertDialogDescription>
+                      <AlertDialogTitle>{t("confirmDeleteTitle")}</AlertDialogTitle>
+                      <AlertDialogDescription>{t("confirmDeleteDescription")}</AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Annuleren</AlertDialogCancel>
+                      <AlertDialogCancel>{tc("cancel")}</AlertDialogCancel>
                       <AlertDialogAction variant="destructive" onClick={() => handleDelete(v.id)}>
-                        Verwijderen
+                        {tc("remove")}
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>

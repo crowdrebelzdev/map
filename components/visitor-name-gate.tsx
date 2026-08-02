@@ -21,6 +21,8 @@ export function VisitorNameGate({ eventId, children }: { eventId: string; childr
   const t = useTranslations("visitorNameGate");
 
   useEffect(() => {
+    // sessionStorage isn't available during SSR render — has to be an effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setUnlocked(sessionStorage.getItem(storageKey(eventId)) !== null);
   }, [eventId]);
 

@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { getOrganization, listOrganizationMembers, listOrganizationEvents } from "@/actions/organizations";
 import { RenameOrganizationForm } from "@/components/rename-organization-form";
 import { OrganizationMembersTable } from "@/components/organization-members-table";
@@ -9,6 +10,7 @@ export default async function PlatformOrganizationDetailPage({
 }: {
   params: Promise<{ organizationId: string }>;
 }) {
+  const t = await getTranslations("platformOrganizationDetail");
   const { organizationId } = await params;
 
   const [org, members, events] = await Promise.all([
@@ -29,7 +31,7 @@ export default async function PlatformOrganizationDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Leden ({members.length})</CardTitle>
+          <CardTitle>{t("members", { count: members.length })}</CardTitle>
         </CardHeader>
         <CardContent>
           <OrganizationMembersTable organizationId={org.id} members={members} />
@@ -38,7 +40,7 @@ export default async function PlatformOrganizationDetailPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>Evenementen ({events.length})</CardTitle>
+          <CardTitle>{t("events", { count: events.length })}</CardTitle>
         </CardHeader>
         <CardContent>
           <OrganizationEventsTable events={events} />

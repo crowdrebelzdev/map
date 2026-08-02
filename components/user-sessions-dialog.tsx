@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { Laptop, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { listUserSessions, revokeUserSession, revokeAllUserSessions } from "@/actions/sessions";
@@ -23,33 +24,39 @@ type SessionRow = {
   userAgent?: string | null;
 };
 
-function formatDate(d: Date) {
-  return new Date(d).toLocaleString("nl-NL", { dateStyle: "medium", timeStyle: "short" });
-}
-
-/** Raw user-agent strings are long and unreadable — reduce to "Browser op OS". */
-function summarizeUserAgent(ua?: string | null) {
-  if (!ua) return "Onbekend apparaat";
-  const browser =
-    /Edg\//.test(ua) ? "Edge" :
-    /Chrome\//.test(ua) ? "Chrome" :
-    /Firefox\//.test(ua) ? "Firefox" :
-    /Safari\//.test(ua) ? "Safari" :
-    "Onbekende browser";
-  const os =
-    /iPhone|iPad/.test(ua) ? "iOS" :
-    /Android/.test(ua) ? "Android" :
-    /Mac OS X/.test(ua) ? "macOS" :
-    /Windows/.test(ua) ? "Windows" :
-    /Linux/.test(ua) ? "Linux" :
-    "onbekend besturingssysteem";
-  return `${browser} op ${os}`;
-}
-
 export function UserSessionsDialog({ userId, userName }: { userId: string; userName: string }) {
+  const t = useTranslations("userSessionsDialog");
+  const tc = useTranslations("common");
+  const locale = useLocale();
   const [open, setOpen] = useState(false);
   const [sessions, setSessions] = useState<SessionRow[] | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  function formatDate(d: Date) {
+    return new Date(d).toLocaleString(locale === "en" ? "en-US" : "nl-NL", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  }
+
+  /** Raw user-agent strings are long and unreadable — reduce to "Browser on OS". */
+  function summarizeUserAgent(ua?: string | null) {
+    if (!ua) return t("unknownDevice");
+    const browser =
+      /Edg\//.test(ua) ? "Edge" :
+      /Chrome\//.test(ua) ? "Chrome" :
+      /Firefox\//.test(ua) ? "Firefox" :
+      /Safari\//.test(ua) ? "Safari" :
+      t("unknownBrowser");
+    const os =
+      /iPhone|iPad/.test(ua) ? "iOS" :
+      /Android/.test(ua) ? "Android" :
+      /Mac OS X/.test(ua) ? "macOS" :
+      /Windows/.test(ua) ? "Windows" :
+      /Linux/.test(ua) ? "Linux" :
+      t("unknownOs");
+    return `${browser} — ${os}`;
+  }
 
   function load() {
     startTransition(async () => {
@@ -57,7 +64,7 @@ export function UserSessionsDialog({ userId, userName }: { userId: string; userN
         const rows = await listUserSessions(userId);
         setSessions(rows);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Ophalen mislukt.");
+        toast.error(err instanceof Error ? err.message : t("fetchErrorFallback"));
       }
     });
   }
@@ -66,10 +73,10 @@ export function UserSessionsDialog({ userId, userName }: { userId: string; userN
     startTransition(async () => {
       try {
         await revokeUserSession(token);
-        toast.success("Sessie ingetrokken.");
+        toast.success(t("revokedToast"));
         setSessions((prev) => prev?.filter((s) => s.token !== token) ?? null);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Intrekken mislukt.");
+        toast.error(err instanceof Error ? err.message : t("revokeErrorFallback"));
       }
     });
   }
@@ -78,10 +85,10 @@ export function UserSessionsDialog({ userId, userName }: { userId: string; userN
     startTransition(async () => {
       try {
         await revokeAllUserSessions(userId);
-        toast.success("Overal uitgelogd.");
+        toast.success(t("revokeAllToast"));
         setSessions([]);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Uitloggen mislukt.");
+        toast.error(err instanceof Error ? err.message : t("revokeAllErrorFallback"));
       }
     });
   }
@@ -96,26 +103,26 @@ export function UserSessionsDialog({ userId, userName }: { userId: string; userN
     >
       <DialogTrigger render={<Button variant="ghost" size="icon-sm" />}>
         <Laptop />
-        <span className="sr-only">Sessies van {userName}</span>
+        <span className="sr-only">{t("sessionsOf", { name: userName })}</span>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Actieve sessies — {userName}</DialogTitle>
-          <DialogDescription>Apparaten/browsers waar dit account nu is ingelogd.</DialogDescription>
+          <DialogTitle>{t("activeSessionsTitle", { name: userName })}</DialogTitle>
+          <DialogDescription>{t("activeSessionsDescription")}</DialogDescription>
         </DialogHeader>
 
         <div className="max-h-80 space-y-2 overflow-y-auto">
           {sessions === null ? (
-            <p className="text-sm text-muted-foreground">{isPending ? "Bezig..." : ""}</p>
+            <p className="text-sm text-muted-foreground">{isPending ? tc("saving") : ""}</p>
           ) : sessions.length === 0 ? (
-            <p className="text-sm text-muted-foreground">Geen actieve sessies.</p>
+            <p className="text-sm text-muted-foreground">{t("noActiveSessions")}</p>
           ) : (
             sessions.map((s) => (
               <div key={s.id} className="flex items-center justify-between gap-2 rounded-md border p-2">
                 <div className="text-sm">
                   <div className="text-muted-foreground">{summarizeUserAgent(s.userAgent)}</div>
                   <div className="text-xs text-muted-foreground">
-                    {s.ipAddress ?? "onbekend IP"} — sinds {formatDate(s.createdAt)}
+                    {s.ipAddress ?? t("unknownIp")} — {t("since", { date: formatDate(s.createdAt) })}
                   </div>
                 </div>
                 <Button
@@ -125,7 +132,7 @@ export function UserSessionsDialog({ userId, userName }: { userId: string; userN
                   onClick={() => handleRevoke(s.token)}
                   disabled={isPending}
                 >
-                  Intrekken
+                  {t("revoke")}
                 </Button>
               </div>
             ))
@@ -139,7 +146,7 @@ export function UserSessionsDialog({ userId, userName }: { userId: string; userN
             disabled={isPending || !sessions?.length}
           >
             <LogOut />
-            Overal uitloggen
+            {t("revokeAll")}
           </Button>
         </DialogFooter>
       </DialogContent>

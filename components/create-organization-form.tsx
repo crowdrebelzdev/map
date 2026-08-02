@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,8 @@ import { createOrganization } from "@/actions/organizations";
  * organization gets created — see createOrganization's own comment. */
 export function CreateOrganizationForm() {
   const router = useRouter();
+  const t = useTranslations("createOrganizationForm");
+  const tc = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [saving, setSaving] = useState(false);
@@ -31,12 +34,12 @@ export function CreateOrganizationForm() {
 
     try {
       await createOrganization({ name });
-      toast.success("Organisatie aangemaakt.");
+      toast.success(t("successToast"));
       setName("");
       setOpen(false);
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Aanmaken mislukt.");
+      toast.error(err instanceof Error ? err.message : t("errorFallback"));
     } finally {
       setSaving(false);
     }
@@ -46,23 +49,23 @@ export function CreateOrganizationForm() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button />}>
         <Plus />
-        Nieuwe organisatie
+        {t("newOrganization")}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Nieuwe organisatie</DialogTitle>
+          <DialogTitle>{t("newOrganization")}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-1">
-            <Label htmlFor="org-name">Naam</Label>
+            <Label htmlFor="org-name">{tc("name")}</Label>
             <Input id="org-name" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
           <DialogFooter>
             <Button variant="outline" type="button" onClick={() => setOpen(false)} disabled={saving}>
-              Annuleren
+              {tc("cancel")}
             </Button>
             <Button type="submit" disabled={saving}>
-              {saving ? "Bezig..." : "Organisatie aanmaken"}
+              {saving ? tc("saving") : t("createButton")}
             </Button>
           </DialogFooter>
         </form>

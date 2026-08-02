@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Ban, CircleCheck } from "lucide-react";
 import { toast } from "sonner";
 import { banUser, unbanUser } from "@/actions/users";
@@ -38,6 +39,8 @@ export function BanUserButton({
   banned: boolean;
 }) {
   const router = useRouter();
+  const t = useTranslations("banUserButton");
+  const tc = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -47,12 +50,12 @@ export function BanUserButton({
     startTransition(async () => {
       try {
         await banUser(userId, reason);
-        toast.success(`${userName} gebanned.`);
+        toast.success(t("bannedToast", { name: userName }));
         setReason("");
         setOpen(false);
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Bannen mislukt.");
+        toast.error(err instanceof Error ? err.message : t("banErrorFallback"));
       }
     });
   }
@@ -61,11 +64,11 @@ export function BanUserButton({
     startTransition(async () => {
       try {
         await unbanUser(userId);
-        toast.success(`${userName} ontbannen.`);
+        toast.success(t("unbannedToast", { name: userName }));
         setOpen(false);
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Ontbannen mislukt.");
+        toast.error(err instanceof Error ? err.message : t("unbanErrorFallback"));
       }
     });
   }
@@ -75,19 +78,17 @@ export function BanUserButton({
       <AlertDialog open={open} onOpenChange={setOpen}>
         <AlertDialogTrigger render={<Button variant="outline" size="sm" />}>
           <CircleCheck />
-          Ontbannen
+          {t("unban")}
         </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{userName} ontbannen?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Deze gebruiker kan daarna weer gewoon inloggen.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t("confirmUnbanTitle", { name: userName })}</AlertDialogTitle>
+            <AlertDialogDescription>{t("confirmUnbanDescription")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isPending}>Annuleren</AlertDialogCancel>
+            <AlertDialogCancel disabled={isPending}>{tc("cancel")}</AlertDialogCancel>
             <AlertDialogAction onClick={handleUnban} disabled={isPending}>
-              {isPending ? "Bezig..." : "Ontbannen"}
+              {isPending ? tc("saving") : t("unban")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -99,23 +100,23 @@ export function BanUserButton({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button variant="outline" size="sm" className="text-destructive" />}>
         <Ban />
-        Bannen
+        {t("ban")}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{userName} bannen?</DialogTitle>
+          <DialogTitle>{t("confirmBanTitle", { name: userName })}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleBan} className="space-y-3">
           <div className="space-y-1">
-            <Label htmlFor="ban-reason">Reden (optioneel)</Label>
+            <Label htmlFor="ban-reason">{t("reasonLabel")}</Label>
             <Input id="ban-reason" value={reason} onChange={(e) => setReason(e.target.value)} />
           </div>
           <DialogFooter>
             <Button variant="outline" type="button" onClick={() => setOpen(false)} disabled={isPending}>
-              Annuleren
+              {tc("cancel")}
             </Button>
             <Button type="submit" variant="destructive" disabled={isPending}>
-              {isPending ? "Bezig..." : "Bannen"}
+              {isPending ? tc("saving") : t("ban")}
             </Button>
           </DialogFooter>
         </form>

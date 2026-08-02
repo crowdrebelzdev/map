@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, count, desc, eq, gte, sql } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { incident, type IncidentType } from "@/db/schema";
 import { user } from "@/db/schema";
@@ -22,7 +23,8 @@ export async function createIncident(input: {
   const { session } = await requireAnyEventAccess(input.eventId);
 
   if (input.type === "incident" && !input.description?.trim()) {
-    throw new Error("Beschrijving is verplicht.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("descriptionRequired"));
   }
 
   await db.insert(incident).values({

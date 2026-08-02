@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { eventDay } from "@/db/schema";
 import { requireEventPermission } from "@/lib/event-access";
@@ -15,7 +16,8 @@ export async function createEventDay(input: {
   await requireEventPermission(input.eventId, "edit_map");
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) {
-    throw new Error("Ongeldige datum.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("invalidDate"));
   }
 
   await db.insert(eventDay).values({

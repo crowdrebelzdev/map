@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 import { updateUserProfile } from "@/actions/users";
@@ -27,6 +28,8 @@ export function EditUserForm({
   currentEmail: string;
 }) {
   const router = useRouter();
+  const t = useTranslations("editUserForm");
+  const tc = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [name, setName] = useState(currentName);
   const [email, setEmail] = useState(currentEmail);
@@ -37,11 +40,11 @@ export function EditUserForm({
     setSaving(true);
     try {
       await updateUserProfile(userId, { name, email });
-      toast.success("Gebruiker bijgewerkt.");
+      toast.success(t("successToast"));
       setOpen(false);
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Opslaan mislukt.");
+      toast.error(err instanceof Error ? err.message : t("errorFallback"));
     } finally {
       setSaving(false);
     }
@@ -60,19 +63,19 @@ export function EditUserForm({
     >
       <DialogTrigger render={<Button variant="outline" size="sm" />}>
         <Pencil />
-        Bewerken
+        {t("edit")}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Gebruiker bewerken</DialogTitle>
+          <DialogTitle>{t("title")}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-1">
-            <Label htmlFor="edit-user-name">Naam</Label>
+            <Label htmlFor="edit-user-name">{tc("name")}</Label>
             <Input id="edit-user-name" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="edit-user-email">E-mail</Label>
+            <Label htmlFor="edit-user-email">{tc("email")}</Label>
             <Input
               id="edit-user-email"
               type="email"
@@ -83,10 +86,10 @@ export function EditUserForm({
           </div>
           <DialogFooter>
             <Button variant="outline" type="button" onClick={() => setOpen(false)} disabled={saving}>
-              Annuleren
+              {tc("cancel")}
             </Button>
             <Button type="submit" disabled={saving}>
-              {saving ? "Bezig..." : "Opslaan"}
+              {saving ? tc("saving") : tc("save")}
             </Button>
           </DialogFooter>
         </form>

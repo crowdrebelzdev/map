@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { sql } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { platformSettings, publicAccessModeValues, type PublicAccessMode } from "@/db/schema";
 import { requirePlatformAdmin } from "@/lib/org-access";
@@ -9,15 +10,16 @@ import { PLATFORM_SETTINGS_ID, type PlatformSettings } from "@/lib/platform-sett
 
 export async function updatePlatformSettings(input: Partial<PlatformSettings>) {
   await requirePlatformAdmin();
+  const t = await getTranslations("actionErrors");
 
   if (input.defaultEventAccessMode && !publicAccessModeValues.includes(input.defaultEventAccessMode)) {
-    throw new Error("Ongeldig standaard toegangsniveau.");
+    throw new Error(t("invalidDefaultAccessMode"));
   }
   if (input.platformName !== undefined && !input.platformName.trim()) {
-    throw new Error("Platformnaam mag niet leeg zijn.");
+    throw new Error(t("platformNameRequired"));
   }
   if (input.logoInitial !== undefined && !input.logoInitial.trim()) {
-    throw new Error("Logo-letter mag niet leeg zijn.");
+    throw new Error(t("logoInitialRequired"));
   }
 
   const values = {

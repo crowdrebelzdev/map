@@ -1,4 +1,5 @@
 import { Search } from "lucide-react";
+import { getTranslations } from "next-intl/server";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty";
@@ -8,12 +9,15 @@ import { getTopSearches } from "@/actions/search-log";
  * `getTopSearches`) — surfaces terms people search for on the live/public map, which can
  * point at a POI that's hard to find or missing a name people expect. */
 export async function TopSearchesCard({ eventId }: { eventId: string }) {
-  const topSearches = await getTopSearches(eventId, { limit: 10 });
+  const [t, topSearches] = await Promise.all([
+    getTranslations("topSearchesCard"),
+    getTopSearches(eventId, { limit: 10 }),
+  ]);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Meest gezocht</CardTitle>
+        <CardTitle>{t("title")}</CardTitle>
       </CardHeader>
       <CardContent>
         {topSearches.length === 0 ? (
@@ -22,10 +26,8 @@ export async function TopSearchesCard({ eventId }: { eventId: string }) {
               <EmptyMedia variant="icon">
                 <Search />
               </EmptyMedia>
-              <EmptyTitle>Nog geen zoekopdrachten</EmptyTitle>
-              <EmptyDescription>
-                Verschijnt hier zodra bezoekers op de kaart iets opzoeken.
-              </EmptyDescription>
+              <EmptyTitle>{t("emptyTitle")}</EmptyTitle>
+              <EmptyDescription>{t("emptyDescription")}</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (

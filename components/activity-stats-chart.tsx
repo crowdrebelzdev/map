@@ -1,19 +1,21 @@
 "use client";
 
 import { BarChart, Bar, CartesianGrid, XAxis } from "recharts";
+import { useTranslations } from "next-intl";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ChartContainer, ChartTooltip, ChartTooltipContent, ChartLegend, ChartLegendContent, type ChartConfig } from "@/components/ui/chart";
-
-const chartConfig = {
-  incidents: { label: "Meldingen", color: "var(--chart-2)" },
-  broadcasts: { label: "Berichten", color: "var(--chart-3)" },
-} satisfies ChartConfig;
 
 export type ActivityStatsPoint = { day: string; incidents: number; broadcasts: number };
 
 /** Daily incident/SOS + broadcast volume, combined into one compact chart — gives
  * organizers a trend line on top of the existing "open meldingen" snapshot tile. */
 function ActivityStatsChartInner({ data }: { data: ActivityStatsPoint[] }) {
+  const t = useTranslations("activityStatsChart");
+  const chartConfig = {
+    incidents: { label: t("incidentsLabel"), color: "var(--chart-2)" },
+    broadcasts: { label: t("broadcastsLabel"), color: "var(--chart-3)" },
+  } satisfies ChartConfig;
+
   return (
     <ChartContainer config={chartConfig} className="aspect-auto h-48 w-full">
       <BarChart data={data} margin={{ left: 0, right: 12, top: 8, bottom: 0 }}>
@@ -35,16 +37,17 @@ function ActivityStatsChartInner({ data }: { data: ActivityStatsPoint[] }) {
 }
 
 export function ActivityStatsChart({ data }: { data: ActivityStatsPoint[] }) {
+  const t = useTranslations("activityStatsChart");
   const hasActivity = data.some((d) => d.incidents > 0 || d.broadcasts > 0);
 
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Activiteit (14 dagen)</CardTitle>
+        <CardTitle>{t("title")}</CardTitle>
       </CardHeader>
       <CardContent>
         {!hasActivity ? (
-          <p className="text-sm text-muted-foreground">Nog geen meldingen of berichten in deze periode.</p>
+          <p className="text-sm text-muted-foreground">{t("empty")}</p>
         ) : (
           <ActivityStatsChartInner data={data} />
         )}

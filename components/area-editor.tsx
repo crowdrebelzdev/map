@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Pencil, Trash2, MapPinned, Tags } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,8 @@ function AreaCategoryRow({
   category: EventMapAreaCategory;
 }) {
   const router = useRouter();
+  const t = useTranslations("areaEditor");
+  const tc = useTranslations("common");
   const [label, setLabel] = useState(category.label);
   const [color, setColor] = useState(category.color);
   const [extraFields, setExtraFields] = useState<PoiExtraFieldDef[]>(category.extraFields ?? []);
@@ -67,10 +70,10 @@ function AreaCategoryRow({
     startTransition(async () => {
       try {
         await updateAreaCategory({ eventId, eventSlug, categoryId: category.id, label, color, extraFields });
-        toast.success("Area-categorie opgeslagen.");
+        toast.success(t("categorySavedToast"));
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Opslaan mislukt.");
+        toast.error(err instanceof Error ? err.message : t("saveErrorFallback"));
       }
     });
   }
@@ -79,11 +82,11 @@ function AreaCategoryRow({
     startTransition(async () => {
       try {
         await deleteAreaCategory(eventId, eventSlug, category.id);
-        toast.success("Area-categorie verwijderd.");
+        toast.success(t("categoryDeletedToast"));
         setConfirmDeleteOpen(false);
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
+        toast.error(err instanceof Error ? err.message : t("deleteErrorFallback"));
       }
     });
   }
@@ -96,7 +99,7 @@ function AreaCategoryRow({
       </AccordionTrigger>
       <AccordionContent className="space-y-3 border-t p-3">
         <Field>
-          <FieldLabel htmlFor={`area-category-color-${category.id}`}>Kleur</FieldLabel>
+          <FieldLabel htmlFor={`area-category-color-${category.id}`}>{tc("color")}</FieldLabel>
           <input
             id={`area-category-color-${category.id}`}
             type="color"
@@ -106,7 +109,7 @@ function AreaCategoryRow({
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor={`area-category-name-${category.id}`}>Naam</FieldLabel>
+          <FieldLabel htmlFor={`area-category-name-${category.id}`}>{tc("name")}</FieldLabel>
           <Input
             id={`area-category-name-${category.id}`}
             value={label}
@@ -116,7 +119,7 @@ function AreaCategoryRow({
         <ExtraFieldsEditor fields={extraFields} onChange={setExtraFields} />
         <div className="flex items-center gap-2 pt-1">
           <Button onClick={handleSave} disabled={!dirty || isPending} className="flex-1">
-            Opslaan
+            {tc("save")}
           </Button>
           <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
             <AlertDialogTrigger
@@ -130,20 +133,17 @@ function AreaCategoryRow({
               }
             >
               <Trash2 />
-              <span className="sr-only">Verwijderen</span>
+              <span className="sr-only">{tc("remove")}</span>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Area-categorie verwijderen?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  Weet je zeker dat je &quot;{label}&quot; wilt verwijderen? Dit kan niet ongedaan worden
-                  gemaakt.
-                </AlertDialogDescription>
+                <AlertDialogTitle>{t("confirmDeleteCategoryTitle")}</AlertDialogTitle>
+                <AlertDialogDescription>{t("confirmDeleteDescription", { name: label })}</AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel disabled={isPending}>Annuleren</AlertDialogCancel>
+                <AlertDialogCancel disabled={isPending}>{tc("cancel")}</AlertDialogCancel>
                 <AlertDialogAction variant="destructive" onClick={handleDelete} disabled={isPending}>
-                  {isPending ? "Bezig..." : "Verwijderen"}
+                  {isPending ? tc("saving") : tc("remove")}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -156,6 +156,8 @@ function AreaCategoryRow({
 
 function NewAreaCategoryForm({ eventId, eventSlug }: { eventId: string; eventSlug: string }) {
   const router = useRouter();
+  const t = useTranslations("areaEditor");
+  const tc = useTranslations("common");
   const [label, setLabel] = useState("");
   const [color, setColor] = useState("#059669");
   const [extraFields, setExtraFields] = useState<PoiExtraFieldDef[]>([]);
@@ -166,12 +168,12 @@ function NewAreaCategoryForm({ eventId, eventSlug }: { eventId: string; eventSlu
     startTransition(async () => {
       try {
         await createAreaCategory({ eventId, eventSlug, label, color, extraFields });
-        toast.success("Area-categorie toegevoegd.");
+        toast.success(t("categoryAddedToast"));
         setLabel("");
         setExtraFields([]);
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Aanmaken mislukt.");
+        toast.error(err instanceof Error ? err.message : t("createErrorFallback"));
       }
     });
   }
@@ -179,11 +181,11 @@ function NewAreaCategoryForm({ eventId, eventSlug }: { eventId: string; eventSlu
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Nieuwe area-categorie</CardTitle>
+        <CardTitle>{t("newCategoryTitle")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <Field>
-          <FieldLabel htmlFor="new-area-category-color">Kleur</FieldLabel>
+          <FieldLabel htmlFor="new-area-category-color">{tc("color")}</FieldLabel>
           <input
             id="new-area-category-color"
             type="color"
@@ -193,17 +195,17 @@ function NewAreaCategoryForm({ eventId, eventSlug }: { eventId: string; eventSlu
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor="new-area-category-label">Naam</FieldLabel>
+          <FieldLabel htmlFor="new-area-category-label">{tc("name")}</FieldLabel>
           <Input
             id="new-area-category-label"
             value={label}
             onChange={(e) => setLabel(e.target.value)}
-            placeholder="Bijv. Camping"
+            placeholder={t("namePlaceholder")}
           />
         </Field>
         <ExtraFieldsEditor fields={extraFields} onChange={setExtraFields} />
         <Button onClick={handleCreate} disabled={!label.trim() || isPending} className="w-full">
-          Toevoegen
+          {tc("add")}
         </Button>
       </CardContent>
     </Card>
@@ -239,6 +241,8 @@ export function AreaList({
   onSelectArea: (a: AreaRow) => void;
 }) {
   const router = useRouter();
+  const t = useTranslations("areaEditor");
+  const tc = useTranslations("common");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteArea, setConfirmDeleteArea] = useState<AreaRow | null>(null);
   const categoryById = new Map(categories.map((c) => [c.id, c]));
@@ -249,11 +253,11 @@ export function AreaList({
     setDeletingId(areaId);
     try {
       await deleteArea(eventId, eventSlug, areaId);
-      toast.success("Area verwijderd.");
+      toast.success(t("areaDeletedToast"));
       setConfirmDeleteArea(null);
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
+      toast.error(err instanceof Error ? err.message : t("deleteErrorFallback"));
     } finally {
       setDeletingId(null);
     }
@@ -264,26 +268,24 @@ export function AreaList({
       {editMode && (
         <Card>
           <CardHeader>
-            <CardTitle>Area tekenen</CardTitle>
+            <CardTitle>{t("drawAreaTitle")}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             {drawingVertices === null ? (
               <Button onClick={onStartDrawing} className="w-full" disabled={categories.length === 0}>
-                {categories.length === 0 ? "Maak eerst een area-categorie aan" : "Nieuwe area tekenen"}
+                {categories.length === 0 ? t("createCategoryFirst") : t("drawNewArea")}
               </Button>
             ) : (
               <>
                 <p className="text-sm text-muted-foreground">
-                  Klik op de kaart om punten te plaatsen ({pointCount}
-                  {pointCount < 3 ? ", minimaal 3 nodig" : ""}). Klik op een punt om 'm te
-                  verwijderen, sleep om te verplaatsen.
+                  {t("pointsHint", { count: pointCount, suffix: pointCount < 3 ? t("pointsMinSuffix") : "" })}
                 </p>
                 <div className="flex gap-2">
                   <Button onClick={onFinishDrawing} disabled={pointCount < 3}>
-                    Klaar
+                    {tc("done")}
                   </Button>
                   <Button variant="ghost" onClick={onCancelDrawing}>
-                    Annuleren
+                    {tc("cancel")}
                   </Button>
                 </div>
               </>
@@ -294,7 +296,7 @@ export function AreaList({
 
       <Card>
         <CardHeader>
-          <CardTitle>Bestaande areas ({areas.length})</CardTitle>
+          <CardTitle>{t("existingAreas", { count: areas.length })}</CardTitle>
         </CardHeader>
         <CardContent>
           {areas.length === 0 ? (
@@ -303,8 +305,8 @@ export function AreaList({
                 <EmptyMedia variant="icon">
                   <MapPinned />
                 </EmptyMedia>
-                <EmptyTitle>Nog geen areas</EmptyTitle>
-                <EmptyDescription>Teken hierboven je eerste area op de kaart.</EmptyDescription>
+                <EmptyTitle>{t("emptyAreasTitle")}</EmptyTitle>
+                <EmptyDescription>{t("emptyAreasDescription")}</EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
@@ -332,7 +334,7 @@ export function AreaList({
                     <div className="flex shrink-0 items-center gap-1">
                       <Button variant="ghost" size="icon-sm" onClick={() => onSelectArea(a)}>
                         <Pencil />
-                        <span className="sr-only">Bewerken</span>
+                        <span className="sr-only">{tc("edit")}</span>
                       </Button>
                       <Button
                         variant="ghost"
@@ -342,7 +344,7 @@ export function AreaList({
                         disabled={deletingId === a.id}
                       >
                         <Trash2 />
-                        <span className="sr-only">Verwijderen</span>
+                        <span className="sr-only">{tc("remove")}</span>
                       </Button>
                     </div>
                   )}
@@ -359,20 +361,19 @@ export function AreaList({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Area verwijderen?</AlertDialogTitle>
+            <AlertDialogTitle>{t("confirmDeleteAreaTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Weet je zeker dat je &quot;{confirmDeleteArea?.name}&quot; wilt verwijderen? Dit kan niet
-              ongedaan worden gemaakt.
+              {t("confirmDeleteDescription", { name: confirmDeleteArea?.name ?? "" })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deletingId !== null}>Annuleren</AlertDialogCancel>
+            <AlertDialogCancel disabled={deletingId !== null}>{tc("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               onClick={() => confirmDeleteArea && handleDelete(confirmDeleteArea.id)}
               disabled={deletingId !== null}
             >
-              {deletingId !== null ? "Bezig..." : "Verwijderen"}
+              {deletingId !== null ? tc("saving") : tc("remove")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -380,7 +381,7 @@ export function AreaList({
 
       <Card>
         <CardHeader>
-          <CardTitle>Area-categorieën ({categories.length})</CardTitle>
+          <CardTitle>{t("categoriesTitle", { count: categories.length })}</CardTitle>
         </CardHeader>
         <CardContent>
           {categories.length === 0 ? (
@@ -389,10 +390,8 @@ export function AreaList({
                 <EmptyMedia variant="icon">
                   <Tags />
                 </EmptyMedia>
-                <EmptyTitle>Nog geen area-categorieën</EmptyTitle>
-                <EmptyDescription>
-                  Maak hieronder je eerste area-categorie aan om areas te kunnen tekenen.
-                </EmptyDescription>
+                <EmptyTitle>{t("emptyCategoriesTitle")}</EmptyTitle>
+                <EmptyDescription>{t("emptyCategoriesDescription")}</EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (

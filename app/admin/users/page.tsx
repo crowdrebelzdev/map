@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { listAllUsers } from "@/actions/users";
 import { PlatformUsersTable } from "@/components/platform-users-table";
 import { PaginationControls } from "@/components/pagination-controls";
@@ -8,6 +9,7 @@ export default async function PlatformUsersPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  const t = await getTranslations("platformUsers");
   const { page: pageParam } = await searchParams;
   const page = Math.max(1, Number(pageParam) || 1);
 
@@ -16,7 +18,7 @@ export default async function PlatformUsersPage({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Gebruikers ({total})</CardTitle>
+        <CardTitle>{t("title", { count: total })}</CardTitle>
       </CardHeader>
       <CardContent>
         <PlatformUsersTable users={users} />

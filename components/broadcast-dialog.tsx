@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { MessageSquare } from "lucide-react";
 import { toast } from "sonner";
 import { sendBroadcast } from "@/actions/broadcasts";
@@ -29,6 +30,8 @@ export function BroadcastDialog({
   eventSlug: string;
   recipients: { id: string; name: string }[];
 }) {
+  const t = useTranslations("broadcastDialog");
+  const tc = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [recipientId, setRecipientId] = useState(EVERYONE_VALUE);
@@ -41,12 +44,12 @@ export function BroadcastDialog({
       const targetId = recipientId === EVERYONE_VALUE ? null : recipientId;
       await sendBroadcast(eventId, eventSlug, message, targetId);
       const targetName = targetId ? recipients.find((r) => r.id === targetId)?.name : null;
-      toast.success(targetName ? `Bericht verstuurd naar ${targetName}.` : "Bericht verstuurd naar iedereen op de kaart.");
+      toast.success(targetName ? t("sentToPersonToast", { name: targetName }) : t("sentToEveryoneToast"));
       setMessage("");
       setRecipientId(EVERYONE_VALUE);
       setOpen(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Versturen mislukt.");
+      toast.error(err instanceof Error ? err.message : t("errorFallback"));
     } finally {
       setSending(false);
     }
@@ -56,25 +59,23 @@ export function BroadcastDialog({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button variant="secondary" size="sm" className="gap-1.5" />}>
         <MessageSquare size={15} />
-        Bericht sturen
+        {t("trigger")}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Bericht sturen</DialogTitle>
-          <DialogDescription>
-            Verschijnt direct als melding bij de ontvanger(s) en blijft zichtbaar bij "Berichten".
-          </DialogDescription>
+          <DialogTitle>{t("trigger")}</DialogTitle>
+          <DialogDescription>{t("description")}</DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
           {recipients.length > 0 && (
             <div className="space-y-1">
-              <Label htmlFor="broadcast-recipient">Naar</Label>
+              <Label htmlFor="broadcast-recipient">{t("toLabel")}</Label>
               <Select value={recipientId} onValueChange={(v) => setRecipientId(v ?? EVERYONE_VALUE)}>
                 <SelectTrigger id="broadcast-recipient" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={EVERYONE_VALUE}>Iedereen op de kaart</SelectItem>
+                  <SelectItem value={EVERYONE_VALUE}>{t("everyoneOption")}</SelectItem>
                   {recipients.map((r) => (
                     <SelectItem key={r.id} value={r.id}>
                       {r.name}
@@ -85,7 +86,7 @@ export function BroadcastDialog({
             </div>
           )}
           <Textarea
-            placeholder="Bijv. 'Iedereen naar sector C i.v.m. drukte.'"
+            placeholder={t("messagePlaceholder")}
             value={message}
             onChange={(e) => setMessage(e.target.value)}
             maxLength={300}
@@ -94,10 +95,10 @@ export function BroadcastDialog({
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)} disabled={sending}>
-            Annuleren
+            {tc("cancel")}
           </Button>
           <Button onClick={handleSend} disabled={sending || !message.trim()}>
-            {sending ? "Bezig..." : "Versturen"}
+            {sending ? tc("saving") : t("send")}
           </Button>
         </DialogFooter>
       </DialogContent>

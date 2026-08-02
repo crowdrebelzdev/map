@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
 import { Moon, Sun } from "lucide-react";
@@ -12,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { useMounted } from "@/hooks/use-mounted";
 import type { VariantProps } from "class-variance-authority";
 
 export function ThemeToggle({
@@ -26,8 +26,7 @@ export function ThemeToggle({
   const { setTheme } = useTheme();
   const t = useTranslations("themeToggle");
   // Avoid rendering theme-dependent icon state before hydration confirms the real theme.
-  const [mounted, setMounted] = useState(false);
-  useEffect(() => setMounted(true), []);
+  const mounted = useMounted();
 
   return (
     <DropdownMenu>

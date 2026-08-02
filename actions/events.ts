@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { asc, count, desc, eq } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import {
   areaCategory,
@@ -47,10 +48,11 @@ const DEFAULT_POI_CATEGORIES = [
 export async function createEvent(formData: FormData) {
   const { session, organizationId } = await requireActiveOrganizationId();
   await requireOrgAdmin(organizationId, session);
+  const t = await getTranslations("actionErrors");
 
   const name = String(formData.get("name") ?? "").trim();
   if (!name) {
-    throw new Error("Naam is verplicht.");
+    throw new Error(t("nameRequired"));
   }
   const templateId = String(formData.get("templateId") ?? "").trim() || null;
 
@@ -70,7 +72,7 @@ export async function createEvent(formData: FormData) {
   if (templateId) {
     const template = await db.query.eventTemplate.findFirst({ where: eq(eventTemplate.id, templateId) });
     if (!template || template.organizationId !== organizationId) {
-      throw new Error("Ongeldig sjabloon.");
+      throw new Error(t("invalidTemplate"));
     }
     const templateCategories = await db.query.eventTemplateCategory.findMany({
       where: eq(eventTemplateCategory.templateId, templateId),
@@ -105,7 +107,8 @@ export async function duplicateEvent(eventId: string) {
 
   const source = await db.query.event.findFirst({ where: eq(event.id, eventId) });
   if (!source || source.organizationId !== organizationId) {
-    throw new Error("Evenement niet gevonden.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("eventNotFound"));
   }
 
   let slug = `${source.slug}-kopie`;
@@ -286,7 +289,8 @@ export async function unarchiveEvent(eventId: string) {
 export async function updatePublicAccessMode(eventId: string, eventSlug: string, mode: PublicAccessMode) {
   const session = await requireOrgAdminForEvent(eventId);
   if (!publicAccessModeValues.includes(mode)) {
-    throw new Error("Ongeldig toegangsniveau.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("invalidAccessMode"));
   }
 
   await db.update(event).set({ publicAccessMode: mode }).where(eq(event.id, eventId));

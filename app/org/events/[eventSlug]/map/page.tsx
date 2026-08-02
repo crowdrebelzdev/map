@@ -21,9 +21,10 @@ export default async function EventMapPage({
     redirect("/org/events");
   }
 
-  const [existingMap, existingGrid] = await Promise.all([
+  const [existingMap, existingGrid, tabs] = await Promise.all([
     db.query.eventMap.findFirst({ where: eq(eventMap.eventId, ev.id) }),
     db.query.gridConfig.findFirst({ where: eq(gridConfig.eventId, ev.id) }),
+    buildEventTabs(eventSlug, access),
   ]);
 
   return (
@@ -31,7 +32,7 @@ export default async function EventMapPage({
       eventId={ev.id}
       eventSlug={eventSlug}
       eventName={ev.name}
-      tabs={buildEventTabs(eventSlug, access)}
+      tabs={tabs}
       existingMap={existingMap ?? null}
       existingGrid={existingGrid ?? null}
     />

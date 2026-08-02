@@ -30,6 +30,8 @@ export function useOfflineMap(map: MapRow | null, tileUrlTemplate: string | null
   const [tipDismissed, setTipDismissed] = useState(true);
 
   useEffect(() => {
+    // navigator isn't available during SSR render — has to be an effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsOnline(navigator.onLine);
     const goOnline = () => setIsOnline(true);
     const goOffline = () => setIsOnline(false);
@@ -43,7 +45,9 @@ export function useOfflineMap(map: MapRow | null, tileUrlTemplate: string | null
 
   useEffect(() => {
     registerServiceWorker();
+    // localStorage isn't available during SSR render — has to be an effect.
     if (map && localStorage.getItem(`offline-map-${map.eventId}`)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setOfflineStatus("done");
     }
     if (map && !localStorage.getItem(`offline-tip-dismissed-${map.eventId}`)) {
@@ -105,6 +109,9 @@ export function useOfflineMap(map: MapRow | null, tileUrlTemplate: string | null
   useEffect(() => {
     if (!map || !isOnline) return;
     if (!localStorage.getItem(`offline-map-${map.eventId}`)) return;
+    // Kicks off a genuine side effect (network fetch) in response to regained
+    // connectivity for an already-offline-saved event — not a render-derived reset.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     runOfflineDownload(map, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [map?.eventId, isOnline]);

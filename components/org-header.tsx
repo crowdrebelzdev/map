@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import {
   LayoutDashboard,
   CalendarDays,
@@ -45,16 +46,6 @@ function initials(name: string) {
   );
 }
 
-const NAV_ITEMS = [
-  { href: "/org", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/org/events", label: "Evenementen", icon: CalendarDays },
-];
-
-const MANAGE_ITEMS = [
-  { href: "/org/users", label: "Gebruikers", icon: UsersIcon },
-  { href: "/org/templates", label: "Sjablonen", icon: LayoutTemplate },
-];
-
 function isRouteActive(pathname: string, href: string) {
   return href === "/org" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`);
 }
@@ -82,13 +73,24 @@ export function OrgHeader({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const t = useTranslations("nav");
+  const tNavBar = useTranslations("navBar");
   const { platformName, logoInitial, brandColor } = useBranding();
   const activeOrg = organizations.find((o) => o.id === activeOrganizationId) ?? organizations[0];
+
+  const NAV_ITEMS = [
+    { href: "/org", label: t("dashboard"), icon: LayoutDashboard },
+    { href: "/org/events", label: t("events"), icon: CalendarDays },
+  ];
+  const MANAGE_ITEMS = [
+    { href: "/org/users", label: t("users"), icon: UsersIcon },
+    { href: "/org/templates", label: t("templates"), icon: LayoutTemplate },
+  ];
   const allNavItems = canManageOrg ? [...NAV_ITEMS, ...MANAGE_ITEMS] : NAV_ITEMS;
 
   async function handleSignOut() {
     await authClient.signOut();
-    toast.success("Uitgelogd.");
+    toast.success(tNavBar("signedOut"));
     router.push("/sign-in");
     router.refresh();
   }
@@ -103,12 +105,12 @@ export function OrgHeader({
     organizations.length > 1 ? (
       <DropdownMenu>
         <DropdownMenuTrigger className={cn(pillBase, pillInactive, "w-full border md:w-auto")}>
-          <span className="max-w-32 truncate">{activeOrg?.name ?? "Organisatie"}</span>
+          <span className="max-w-32 truncate">{activeOrg?.name ?? t("defaultOrgName")}</span>
           <ChevronDown className="h-4 w-4" />
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" className="w-56">
           <DropdownMenuGroup>
-            <DropdownMenuLabel className="font-normal text-muted-foreground">Organisaties</DropdownMenuLabel>
+            <DropdownMenuLabel className="font-normal text-muted-foreground">{t("organizations")}</DropdownMenuLabel>
             {organizations.map((org) => (
               <DropdownMenuItem key={org.id} onClick={() => handleSwitchOrg(org.id)}>
                 {org.name}
@@ -152,12 +154,12 @@ export function OrgHeader({
                   MANAGE_ITEMS.some((item) => isRouteActive(pathname, item.href)) ? pillActive : pillInactive,
                 )}
               >
-                Beheer
+                {t("management")}
                 <ChevronDown className="h-4 w-4" />
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="min-w-56">
                 <DropdownMenuGroup>
-                  <DropdownMenuLabel>Beheer</DropdownMenuLabel>
+                  <DropdownMenuLabel>{t("management")}</DropdownMenuLabel>
                   {MANAGE_ITEMS.map((item) => (
                     <Link key={item.href} href={item.href}>
                       <DropdownMenuItem className="gap-2">
@@ -199,7 +201,7 @@ export function OrgHeader({
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut}>
                 <LogOut />
-                Uitloggen
+                {tNavBar("signOut")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -209,7 +211,7 @@ export function OrgHeader({
         <Sheet>
           <SheetTrigger render={<Button variant="ghost" size="icon" className="md:hidden" />}>
             <Menu />
-            <span className="sr-only">Menu</span>
+            <span className="sr-only">{t("menu")}</span>
           </SheetTrigger>
           <SheetContent side="right" className="flex flex-col overflow-y-auto">
             <SheetHeader>
@@ -251,7 +253,7 @@ export function OrgHeader({
               </div>
               <Button variant="outline" className="w-full" onClick={handleSignOut}>
                 <LogOut />
-                Uitloggen
+                {tNavBar("signOut")}
               </Button>
             </div>
           </SheetContent>

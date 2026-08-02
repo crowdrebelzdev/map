@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, desc, eq, ne } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { eventMap, eventMapVersion } from "@/db/schema";
 import { requireEventPermission } from "@/lib/event-access";
@@ -39,7 +40,8 @@ export async function uploadMapImage(
   const imageHeight = Number(formData.get("imageHeight"));
 
   if (!(file instanceof File) || !imageWidth || !imageHeight) {
-    throw new Error("Ongeldige afbeelding.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("invalidImage"));
   }
 
   const imageUrl = await saveMapImage(eventId, file, "full");
@@ -144,7 +146,8 @@ export async function restoreMapVersion(eventId: string, eventSlug: string, vers
     where: and(eq(eventMapVersion.id, versionId), eq(eventMapVersion.eventId, eventId)),
   });
   if (!version) {
-    throw new Error("Versie niet gevonden.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("versionNotFound"));
   }
   const current = await db.query.eventMap.findFirst({ where: eq(eventMap.eventId, eventId) });
 
@@ -187,7 +190,8 @@ export async function deleteMapVersion(eventId: string, eventSlug: string, versi
     where: and(eq(eventMapVersion.id, versionId), eq(eventMapVersion.eventId, eventId)),
   });
   if (!version) {
-    throw new Error("Versie niet gevonden.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("versionNotFound"));
   }
 
   const [current, otherVersions] = await Promise.all([
@@ -277,7 +281,8 @@ export async function finalizeMapTiles(
 
   const current = await db.query.eventMap.findFirst({ where: eq(eventMap.eventId, eventId) });
   if (!current) {
-    throw new Error("Plattegrond niet gevonden.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("mapNotFound"));
   }
 
   await db

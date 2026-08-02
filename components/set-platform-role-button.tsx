@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ShieldCheck, ShieldOff } from "lucide-react";
 import { toast } from "sonner";
 import { setPlatformRole } from "@/actions/users";
@@ -28,6 +29,8 @@ export function SetPlatformRoleButton({
   isPlatformAdmin: boolean;
 }) {
   const router = useRouter();
+  const t = useTranslations("setPlatformRoleButton");
+  const tc = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -35,11 +38,11 @@ export function SetPlatformRoleButton({
     startTransition(async () => {
       try {
         await setPlatformRole(userId, isPlatformAdmin ? "user" : "admin");
-        toast.success(isPlatformAdmin ? "Platformbeheerder-rol verwijderd." : "Platformbeheerder gemaakt.");
+        toast.success(isPlatformAdmin ? t("roleRemoved") : t("roleGranted"));
         setOpen(false);
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Wijzigen mislukt.");
+        toast.error(err instanceof Error ? err.message : t("errorFallback"));
       }
     });
   }
@@ -48,25 +51,23 @@ export function SetPlatformRoleButton({
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger render={<Button variant="outline" size="sm" />}>
         {isPlatformAdmin ? <ShieldOff /> : <ShieldCheck />}
-        {isPlatformAdmin ? "Rol verwijderen" : "Platformbeheerder maken"}
+        {isPlatformAdmin ? t("removeRole") : t("makeAdmin")}
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>
             {isPlatformAdmin
-              ? `Platformbeheerder-rol van ${userName} verwijderen?`
-              : `${userName} platformbeheerder maken?`}
+              ? t("confirmRemoveTitle", { name: userName })
+              : t("confirmMakeTitle", { name: userName })}
           </AlertDialogTitle>
           <AlertDialogDescription>
-            {isPlatformAdmin
-              ? "Deze gebruiker verliest platform-brede toegang en houdt alleen de rollen binnen de organisaties waar diegene al lid van is."
-              : "Deze gebruiker krijgt onbeperkte, platform-brede toegang tot alle organisaties."}
+            {isPlatformAdmin ? t("removeDescription") : t("makeDescription")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isPending}>Annuleren</AlertDialogCancel>
+          <AlertDialogCancel disabled={isPending}>{tc("cancel")}</AlertDialogCancel>
           <AlertDialogAction onClick={handleConfirm} disabled={isPending}>
-            {isPending ? "Bezig..." : "Bevestigen"}
+            {isPending ? tc("saving") : t("confirm")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

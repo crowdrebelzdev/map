@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { event, member } from "@/db/schema";
 import { requireSession } from "@/lib/get-session";
@@ -21,7 +22,8 @@ export async function requireActiveOrganizationId(): Promise<{ session: Session;
   const session = await requireSession();
   const organizationId = await resolveActiveOrganizationId(session);
   if (!organizationId) {
-    throw new Error("Geen organisatie gevonden voor dit account.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("noOrgForAccount"));
   }
   return { session, organizationId };
 }
@@ -45,7 +47,8 @@ export async function isOrgAdmin(session: Session, organizationId: string): Prom
 export async function requirePlatformAdmin(session?: Session): Promise<Session> {
   const s = session ?? (await requireSession());
   if (s.user.role !== "admin") {
-    throw new Error("Niet toegestaan: alleen voor platformbeheerders.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("platformAdminOnly"));
   }
   return s;
 }
@@ -57,7 +60,8 @@ export async function requireOrgAdmin(
 ): Promise<Session> {
   const s = session ?? (await requireSession());
   if (!(await isOrgAdmin(s, organizationId))) {
-    throw new Error("Niet toegestaan: alleen voor organisatiebeheerders.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("orgAdminOnly"));
   }
   return s;
 }
@@ -70,7 +74,8 @@ export async function requireOrgAdminForEvent(eventId: string, session?: Session
     columns: { organizationId: true },
   });
   if (!ev) {
-    throw new Error("Evenement niet gevonden.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("eventNotFound"));
   }
   return requireOrgAdmin(ev.organizationId, session);
 }
@@ -94,7 +99,8 @@ export async function requireOrgAdminForUser(targetUserId: string, session?: Ses
   const targetOrgIds = new Set(targetOrgs.map((m) => m.organizationId));
   const sharesOrg = callerOwnerOrgs.some((m) => targetOrgIds.has(m.organizationId));
   if (!sharesOrg) {
-    throw new Error("Niet toegestaan: alleen voor organisatiebeheerders.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("orgAdminOnly"));
   }
   return s;
 }

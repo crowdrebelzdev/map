@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useRef } from "react";
 import {
   Map,
   Source,
@@ -12,12 +12,16 @@ import {
   type MapLayerMouseEvent,
 } from "react-map-gl/maplibre";
 import "maplibre-gl/dist/maplibre-gl.css";
-import Supercluster, { type ClusterFeature, type PointFeature } from "supercluster";
 import { X } from "lucide-react";
 import type { CornerSet, GridCell, LatLng } from "@/lib/geo";
-import { computeTransform, gridCellsToGeoJSON, isPointInPolygon, latLngToPixel, polygonsIntersect } from "@/lib/geo";
 import { cn } from "@/lib/utils";
 import { getPoiIcon, getShapeContainerStyle } from "@/lib/poi-icons";
+import { useMapLoadState } from "@/hooks/use-map-load-state";
+import { useMapViewport } from "@/hooks/use-map-viewport";
+import { useFlyToTarget } from "@/hooks/use-fly-to-target";
+import { usePoiClustering, isClusterFeature } from "@/hooks/use-poi-clustering";
+import { useVisibleMapData } from "@/hooks/use-visible-map-data";
+import { useMapSelection } from "@/hooks/use-map-selection";
 import type { PoiExtraFieldDef, PoiExtraFieldValue } from "@/db/schema";
 
 const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
@@ -52,15 +56,6 @@ export type EventMapPoi = {
   owner?: string | null;
   extraFieldValues?: PoiExtraFieldValue[];
 };
-
-type PoiPointProps = { poiId: string };
-type PoiClusterProps = Record<string, never>;
-
-function isClusterFeature(
-  item: ClusterFeature<PoiClusterProps> | PointFeature<PoiPointProps>,
-): item is ClusterFeature<PoiClusterProps> {
-  return "cluster" in item.properties && item.properties.cluster === true;
-}
 
 export type EventMapLiveUser = {
   userId: string;
@@ -285,217 +280,61 @@ export default function EventMapView({
   onMapReady,
 }: EventMapViewProps) {
   const mapRef = useRef<MapRef | null>(null);
-  const mapReadyFiredRef = useRef(false);
-  const [loaded, setLoaded] = useState(false);
-  const [selectedPoiId, setSelectedPoiId] = useState<string | null>(null);
-  const [selectedAreaId, setSelectedAreaId] = useState<string | null>(null);
-  const [viewport, setViewport] = useState<{ zoom: number; bounds: [number, number, number, number] } | null>(
-    null,
-  );
+  const { loaded, handleMapLoad, handleMapSourceData } = useMapLoadState(mapRef, mapImage, onMapReady);
+  const viewport = useMapViewport(mapRef, loaded);
+  useFlyToTarget(mapRef, loaded, flyToTarget);
 
-  // Lets a parent (e.g. a sidebar POI list) open the same read-only panel a direct marker
-  // click would — the `token` in the signal guarantees this fires even when re-selecting
-  // the POI that's already selected.
-  useEffect(() => {
-    if (!externalSelectPoi) return;
-    setSelectedPoiId(externalSelectPoi.id);
-    setSelectedAreaId(null);
-  }, [externalSelectPoi]);
+  const {
+    categoryById,
+    visiblePois,
+    poiById,
+    areaCategoryById,
+    visibleAreas,
+    areaById,
+    gridGeoJson,
+    highlightGeoJson,
+    drawingGeoJson,
+  } = useVisibleMapData({
+    pois,
+    categories,
+    visibleCategories,
+    extraVisiblePoiId,
+    areas,
+    areaCategories,
+    visibleAreaCategoryIds,
+    gridCells,
+    highlightedCell,
+    drawingVertices,
+  });
 
-  useEffect(() => {
-    onSelectedPoiIdChange?.(selectedPoiId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedPoiId]);
+  const { clusterIndex, clusterItems } = usePoiClustering(visiblePois, viewport);
 
-  // Tracked for POI clustering + zoom-gated labels — recomputed on every pan/zoom so
-  // clusters stay in sync with what's actually on screen.
-  useEffect(() => {
-    if (!loaded || !mapRef.current) return;
-    const map = mapRef.current.getMap();
-    function updateViewport() {
-      const b = map.getBounds();
-      setViewport({
-        zoom: map.getZoom(),
-        bounds: [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()],
-      });
-    }
-    updateViewport();
-    map.on("move", updateViewport);
-    return () => {
-      map.off("move", updateViewport);
-    };
-  }, [loaded]);
-
-  useEffect(() => {
-    if (!loaded || !flyToTarget || !mapRef.current) return;
-    if (flyToTarget.type === "bounds") {
-      mapRef.current.fitBounds(flyToTarget.bounds, { padding: 60, duration: 800 });
-    } else {
-      mapRef.current.flyTo({
-        center: [flyToTarget.center.lng, flyToTarget.center.lat],
-        zoom: flyToTarget.zoom ?? 19,
-        duration: 800,
-      });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flyToTarget, loaded]);
-
-  const gridGeoJson = useMemo(() => gridCellsToGeoJSON(gridCells), [gridCells]);
-
-  const highlightGeoJson = useMemo(():
-    | GeoJSON.Feature<GeoJSON.Polygon>
-    | null => {
-    if (!highlightedCell) return null;
-    const ring = [...highlightedCell.corners.map((c) => [c.lng, c.lat]), [
-      highlightedCell.corners[0].lng,
-      highlightedCell.corners[0].lat,
-    ]];
-    return {
-      type: "Feature",
-      properties: {},
-      geometry: { type: "Polygon", coordinates: [ring] },
-    };
-  }, [highlightedCell]);
-
-  // Not `new Map(...)` — this file imports `Map` from react-map-gl for the map component,
-  // which shadows the built-in Map constructor.
-  const categoryById = useMemo(
-    () => Object.fromEntries(categories.map((c) => [c.id, c])),
-    [categories],
-  );
-
-  const visiblePois = useMemo(
-    () =>
-      visibleCategories
-        ? pois.filter((p) => visibleCategories.includes(p.categoryId) || p.id === extraVisiblePoiId)
-        : pois,
-    [pois, visibleCategories, extraVisiblePoiId],
-  );
-
-  // Not `new Map(...)` — see the comment on categoryById above; same shadowing trap.
-  const poiById = useMemo(
-    () => Object.fromEntries(visiblePois.map((p) => [p.id, p])) as Record<string, EventMapPoi>,
-    [visiblePois],
-  );
-
-  const areaCategoryById = useMemo(
-    () => Object.fromEntries(areaCategories.map((c) => [c.id, c])),
-    [areaCategories],
-  );
-
-  const visibleAreas = useMemo(
-    () =>
-      visibleAreaCategoryIds
-        ? areas.filter((a) => visibleAreaCategoryIds.includes(a.categoryId))
-        : areas,
-    [areas, visibleAreaCategoryIds],
-  );
-
-  const areaById = useMemo(
-    () => Object.fromEntries(visibleAreas.map((a) => [a.id, a])) as Record<string, EventMapArea>,
-    [visibleAreas],
-  );
-
-  const areasGeoJson = useMemo((): GeoJSON.FeatureCollection<GeoJSON.Polygon> => {
-    const focused = Boolean(selectedPoiId || selectedAreaId);
-    return {
-      type: "FeatureCollection",
-      features: visibleAreas.map((a) => ({
-        type: "Feature",
-        properties: {
-          areaId: a.id,
-          color: areaCategoryById[a.categoryId]?.color ?? FALLBACK_CATEGORY_COLOR,
-          dimmed: focused && a.id !== selectedAreaId,
-        },
-        geometry: {
-          type: "Polygon",
-          coordinates: [[...a.vertices.map((v) => [v.lng, v.lat]), [a.vertices[0]?.lng ?? 0, a.vertices[0]?.lat ?? 0]]],
-        },
-      })),
-    };
-  }, [visibleAreas, areaCategoryById, selectedPoiId, selectedAreaId]);
-
-  const drawingGeoJson = useMemo((): GeoJSON.Feature<GeoJSON.LineString | GeoJSON.Polygon> | null => {
-    if (!drawingVertices || drawingVertices.length < 2) return null;
-    const coords = drawingVertices.map((v) => [v.lng, v.lat]);
-    if (drawingVertices.length >= 3) {
-      return {
-        type: "Feature",
-        properties: {},
-        geometry: { type: "Polygon", coordinates: [[...coords, coords[0]]] },
-      };
-    }
-    return { type: "Feature", properties: {}, geometry: { type: "LineString", coordinates: coords } };
-  }, [drawingVertices]);
-
-  const clusterIndex = useMemo(() => {
-    // A smaller radius means points only merge once they're genuinely close together on
-    // screen — i.e. clustering kicks in later, only once you're properly zoomed out.
-    const index = new Supercluster<PoiPointProps, PoiClusterProps>({ radius: 32, maxZoom: 18 });
-    index.load(
-      visiblePois.map(
-        (p): PointFeature<PoiPointProps> => ({
-          type: "Feature",
-          properties: { poiId: p.id },
-          geometry: { type: "Point", coordinates: [p.lng, p.lat] },
-        }),
-      ),
-    );
-    return index;
-  }, [visiblePois]);
-
-  const clusterItems = useMemo(() => {
-    if (!viewport) return [];
-    return clusterIndex.getClusters(viewport.bounds, Math.round(viewport.zoom));
-  }, [clusterIndex, viewport]);
-
-  const selectedPoi = selectedPoiId ? poiById[selectedPoiId] : null;
-  const selectedCategory = selectedPoi ? categoryById[selectedPoi.categoryId] : undefined;
-
-  const gridTransform = useMemo(
-    () =>
-      gridTransformInput
-        ? computeTransform(gridTransformInput.columns, gridTransformInput.rows, gridTransformInput.corners)
-        : null,
-    [gridTransformInput],
-  );
-
-  const selectedPoiGridCell = useMemo(() => {
-    if (!selectedPoi || !gridTransform) return null;
-    const px = latLngToPixel(gridTransform, { lat: selectedPoi.lat, lng: selectedPoi.lng });
-    const col = Math.floor(px.x);
-    const row = Math.floor(px.y);
-    return gridCells.find((c) => c.col === col && c.row === row) ?? null;
-  }, [selectedPoi, gridTransform, gridCells]);
-
-  const selectedArea = selectedAreaId ? areaById[selectedAreaId] : null;
-  const selectedAreaCategory = selectedArea ? areaCategoryById[selectedArea.categoryId] : undefined;
-
-  const selectedAreaGridCells = useMemo(() => {
-    if (!selectedArea || gridCells.length === 0) return [];
-    // Any overlap counts, not just cells whose center falls inside — an area that only
-    // clips a cell's corner should still list that cell.
-    return gridCells.filter((c) => polygonsIntersect(c.corners, selectedArea.vertices));
-  }, [selectedArea, gridCells]);
-
-  // Which other visible areas also cover each of the selected area's grid cells — surfaced
-  // as a small badge so overlapping sectors (e.g. a parking area sharing cells with a
-  // security zone) are visible without cross-referencing every area's own cell list by hand.
-  const otherAreasByGridCell = useMemo(() => {
-    const result: Record<string, EventMapArea[]> = {};
-    if (!selectedArea || selectedAreaGridCells.length === 0 || visibleAreas.length <= 1) return result;
-    const otherAreas = visibleAreas.filter((a) => a.id !== selectedArea.id);
-    for (const cell of selectedAreaGridCells) {
-      const overlapping = otherAreas.filter((a) => polygonsIntersect(cell.corners, a.vertices));
-      if (overlapping.length > 0) result[cell.code] = overlapping;
-    }
-    return result;
-  }, [selectedArea, selectedAreaGridCells, visibleAreas]);
-
-  const selectedAreaPois = useMemo(() => {
-    if (!selectedArea) return [];
-    return visiblePois.filter((p) => isPointInPolygon({ lat: p.lat, lng: p.lng }, selectedArea.vertices));
-  }, [selectedArea, visiblePois]);
+  const {
+    selectedPoiId,
+    setSelectedPoiId,
+    selectedAreaId,
+    setSelectedAreaId,
+    selectedPoi,
+    selectedCategory,
+    selectedPoiGridCell,
+    selectedArea,
+    selectedAreaCategory,
+    selectedAreaGridCells,
+    otherAreasByGridCell,
+    selectedAreaPois,
+    areasGeoJson,
+  } = useMapSelection({
+    externalSelectPoi,
+    onSelectedPoiIdChange,
+    poiById,
+    categoryById,
+    areaById,
+    areaCategoryById,
+    visiblePois,
+    visibleAreas,
+    gridCells,
+    gridTransformInput,
+  });
 
   const initialBounds = mapImage ? cornersToBounds(mapImage.corners) : undefined;
 
@@ -551,40 +390,8 @@ export default function EventMapView({
       onClick={handleClick}
       interactiveLayerIds={["map-areas-fill-layer"]}
       cursor={onMapClick || drawingVertices ? "crosshair" : "grab"}
-      onLoad={() => {
-        setLoaded(true);
-        // MapLibre's compact attribution briefly shows the full credit line on first
-        // load before collapsing to just the icon on the next drag — collapse it
-        // immediately instead so it never flashes the full text at all.
-        mapRef.current
-          ?.getMap()
-          .getContainer()
-          .querySelector(".maplibregl-ctrl-attrib")
-          ?.classList.remove("maplibregl-compact-show");
-        // No plattegrond configured for this event at all — nothing else to wait for, so
-        // the map is as "ready" as it'll ever be as soon as the base style has loaded (the
-        // `onSourceData` check below only ever fires for the plattegrond's own source, so
-        // without one this would otherwise wait forever).
-        if (!mapImage && !mapReadyFiredRef.current) {
-          mapReadyFiredRef.current = true;
-          onMapReady?.();
-        }
-      }}
-      onSourceData={(e) => {
-        // Specifically the plattegrond's own source (tiles or the flat-image fallback —
-        // exactly one of the two exists whenever `mapImage` is set), not just "the style
-        // finished loading" (`onLoad`) or "nothing is pending right now" (the `idle` event
-        // this used to key off of): `loaded` only flips true *after* `onLoad` already ran,
-        // and the Source below is only added to the map on the *next* render after that —
-        // maplibre-gl's own `idle` event can fire in the gap between those two, before the
-        // plattegrond source was even added yet, handing control back to the parent while
-        // the map underneath still has nothing plattegrond-related loaded or even queued.
-        if (mapReadyFiredRef.current) return;
-        if ((e.sourceId === "event-map-tiles" || e.sourceId === "event-map-image") && e.isSourceLoaded) {
-          mapReadyFiredRef.current = true;
-          onMapReady?.();
-        }
-      }}
+      onLoad={handleMapLoad}
+      onSourceData={handleMapSourceData}
       // Required by OpenStreetMap's ODbL license and OpenFreeMap's terms — can't be removed,
       // but `compact` collapses it to a small "i" icon instead of the full credit line.
       attributionControl={{ compact: true }}

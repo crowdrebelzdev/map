@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Eye, Pencil, PanelLeft } from "lucide-react";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
@@ -41,9 +42,10 @@ type Tab = "pois" | "categories" | "areas";
 const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/.test(navigator.userAgent);
 
 function UndoShortcutHint() {
+  const t = useTranslations("poiWorkspace");
   return (
     <span className="flex items-center gap-1.5">
-      Ongedaan maken
+      {t("undoMoveLabel")}
       <KbdGroup>
         <Kbd>{isMac ? "⌘" : "Ctrl"}</Kbd>
         <Kbd>Z</Kbd>
@@ -51,12 +53,6 @@ function UndoShortcutHint() {
     </span>
   );
 }
-
-const TAB_LABELS: Record<Tab, string> = {
-  pois: "POI's",
-  categories: "Categorieën",
-  areas: "Areas",
-};
 
 function areaBounds(vertices: LatLng[]): FlyToTarget {
   const lats = vertices.map((v) => v.lat);
@@ -111,6 +107,13 @@ export function PoiWorkspace({
   canManageAreas: boolean;
 }) {
   const router = useRouter();
+  const t = useTranslations("poiWorkspace");
+  const tc = useTranslations("common");
+  const TAB_LABELS: Record<Tab, string> = {
+    pois: t("tabPois"),
+    categories: t("tabCategories"),
+    areas: t("tabAreas"),
+  };
   const availableTabs: Tab[] = [
     canManagePois && "pois",
     canManageCategories && "categories",
@@ -136,7 +139,10 @@ export function PoiWorkspace({
 
   // A freshly created category isn't in `visibleCategoryIds` yet (that state was only seeded
   // from `categories` once, at mount) — without this it'd default to hidden in the filters.
+  // Merges new ids into existing state rather than resetting it, so a key-remount (which
+  // would also discard the user's existing show/hide choices) isn't an option here.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setVisibleCategoryIds((prev) => {
       const newIds = categories.map((c) => c.id).filter((id) => !prev.includes(id));
       return newIds.length > 0 ? [...prev, ...newIds] : prev;
@@ -144,6 +150,7 @@ export function PoiWorkspace({
   }, [categories]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setVisibleAreaCategoryIds((prev) => {
       const newIds = areaCategories.map((c) => c.id).filter((id) => !prev.includes(id));
       return newIds.length > 0 ? [...prev, ...newIds] : prev;
@@ -155,13 +162,13 @@ export function PoiWorkspace({
       lastMoveRef.current = null;
       try {
         await movePoi(eventId, eventSlug, poiId, from.lat, from.lng);
-        toast.success(`Verplaatsing van "${poiName}" ongedaan gemaakt.`);
+        toast.success(t("undoneToast", { name: poiName }));
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Ongedaan maken mislukt.");
+        toast.error(err instanceof Error ? err.message : t("undoErrorFallback"));
       }
     },
-    [eventId, eventSlug, router],
+    [eventId, eventSlug, router, t],
   );
 
   useEffect(() => {
@@ -239,15 +246,15 @@ export function PoiWorkspace({
       if (poiBeforeMove) {
         const from = { lat: poiBeforeMove.lat, lng: poiBeforeMove.lng };
         lastMoveRef.current = { poiId, poiName: poiBeforeMove.name, from };
-        toast.success("POI verplaatst.", {
+        toast.success(t("movedToast"), {
           action: { label: <UndoShortcutHint />, onClick: () => undoMove(poiId, poiBeforeMove.name, from) },
         });
       } else {
-        toast.success("POI verplaatst.");
+        toast.success(t("movedToast"));
       }
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Verplaatsen mislukt.");
+      toast.error(err instanceof Error ? err.message : t("moveErrorFallback"));
     }
   }
 
@@ -378,7 +385,7 @@ export function PoiWorkspace({
         className="absolute left-3 top-3 z-20 lg:hidden"
       >
         <PanelLeft />
-        <span className="sr-only">Zijbalk in-/uitklappen</span>
+        <span className="sr-only">{t("toggleSidebarSr")}</span>
       </Button>
 
       <div
@@ -391,17 +398,17 @@ export function PoiWorkspace({
         <div className="mb-4 flex items-center gap-2">
           {availableTabs.length > 1 && (
             <div className="flex flex-1 gap-1 rounded-md bg-muted p-1">
-              {availableTabs.map((t) => (
+              {availableTabs.map((tabKey) => (
                 <button
-                  key={t}
+                  key={tabKey}
                   type="button"
-                  onClick={() => handleTabChange(t)}
+                  onClick={() => handleTabChange(tabKey)}
                   className={cn(
                     "flex-1 rounded-sm py-1.5 text-sm font-medium transition-colors",
-                    tab === t ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
+                    tab === tabKey ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
                   )}
                 >
-                  {TAB_LABELS[t]}
+                  {TAB_LABELS[tabKey]}
                 </button>
               ))}
             </div>
@@ -431,7 +438,7 @@ export function PoiWorkspace({
               )}
             >
               <Eye className="size-3.5" />
-              Bekijken
+              {t("viewMode")}
             </button>
             <button
               type="button"
@@ -444,7 +451,7 @@ export function PoiWorkspace({
               )}
             >
               <Pencil className="size-3.5" />
-              Bewerken
+              {tc("edit")}
             </button>
           </div>
         )}

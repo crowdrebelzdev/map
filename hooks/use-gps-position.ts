@@ -17,6 +17,8 @@ export function useGpsPosition() {
 
   useEffect(() => {
     if (typeof window !== "undefined" && !window.isSecureContext) {
+      // window/navigator feature-detection can't happen during render (SSR has neither).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setGpsStatus("insecure");
       return;
     }

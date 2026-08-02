@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, eq, inArray } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { eventDay, eventMap, poi, poiCategory, poiSizeValues, type PoiSize, type PoiExtraFieldValue } from "@/db/schema";
 import { requireEventPermission } from "@/lib/event-access";
@@ -9,49 +10,51 @@ import { logActivity } from "@/lib/activity-log";
 import { sanitizeExtraFieldValues } from "@/lib/extra-fields";
 import { computeTransform, latLngToPixel } from "@/lib/geo";
 
-async function resolveEventDayId(eventId: string, eventDayId: string | null | undefined) {
+type Translator = Awaited<ReturnType<typeof getTranslations>>;
+
+async function resolveEventDayId(t: Translator, eventId: string, eventDayId: string | null | undefined) {
   if (!eventDayId) return null;
   const day = await db.query.eventDay.findFirst({
     where: and(eq(eventDay.id, eventDayId), eq(eventDay.eventId, eventId)),
   });
   if (!day) {
-    throw new Error("Ongeldige dag.");
+    throw new Error(t("invalidDay"));
   }
   return day.id;
 }
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-function validateTimeWindow(startTime: string | null | undefined, endTime: string | null | undefined) {
+function validateTimeWindow(t: Translator, startTime: string | null | undefined, endTime: string | null | undefined) {
   const start = startTime?.trim() || null;
   const end = endTime?.trim() || null;
   if (!start && !end) return { startTime: null, endTime: null };
   if (!start || !end) {
-    throw new Error("Vul zowel een start- als eindtijd in, of laat beide leeg.");
+    throw new Error(t("startEndTimeBoth"));
   }
   if (!TIME_RE.test(start) || !TIME_RE.test(end)) {
-    throw new Error("Ongeldige tijd (verwacht HH:MM).");
+    throw new Error(t("invalidTimeFormat"));
   }
   if (start >= end) {
-    throw new Error("Starttijd moet vóór eindtijd liggen.");
+    throw new Error(t("startBeforeEnd"));
   }
   return { startTime: start, endTime: end };
 }
 
-function validateSize(size: string | undefined): PoiSize {
+function validateSize(t: Translator, size: string | undefined): PoiSize {
   if (!size) return "medium";
   if (!poiSizeValues.includes(size as PoiSize)) {
-    throw new Error("Ongeldige grootte.");
+    throw new Error(t("invalidSize"));
   }
   return size as PoiSize;
 }
 
 const HEX_COLOR_RE = /^#[0-9a-fA-F]{6}$/;
 
-function validateOptionalColor(color: string | null | undefined): string | null {
+function validateOptionalColor(t: Translator, color: string | null | undefined): string | null {
   if (!color) return null;
   if (!HEX_COLOR_RE.test(color)) {
-    throw new Error("Ongeldige kleur.");
+    throw new Error(t("invalidColor"));
   }
   return color;
 }
@@ -77,22 +80,23 @@ export async function createPoi(input: {
   lng: number;
 }) {
   const { session } = await requireEventPermission(input.eventId, "manage_pois");
+  const t = await getTranslations("actionErrors");
 
   const category = await db.query.poiCategory.findFirst({
     where: and(eq(poiCategory.id, input.categoryId), eq(poiCategory.eventId, input.eventId)),
   });
   if (!category) {
-    throw new Error("Ongeldige categorie.");
+    throw new Error(t("invalidCategory"));
   }
   if (!input.name.trim()) {
-    throw new Error("Naam is verplicht.");
+    throw new Error(t("nameRequired"));
   }
-  const eventDayId = await resolveEventDayId(input.eventId, input.eventDayId);
-  const size = validateSize(input.size);
-  const { startTime, endTime } = validateTimeWindow(input.startTime, input.endTime);
+  const eventDayId = await resolveEventDayId(t, input.eventId, input.eventDayId);
+  const size = validateSize(t, input.size);
+  const { startTime, endTime } = validateTimeWindow(t, input.startTime, input.endTime);
   const extraFieldValues = sanitizeExtraFieldValues(input.extraFieldValues);
-  const fillColor = validateOptionalColor(input.fillColor);
-  const borderColor = validateOptionalColor(input.borderColor);
+  const fillColor = validateOptionalColor(t, input.fillColor);
+  const borderColor = validateOptionalColor(t, input.borderColor);
 
   await db.insert(poi).values({
     eventId: input.eventId,
@@ -147,22 +151,23 @@ export async function updatePoi(input: {
   extraFieldValues?: PoiExtraFieldValue[];
 }) {
   const { session } = await requireEventPermission(input.eventId, "manage_pois");
+  const t = await getTranslations("actionErrors");
 
   const category = await db.query.poiCategory.findFirst({
     where: and(eq(poiCategory.id, input.categoryId), eq(poiCategory.eventId, input.eventId)),
   });
   if (!category) {
-    throw new Error("Ongeldige categorie.");
+    throw new Error(t("invalidCategory"));
   }
   if (!input.name.trim()) {
-    throw new Error("Naam is verplicht.");
+    throw new Error(t("nameRequired"));
   }
-  const eventDayId = await resolveEventDayId(input.eventId, input.eventDayId);
-  const size = validateSize(input.size);
-  const { startTime, endTime } = validateTimeWindow(input.startTime, input.endTime);
+  const eventDayId = await resolveEventDayId(t, input.eventId, input.eventDayId);
+  const size = validateSize(t, input.size);
+  const { startTime, endTime } = validateTimeWindow(t, input.startTime, input.endTime);
   const extraFieldValues = sanitizeExtraFieldValues(input.extraFieldValues);
-  const fillColor = validateOptionalColor(input.fillColor);
-  const borderColor = validateOptionalColor(input.borderColor);
+  const fillColor = validateOptionalColor(t, input.fillColor);
+  const borderColor = validateOptionalColor(t, input.borderColor);
 
   await db
     .update(poi)
@@ -196,7 +201,8 @@ export async function movePoi(eventId: string, eventSlug: string, poiId: string,
     columns: { name: true },
   });
   if (!existing) {
-    throw new Error("POI niet gevonden.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("poiNotFound"));
   }
 
   await db.update(poi).set({ lat, lng }).where(and(eq(poi.id, poiId), eq(poi.eventId, eventId)));
@@ -240,12 +246,14 @@ export async function bulkMovePois(
       where: and(eq(poiCategory.id, patch.categoryId), eq(poiCategory.eventId, eventId)),
     });
     if (!category) {
-      throw new Error("Ongeldige categorie.");
+      const t = await getTranslations("actionErrors");
+      throw new Error(t("invalidCategory"));
     }
     set.categoryId = patch.categoryId;
   }
   if (patch.eventDayId !== undefined) {
-    set.eventDayId = await resolveEventDayId(eventId, patch.eventDayId);
+    const t = await getTranslations("actionErrors");
+    set.eventDayId = await resolveEventDayId(t, eventId, patch.eventDayId);
   }
   if (Object.keys(set).length === 0) return;
 
@@ -326,6 +334,7 @@ export async function importPoisCsv(
   rows: PoiImportRow[],
 ): Promise<PoiImportResult> {
   const { session } = await requireEventPermission(eventId, "manage_pois");
+  const t = await getTranslations("actionErrors");
 
   const categories = await db.query.poiCategory.findMany({ where: eq(poiCategory.eventId, eventId) });
   const categoryByLabel = new Map(categories.map((c) => [c.label.trim().toLowerCase(), c]));
@@ -339,7 +348,7 @@ export async function importPoisCsv(
 
   const mapRow = await db.query.eventMap.findFirst({ where: eq(eventMap.eventId, eventId) });
   if (!mapRow) {
-    throw new Error("Upload eerst een plattegrond voordat je POI's importeert.");
+    throw new Error(t("uploadMapFirst"));
   }
   const transform = computeTransform(mapRow.imageWidth, mapRow.imageHeight, {
     tl: { lat: mapRow.cornerTlLat, lng: mapRow.cornerTlLng },
@@ -355,27 +364,27 @@ export async function importPoisCsv(
     const rowNum = i + 2; // account for the header row
     try {
       const name = row.name?.trim();
-      if (!name) throw new Error("Naam ontbreekt.");
+      if (!name) throw new Error(t("nameMissing"));
 
       const category = categoryByLabel.get((row.categoryLabel ?? "").trim().toLowerCase());
-      if (!category) throw new Error(`Categorie "${row.categoryLabel}" niet gevonden.`);
+      if (!category) throw new Error(t("categoryNotFoundNamed", { label: row.categoryLabel }));
 
       const lat = Number(row.lat);
       const lng = Number(row.lng);
-      if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error("Ongeldige lat/lng.");
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) throw new Error(t("invalidLatLng"));
 
       let eventDayId: string | null = null;
       const dayLabel = row.dayLabel?.trim();
       if (dayLabel && dayLabel.toLowerCase() !== "alle dagen") {
         const found = dayByLabel.get(dayLabel.toLowerCase());
-        if (!found) throw new Error(`Dag "${row.dayLabel}" niet gevonden.`);
+        if (!found) throw new Error(t("dayNotFoundNamed", { label: dayLabel }));
         eventDayId = found;
       }
 
-      const size = validateSize(row.size);
-      const fillColor = validateOptionalColor(row.fillColor);
-      const borderColor = validateOptionalColor(row.borderColor);
-      const { startTime, endTime } = validateTimeWindow(row.startTime, row.endTime);
+      const size = validateSize(t, row.size);
+      const fillColor = validateOptionalColor(t, row.fillColor);
+      const borderColor = validateOptionalColor(t, row.borderColor);
+      const { startTime, endTime } = validateTimeWindow(t, row.startTime, row.endTime);
       const extraFieldValues = parseExtraFieldsString(row.extra);
       const { x, y } = latLngToPixel(transform, { lat, lng });
 
@@ -399,7 +408,7 @@ export async function importPoisCsv(
         lng,
       });
     } catch (err) {
-      errors.push({ row: rowNum, message: err instanceof Error ? err.message : "Ongeldige rij." });
+      errors.push({ row: rowNum, message: err instanceof Error ? err.message : t("invalidRow") });
     }
   });
 

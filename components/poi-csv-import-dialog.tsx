@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,8 @@ import { POI_CSV_HEADERS, csvRecordsToImportRows } from "@/lib/poi-csv";
  * than blocking the rows that do validate. */
 export function PoiCsvImportDialog({ eventId, eventSlug }: { eventId: string; eventSlug: string }) {
   const router = useRouter();
+  const t = useTranslations("poiCsvImportDialog");
+  const tc = useTranslations("common");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -47,11 +50,11 @@ export function PoiCsvImportDialog({ eventId, eventSlug }: { eventId: string; ev
       const importResult = await importPoisCsv(eventId, eventSlug, csvRecordsToImportRows(records));
       setResult(importResult);
       if (importResult.imported > 0) {
-        toast.success(`${importResult.imported} POI('s) geïmporteerd.`);
+        toast.success(t("importedToast", { count: importResult.imported }));
         router.refresh();
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Importeren mislukt.");
+      toast.error(err instanceof Error ? err.message : t("errorFallback"));
     } finally {
       setImporting(false);
     }
@@ -61,15 +64,12 @@ export function PoiCsvImportDialog({ eventId, eventSlug }: { eventId: string; ev
     <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
       <DialogTrigger render={<Button variant="outline" size="icon-sm" />}>
         <Upload />
-        <span className="sr-only">Importeren vanuit CSV</span>
+        <span className="sr-only">{t("trigger")}</span>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>POI's importeren vanuit CSV</DialogTitle>
-          <DialogDescription>
-            Gebruik hetzelfde formaat als de CSV-export: kolommen {POI_CSV_HEADERS.join(", ")}.
-            Categorie en Dag worden op naam gematcht — moeten al bestaan in dit event.
-          </DialogDescription>
+          <DialogTitle>{t("title")}</DialogTitle>
+          <DialogDescription>{t("description", { headers: POI_CSV_HEADERS.join(", ") })}</DialogDescription>
         </DialogHeader>
 
         <input
@@ -81,20 +81,18 @@ export function PoiCsvImportDialog({ eventId, eventSlug }: { eventId: string; ev
           className="text-sm"
         />
 
-        {importing && <p className="text-sm text-muted-foreground">Bezig met importeren...</p>}
+        {importing && <p className="text-sm text-muted-foreground">{t("importing")}</p>}
 
         {result && !importing && (
           <div className="space-y-2 text-sm">
             <p>
-              <span className="font-medium">{result.imported}</span> POI('s) geïmporteerd
-              {result.errors.length > 0 && `, ${result.errors.length} rij(en) overgeslagen`}.
+              <span className="font-medium">{result.imported}</span> {t("importedSummary")}
+              {result.errors.length > 0 && t("skippedSuffix", { count: result.errors.length })}.
             </p>
             {result.errors.length > 0 && (
               <ul className="max-h-40 list-disc space-y-0.5 overflow-y-auto rounded-md border p-2 pl-6 text-xs text-destructive">
                 {result.errors.map((e) => (
-                  <li key={e.row}>
-                    Rij {e.row}: {e.message}
-                  </li>
+                  <li key={e.row}>{t("rowError", { row: e.row, message: e.message })}</li>
                 ))}
               </ul>
             )}
@@ -103,7 +101,7 @@ export function PoiCsvImportDialog({ eventId, eventSlug }: { eventId: string; ev
 
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)}>
-            {fileName ? "Sluiten" : "Annuleren"}
+            {fileName ? t("close") : tc("cancel")}
           </Button>
         </DialogFooter>
       </DialogContent>

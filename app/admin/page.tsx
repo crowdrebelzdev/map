@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { count } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { Building2, CalendarDays, Users as UsersIcon } from "lucide-react";
 import { db } from "@/db";
 import { organization, event, user } from "@/db/schema";
@@ -7,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { buttonVariants } from "@/components/ui/button";
 
 export default async function PlatformAdminDashboardPage() {
+  const t = await getTranslations("platformDashboard");
   const [[orgCount], [userCount], [eventCount]] = await Promise.all([
     db.select({ value: count() }).from(organization),
     db.select({ value: count() }).from(user),
@@ -14,18 +16,16 @@ export default async function PlatformAdminDashboardPage() {
   ]);
 
   const stats = [
-    { label: "Organisaties", value: orgCount.value, icon: Building2, href: "/admin/organizations" },
-    { label: "Gebruikers", value: userCount.value, icon: UsersIcon, href: "/admin/users" },
-    { label: "Evenementen totaal", value: eventCount.value, icon: CalendarDays, href: null },
+    { label: t("statsOrganizations"), value: orgCount.value, icon: Building2, href: "/admin/organizations" },
+    { label: t("statsUsers"), value: userCount.value, icon: UsersIcon, href: "/admin/users" },
+    { label: t("statsEventsTotal"), value: eventCount.value, icon: CalendarDays, href: null },
   ];
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Platformbeheer</h1>
-        <p className="text-sm text-muted-foreground">
-          Overzicht over alle organisaties en gebruikers heen.
-        </p>
+        <h1 className="text-2xl font-semibold">{t("title")}</h1>
+        <p className="text-sm text-muted-foreground">{t("subtitle")}</p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -53,14 +53,14 @@ export default async function PlatformAdminDashboardPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Snel naar</CardTitle>
+          <CardTitle>{t("quickLinks")}</CardTitle>
         </CardHeader>
         <CardContent className="flex flex-wrap gap-2">
           <Link href="/admin/organizations" className={buttonVariants({ variant: "outline", size: "sm" })}>
-            Organisaties beheren
+            {t("manageOrganizations")}
           </Link>
           <Link href="/admin/users" className={buttonVariants({ variant: "outline", size: "sm" })}>
-            Gebruikers beheren
+            {t("manageUsers")}
           </Link>
         </CardContent>
       </Card>

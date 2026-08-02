@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { count, desc, eq } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { member, user } from "@/db/schema";
 import { getServerSession } from "@/lib/get-session";
@@ -16,6 +17,7 @@ export default async function UsersPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  const t = await getTranslations("orgUsers");
   const { page: pageParam } = await searchParams;
   const page = Math.max(1, Number(pageParam) || 1);
   const offset = (page - 1) * PAGE_SIZE;
@@ -46,7 +48,7 @@ export default async function UsersPage({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Gebruikers ({total})</CardTitle>
+        <CardTitle>{t("title", { count: total })}</CardTitle>
         <CreateUserForm />
       </CardHeader>
       <CardContent>

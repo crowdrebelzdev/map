@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { and, count, desc, eq, isNull } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { event, eventMember } from "@/db/schema";
 import { getServerSession } from "@/lib/get-session";
@@ -18,6 +19,7 @@ export default async function EventsPage({
 }: {
   searchParams: Promise<{ page?: string; archived?: string }>;
 }) {
+  const t = await getTranslations("orgEvents");
   const { page: pageParam, archived: archivedParam } = await searchParams;
   const page = Math.max(1, Number(pageParam) || 1);
   const offset = (page - 1) * PAGE_SIZE;
@@ -67,13 +69,13 @@ export default async function EventsPage({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Evenementen ({total})</CardTitle>
+        <CardTitle>{t("title", { count: total })}</CardTitle>
         <div className="flex items-center gap-2">
           <Link
             href={`/org/events?archived=${showArchived ? "0" : "1"}`}
             className={buttonVariants({ variant: "outline", size: "sm" })}
           >
-            {showArchived ? "Verberg gearchiveerd" : "Toon gearchiveerd"}
+            {showArchived ? t("hideArchived") : t("showArchived")}
           </Link>
           {isAdmin && <CreateEventForm templates={templates} />}
         </div>

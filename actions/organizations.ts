@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { and, count, desc, eq, ne } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { organization, member, event, user } from "@/db/schema";
 import { auth } from "@/lib/auth";
@@ -58,7 +59,8 @@ export async function createOrganization(input: { name: string }) {
 
   const name = input.name.trim();
   if (!name) {
-    throw new Error("Naam is verplicht.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("nameRequired"));
   }
 
   let slug = slugify(name);
@@ -81,7 +83,8 @@ export async function getOrganization(organizationId: string) {
 
   const org = await db.query.organization.findFirst({ where: eq(organization.id, organizationId) });
   if (!org) {
-    throw new Error("Organisatie niet gevonden.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("organizationNotFound"));
   }
   return org;
 }
@@ -116,7 +119,8 @@ export async function renameOrganization(organizationId: string, name: string) {
 
   const trimmed = name.trim();
   if (!trimmed) {
-    throw new Error("Naam is verplicht.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("nameRequired"));
   }
 
   await db.update(organization).set({ name: trimmed }).where(eq(organization.id, organizationId));
@@ -141,7 +145,8 @@ export async function updateOrgMemberRole(organizationId: string, userId: string
   await requirePlatformAdmin();
 
   if (role === "member" && (await countOwners(organizationId, userId)) === 0) {
-    throw new Error("Kan de laatste organisatiebeheerder niet degraderen.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("cannotDemoteLastOrgAdmin"));
   }
 
   await db
@@ -160,7 +165,8 @@ export async function removeOrgMember(organizationId: string, userId: string) {
     where: and(eq(member.organizationId, organizationId), eq(member.userId, userId)),
   });
   if (targetMember?.role === "owner" && (await countOwners(organizationId, userId)) === 0) {
-    throw new Error("Kan de laatste organisatiebeheerder niet verwijderen.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("cannotRemoveLastOrgAdmin"));
   }
 
   await db.delete(member).where(and(eq(member.organizationId, organizationId), eq(member.userId, userId)));

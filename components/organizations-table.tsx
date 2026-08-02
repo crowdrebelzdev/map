@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useLocale, useTranslations } from "next-intl";
 import { Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -24,6 +25,9 @@ type OrganizationRow = {
 };
 
 export function OrganizationsTable({ organizations }: { organizations: OrganizationRow[] }) {
+  const t = useTranslations("organizationsTable");
+  const tc = useTranslations("common");
+  const locale = useLocale();
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -39,7 +43,7 @@ export function OrganizationsTable({ organizations }: { organizations: Organizat
       <div className="relative max-w-xs">
         <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Filter op naam of slug..."
+          placeholder={t("filterPlaceholder")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="pl-8"
@@ -47,16 +51,16 @@ export function OrganizationsTable({ organizations }: { organizations: Organizat
       </div>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Geen organisaties gevonden.</p>
+        <p className="text-sm text-muted-foreground">{t("noResults")}</p>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Naam</TableHead>
-              <TableHead>Slug</TableHead>
-              <TableHead>Leden</TableHead>
-              <TableHead>Evenementen</TableHead>
-              <TableHead>Aangemaakt</TableHead>
+              <TableHead>{tc("name")}</TableHead>
+              <TableHead>{tc("slug")}</TableHead>
+              <TableHead>{tc("members")}</TableHead>
+              <TableHead>{tc("events")}</TableHead>
+              <TableHead>{tc("createdAt")}</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -75,7 +79,7 @@ export function OrganizationsTable({ organizations }: { organizations: Organizat
                   <Badge variant="secondary">{o.eventCount}</Badge>
                 </TableCell>
                 <TableCell className="text-muted-foreground">
-                  {o.createdAt.toLocaleDateString("nl-NL")}
+                  {o.createdAt.toLocaleDateString(locale === "en" ? "en-US" : "nl-NL")}
                 </TableCell>
               </TableRow>
             ))}

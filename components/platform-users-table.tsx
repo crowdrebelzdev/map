@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Search } from "lucide-react";
 import { ROLE_LABELS } from "@/lib/auth-roles";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +28,9 @@ type PlatformUserRow = {
 };
 
 export function PlatformUsersTable({ users }: { users: PlatformUserRow[] }) {
+  const t = useTranslations("platformUsersTable");
+  const tc = useTranslations("common");
+  const tUserDetail = useTranslations("platformUserDetail");
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -42,7 +46,7 @@ export function PlatformUsersTable({ users }: { users: PlatformUserRow[] }) {
       <div className="relative max-w-xs">
         <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Filter op naam of e-mail..."
+          placeholder={t("filterPlaceholder")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="pl-8"
@@ -50,14 +54,14 @@ export function PlatformUsersTable({ users }: { users: PlatformUserRow[] }) {
       </div>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Geen gebruikers gevonden.</p>
+        <p className="text-sm text-muted-foreground">{t("noResults")}</p>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Naam</TableHead>
-              <TableHead>E-mail</TableHead>
-              <TableHead>Rol</TableHead>
+              <TableHead>{tc("name")}</TableHead>
+              <TableHead>{tc("email")}</TableHead>
+              <TableHead>{tc("role")}</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -78,7 +82,7 @@ export function PlatformUsersTable({ users }: { users: PlatformUserRow[] }) {
                       <Badge variant={isPlatformAdmin ? "default" : "secondary"}>
                         {isPlatformAdmin ? ROLE_LABELS.admin : ROLE_LABELS.user}
                       </Badge>
-                      {banned && <Badge variant="destructive">Gebanned</Badge>}
+                      {banned && <Badge variant="destructive">{tUserDetail("banned")}</Badge>}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">

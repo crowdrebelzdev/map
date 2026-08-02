@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { CheckCircle2, Circle, MapPin, Radio, ShieldAlert, Users } from "lucide-react";
 import { and, asc, count, eq, gte } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { eventMap, gridConfig, poi, poiCategory, eventMember, eventDay, incident, liveLocation } from "@/db/schema";
 import { requireEventBySlug } from "@/lib/get-event";
@@ -42,12 +43,18 @@ export default async function EventOverviewPage({
 }: {
   params: Promise<{ eventSlug: string }>;
 }) {
+  const t = await getTranslations("eventOverview");
   const { eventSlug } = await params;
   const ev = await requireEventBySlug(eventSlug);
   const session = await getServerSession();
   const access = await getEventAccess(ev.id, { id: session!.user.id, role: session!.user.role ?? null });
   const canViewIncidents = hasEventPermission(access, "manage_incidents");
   const canViewLive = hasEventPermission(access, "view_live_locations");
+  // Server Component: runs once per request, not subject to the re-render/memoization
+  // concerns this rule protects client components from — reading the current time here
+  // is exactly what a request-scoped "active in the last N minutes" query needs.
+  // eslint-disable-next-line react-hooks/purity
+  const activeSince = new Date(Date.now() - ACTIVE_WINDOW_MS);
 
   const [
     map,
@@ -78,7 +85,7 @@ export default async function EventOverviewPage({
           .select({ value: count() })
           .from(liveLocation)
           .where(
-            and(eq(liveLocation.eventId, ev.id), gte(liveLocation.updatedAt, new Date(Date.now() - ACTIVE_WINDOW_MS))),
+            and(eq(liveLocation.eventId, ev.id), gte(liveLocation.updatedAt, activeSince)),
           )
       : Promise.resolve([{ value: 0 }]),
     db.query.eventDay.findMany({ where: eq(eventDay.eventId, ev.id), orderBy: asc(eventDay.date) }),
@@ -98,27 +105,27 @@ export default async function EventOverviewPage({
 
   const items = [
     {
-      label: "Plattegrond geüpload en ankerpunten ingesteld",
+      label: t("checklistMap"),
       done: !!map,
       href: `/org/events/${eventSlug}/map`,
     },
     {
-      label: "Grid ingesteld",
+      label: t("checklistGrid"),
       done: !!grid,
       href: `/org/events/${eventSlug}/map`,
     },
     {
-      label: "Categorieën aangemaakt",
+      label: t("checklistCategories"),
       done: categoryCount > 0,
       href: `/org/events/${eventSlug}/pois`,
     },
     {
-      label: "POI's geplaatst",
+      label: t("checklistPois"),
       done: poiCount > 0,
       href: `/org/events/${eventSlug}/pois`,
     },
     {
-      label: "Team toegewezen",
+      label: t("checklistTeam"),
       done: memberCount > 0,
       href: `/org/events/${eventSlug}/team`,
     },
@@ -127,17 +134,17 @@ export default async function EventOverviewPage({
   const doneCount = items.filter((i) => i.done).length;
 
   const stats = [
-    { label: "POI's", value: poiCount, icon: MapPin, href: `/org/events/${eventSlug}/pois` },
-    { label: "Teamleden", value: memberCount, icon: Users, href: `/org/events/${eventSlug}/team` },
+    { label: t("statsPois"), value: poiCount, icon: MapPin, href: `/org/events/${eventSlug}/pois` },
+    { label: t("statsTeamMembers"), value: memberCount, icon: Users, href: `/org/events/${eventSlug}/team` },
     canViewIncidents && {
-      label: "Open meldingen",
+      label: t("statsOpenIncidents"),
       value: openIncidentCount,
       icon: ShieldAlert,
       href: `/org/events/${eventSlug}/live`,
       alert: openIncidentCount > 0,
     },
     canViewLive && {
-      label: "Live op de kaart",
+      label: t("statsLiveOnMap"),
       value: activeLiveCount,
       icon: Radio,
       href: `/org/events/${eventSlug}/live`,
@@ -177,9 +184,7 @@ export default async function EventOverviewPage({
 
       <Card>
         <CardHeader>
-          <CardTitle>
-            Checklist ({doneCount}/{items.length})
-          </CardTitle>
+          <CardTitle>{t("checklistTitle", { done: doneCount, total: items.length })}</CardTitle>
         </CardHeader>
         <CardContent>
           <ul className="space-y-2">

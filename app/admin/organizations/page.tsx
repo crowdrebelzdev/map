@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { listOrganizations } from "@/actions/organizations";
 import { CreateOrganizationForm } from "@/components/create-organization-form";
 import { OrganizationsTable } from "@/components/organizations-table";
@@ -9,6 +10,7 @@ export default async function PlatformOrganizationsPage({
 }: {
   searchParams: Promise<{ page?: string }>;
 }) {
+  const t = await getTranslations("platformOrganizations");
   const { page: pageParam } = await searchParams;
   const page = Math.max(1, Number(pageParam) || 1);
 
@@ -17,7 +19,7 @@ export default async function PlatformOrganizationsPage({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Organisaties ({total})</CardTitle>
+        <CardTitle>{t("title", { count: total })}</CardTitle>
         <CreateOrganizationForm />
       </CardHeader>
       <CardContent>

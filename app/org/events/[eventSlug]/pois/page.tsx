@@ -26,7 +26,7 @@ export default async function EventPoisPage({
     redirect("/org/events");
   }
 
-  const [map, grid, pois, categories, areas, areaCategories, days] = await Promise.all([
+  const [map, grid, pois, categories, areas, areaCategories, days, tabs] = await Promise.all([
     db.query.eventMap.findFirst({ where: eq(eventMap.eventId, ev.id) }),
     db.query.gridConfig.findFirst({ where: eq(gridConfig.eventId, ev.id) }),
     db.query.poi.findMany({ where: eq(poi.eventId, ev.id) }),
@@ -40,6 +40,7 @@ export default async function EventPoisPage({
       orderBy: asc(areaCategory.sortOrder),
     }),
     db.query.eventDay.findMany({ where: eq(eventDay.eventId, ev.id), orderBy: asc(eventDay.date) }),
+    buildEventTabs(eventSlug, access),
   ]);
 
   const gridCells = grid
@@ -67,7 +68,7 @@ export default async function EventPoisPage({
       eventId={ev.id}
       eventSlug={eventSlug}
       eventName={ev.name}
-      tabs={buildEventTabs(eventSlug, access)}
+      tabs={tabs}
       map={map ?? null}
       tileUrlTemplate={map?.tileVersion ? mapTileUrlTemplate(ev.id, map.tileVersion) : null}
       grid={grid ?? null}

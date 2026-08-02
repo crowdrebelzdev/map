@@ -2,6 +2,7 @@
 
 import { useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Archive, ArchiveRestore } from "lucide-react";
 import { toast } from "sonner";
 import { archiveEvent, unarchiveEvent } from "@/actions/events";
@@ -17,6 +18,7 @@ export function ArchiveEventButton({
   archived: boolean;
 }) {
   const router = useRouter();
+  const t = useTranslations("archiveEventButton");
   const [isPending, startTransition] = useTransition();
 
   function handleToggle() {
@@ -24,14 +26,14 @@ export function ArchiveEventButton({
       try {
         if (archived) {
           await unarchiveEvent(eventId);
-          toast.success(`"${eventName}" hersteld.`);
+          toast.success(t("restoredToast", { name: eventName }));
         } else {
           await archiveEvent(eventId);
-          toast.success(`"${eventName}" gearchiveerd.`);
+          toast.success(t("archivedToast", { name: eventName }));
         }
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Actie mislukt.");
+        toast.error(err instanceof Error ? err.message : t("errorFallback"));
       }
     });
   }
@@ -39,7 +41,7 @@ export function ArchiveEventButton({
   return (
     <Button variant="ghost" size="icon-sm" onClick={handleToggle} disabled={isPending}>
       {archived ? <ArchiveRestore /> : <Archive />}
-      <span className="sr-only">{archived ? "Herstellen" : "Archiveren"}</span>
+      <span className="sr-only">{archived ? t("restore") : t("archive")}</span>
     </Button>
   );
 }

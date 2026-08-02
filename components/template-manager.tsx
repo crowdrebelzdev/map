@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,8 @@ function slugifyKey(label: string) {
 
 function CategoryRow({ templateId, category }: { templateId: string; category: TemplateCategoryRow }) {
   const router = useRouter();
+  const t = useTranslations("templateManager");
+  const tc = useTranslations("common");
   const [label, setLabel] = useState(category.label);
   const [color, setColor] = useState(category.color);
   const [saving, setSaving] = useState(false);
@@ -62,10 +65,10 @@ function CategoryRow({ templateId, category }: { templateId: string; category: T
     setSaving(true);
     try {
       await updateTemplateCategory(templateId, category.id, { label, color });
-      toast.success("Categorie bijgewerkt.");
+      toast.success(t("categoryUpdatedToast"));
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Opslaan mislukt.");
+      toast.error(err instanceof Error ? err.message : t("saveErrorFallback"));
     } finally {
       setSaving(false);
     }
@@ -74,10 +77,10 @@ function CategoryRow({ templateId, category }: { templateId: string; category: T
   async function handleDelete() {
     try {
       await deleteTemplateCategory(templateId, category.id);
-      toast.success("Categorie verwijderd.");
+      toast.success(t("categoryDeletedToast"));
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
+      toast.error(err instanceof Error ? err.message : t("deleteErrorFallback"));
     }
   }
 
@@ -92,25 +95,25 @@ function CategoryRow({ templateId, category }: { templateId: string; category: T
       <Input value={label} onChange={(e) => setLabel(e.target.value)} className="h-8 flex-1 text-sm" />
       {dirty && (
         <Button size="sm" onClick={handleSave} disabled={saving}>
-          {saving ? "..." : "Opslaan"}
+          {saving ? tc("saving") : tc("save")}
         </Button>
       )}
       <AlertDialog>
         <AlertDialogTrigger render={<Button variant="outline" size="icon-sm" />}>
           <Trash2 className="size-3.5" />
-          <span className="sr-only">Verwijderen</span>
+          <span className="sr-only">{tc("remove")}</span>
         </AlertDialogTrigger>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Categorie verwijderen?</AlertDialogTitle>
+            <AlertDialogTitle>{t("confirmDeleteCategoryTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              &quot;{category.label}&quot; wordt uit dit sjabloon verwijderd.
+              {t("confirmDeleteCategoryDescription", { name: category.label })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Annuleren</AlertDialogCancel>
+            <AlertDialogCancel>{tc("cancel")}</AlertDialogCancel>
             <AlertDialogAction variant="destructive" onClick={handleDelete}>
-              Verwijderen
+              {tc("remove")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -121,6 +124,8 @@ function CategoryRow({ templateId, category }: { templateId: string; category: T
 
 function TemplateCard({ template }: { template: TemplateWithCategories }) {
   const router = useRouter();
+  const t = useTranslations("templateManager");
+  const tc = useTranslations("common");
   const [newLabel, setNewLabel] = useState("");
   const [newColor, setNewColor] = useState(DEFAULT_COLOR);
   const [adding, setAdding] = useState(false);
@@ -136,10 +141,10 @@ function TemplateCard({ template }: { template: TemplateWithCategories }) {
       });
       setNewLabel("");
       setNewColor(DEFAULT_COLOR);
-      toast.success("Categorie toegevoegd.");
+      toast.success(t("categoryAddedToast"));
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Toevoegen mislukt.");
+      toast.error(err instanceof Error ? err.message : t("addErrorFallback"));
     } finally {
       setAdding(false);
     }
@@ -148,10 +153,10 @@ function TemplateCard({ template }: { template: TemplateWithCategories }) {
   async function handleDeleteTemplate() {
     try {
       await deleteEventTemplate(template.id);
-      toast.success("Sjabloon verwijderd.");
+      toast.success(t("templateDeletedToast"));
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
+      toast.error(err instanceof Error ? err.message : t("deleteErrorFallback"));
     }
   }
 
@@ -165,20 +170,19 @@ function TemplateCard({ template }: { template: TemplateWithCategories }) {
         <AlertDialog>
           <AlertDialogTrigger render={<Button variant="outline" size="icon-sm" />}>
             <Trash2 className="size-3.5" />
-            <span className="sr-only">Sjabloon verwijderen</span>
+            <span className="sr-only">{t("deleteTemplateSr")}</span>
           </AlertDialogTrigger>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Sjabloon verwijderen?</AlertDialogTitle>
+              <AlertDialogTitle>{t("confirmDeleteTemplateTitle")}</AlertDialogTitle>
               <AlertDialogDescription>
-                &quot;{template.name}&quot; en al zijn categorieën worden verwijderd. Dit kan niet
-                ongedaan worden gemaakt.
+                {t("confirmDeleteTemplateDescription", { name: template.name })}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel>Annuleren</AlertDialogCancel>
+              <AlertDialogCancel>{tc("cancel")}</AlertDialogCancel>
               <AlertDialogAction variant="destructive" onClick={handleDeleteTemplate}>
-                Verwijderen
+                {tc("remove")}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
@@ -186,7 +190,7 @@ function TemplateCard({ template }: { template: TemplateWithCategories }) {
       </CardHeader>
       <CardContent className="space-y-2">
         {template.categories.length === 0 && (
-          <p className="text-xs text-muted-foreground">Nog geen categorieën in dit sjabloon.</p>
+          <p className="text-xs text-muted-foreground">{t("emptyTemplateCategories")}</p>
         )}
         {template.categories.map((c) => (
           <CategoryRow key={c.id} templateId={template.id} category={c} />
@@ -202,13 +206,13 @@ function TemplateCard({ template }: { template: TemplateWithCategories }) {
           <Input
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
-            placeholder="Nieuwe categorie..."
+            placeholder={t("newCategoryPlaceholder")}
             className="h-8 flex-1 text-sm"
             onKeyDown={(e) => e.key === "Enter" && handleAddCategory()}
           />
           <Button size="sm" onClick={handleAddCategory} disabled={adding || !newLabel.trim()}>
             <Plus className="size-3.5" />
-            Toevoegen
+            {tc("add")}
           </Button>
         </div>
       </CardContent>
@@ -218,6 +222,8 @@ function TemplateCard({ template }: { template: TemplateWithCategories }) {
 
 export function TemplateManager({ templates }: { templates: TemplateWithCategories[] }) {
   const router = useRouter();
+  const t = useTranslations("templateManager");
+  const tc = useTranslations("common");
   const [name, setName] = useState("");
   const [creating, setCreating] = useState(false);
 
@@ -227,10 +233,10 @@ export function TemplateManager({ templates }: { templates: TemplateWithCategori
     try {
       await createEmptyTemplate(name);
       setName("");
-      toast.success("Sjabloon aangemaakt.");
+      toast.success(t("templateCreatedToast"));
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Aanmaken mislukt.");
+      toast.error(err instanceof Error ? err.message : t("createErrorFallback"));
     } finally {
       setCreating(false);
     }
@@ -240,21 +246,21 @@ export function TemplateManager({ templates }: { templates: TemplateWithCategori
     <div className="mx-auto max-w-2xl space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Nieuw sjabloon</CardTitle>
+          <CardTitle>{t("newTemplateTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
           <Field>
-            <FieldLabel htmlFor="template-name">Naam</FieldLabel>
+            <FieldLabel htmlFor="template-name">{tc("name")}</FieldLabel>
             <div className="flex gap-2">
               <Input
                 id="template-name"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="bv. Standaard beveiligingsevenement"
+                placeholder={t("namePlaceholder")}
                 onKeyDown={(e) => e.key === "Enter" && handleCreate()}
               />
               <Button onClick={handleCreate} disabled={creating || !name.trim()}>
-                Aanmaken
+                {t("createButton")}
               </Button>
             </div>
           </Field>
@@ -267,15 +273,12 @@ export function TemplateManager({ templates }: { templates: TemplateWithCategori
             <EmptyMedia variant="icon">
               <Plus />
             </EmptyMedia>
-            <EmptyTitle>Nog geen sjablonen</EmptyTitle>
-            <EmptyDescription>
-              Maak hierboven een sjabloon aan, of sla een bestaand event op als sjabloon vanuit de
-              POI-categorieën van dat event.
-            </EmptyDescription>
+            <EmptyTitle>{t("emptyTemplatesTitle")}</EmptyTitle>
+            <EmptyDescription>{t("emptyTemplatesDescription")}</EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
-        templates.map((t) => <TemplateCard key={t.id} template={t} />)
+        templates.map((tpl) => <TemplateCard key={tpl.id} template={tpl} />)
       )}
     </div>
   );

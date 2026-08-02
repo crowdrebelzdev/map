@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,12 +48,12 @@ type ExistingGrid = typeof gridConfig.$inferSelect;
  * that only shows up once actually deployed — test an upload at the chosen tier in production
  * before relying on it for a live event, not just locally.
  */
-const MAP_QUALITY_PRESETS = {
-  standaard: { label: "Standaard", pdfDpi: 200, pdfMaxLongSide: 8000, imageMaxDimension: 2400 },
-  hoog: { label: "Hoog (aanbevolen voor tekst)", pdfDpi: 300, pdfMaxLongSide: 12000, imageMaxDimension: 4000 },
-  maximaal: { label: "Maximaal", pdfDpi: 400, pdfMaxLongSide: 16000, imageMaxDimension: 6000 },
+const MAP_QUALITY_PRESET_VALUES = {
+  standaard: { pdfDpi: 200, pdfMaxLongSide: 8000, imageMaxDimension: 2400 },
+  hoog: { pdfDpi: 300, pdfMaxLongSide: 12000, imageMaxDimension: 4000 },
+  maximaal: { pdfDpi: 400, pdfMaxLongSide: 16000, imageMaxDimension: 6000 },
 } as const;
-type MapQualityPreset = keyof typeof MAP_QUALITY_PRESETS;
+type MapQualityPreset = keyof typeof MAP_QUALITY_PRESET_VALUES;
 
 // A source rasterized at up to 16000px (see pdfMaxLongSide above) is fine as input for tile
 // generation (each tile only ever samples a small piece of it) but exceeds the WebGL max
@@ -101,6 +102,13 @@ export function MapImageEditor({
   existingGrid: ExistingGrid | null;
 }) {
   const router = useRouter();
+  const t = useTranslations("mapImageEditor");
+  const tc = useTranslations("common");
+  const QUALITY_PRESET_LABELS: Record<MapQualityPreset, string> = {
+    standaard: t("qualityStandard"),
+    hoog: t("qualityHigh"),
+    maximaal: t("qualityMax"),
+  };
   const [image, setImage] = useState<
     { imageUrl: string; displayImageUrl: string; imageWidth: number; imageHeight: number } | null
   >(
@@ -175,9 +183,9 @@ export function MapImageEditor({
     if (!rawFile) return;
 
     setUploading(true);
-    toast.loading("Bezig met verwerken...", { id: UPLOAD_TOAST_ID });
+    toast.loading(t("processingToast"), { id: UPLOAD_TOAST_ID });
     try {
-      const preset = MAP_QUALITY_PRESETS[quality];
+      const preset = MAP_QUALITY_PRESET_VALUES[quality];
       const isPdf =
         rawFile.type === "application/pdf" || rawFile.name.toLowerCase().endsWith(".pdf");
       const rasterized = isPdf
@@ -215,13 +223,13 @@ export function MapImageEditor({
           body: file,
         });
         if (!putRes.ok) {
-          throw new Error(`Uploaden naar opslag mislukt (${putRes.status}).`);
+          throw new Error(t("storageUploadErrorFmt", { status: putRes.status }));
         }
         let displayImageUrl = plan.publicUrl;
         if (displayFile !== file) {
           const displayPlan = await prepareMapImageUpload(eventId, displayFile.type, "display");
           if (displayPlan.mode !== "s3") {
-            throw new Error("Onverwachte uploadmodus voor de weergave-afbeelding.");
+            throw new Error(t("unexpectedDisplayUploadMode"));
           }
           const displayPutRes = await fetch(displayPlan.url, {
             method: "PUT",
@@ -229,7 +237,7 @@ export function MapImageEditor({
             body: displayFile,
           });
           if (!displayPutRes.ok) {
-            throw new Error(`Uploaden naar opslag mislukt (${displayPutRes.status}).`);
+            throw new Error(t("storageUploadErrorFmt", { status: displayPutRes.status }));
           }
           displayImageUrl = displayPlan.publicUrl;
         }
@@ -263,16 +271,16 @@ export function MapImageEditor({
           corners,
         });
         router.refresh();
-        toast.success("Plattegrond bijgewerkt — plaatsing is ongewijzigd gebleven.", { id: UPLOAD_TOAST_ID });
+        toast.success(t("updatedPlacementUnchangedToast"), { id: UPLOAD_TOAST_ID });
         // Achtergrondtaak, niet blokkerend — zie de toelichting bij useMapTileGeneration
         // hierboven. De hook toont zijn eigen voortgangs-/foutmelding (eigen toast-id); hier
         // alleen de rejection opvangen zodat er geen onbehandelde promise-fout in de console komt.
         tileGeneration.generate(result.imageUrl, result.imageWidth, result.imageHeight, corners).catch(() => {});
       } else {
-        toast.success("Plattegrond geüpload. Plaats 'm op de kaart en pas 'm passend.", { id: UPLOAD_TOAST_ID });
+        toast.success(t("uploadedToast"), { id: UPLOAD_TOAST_ID });
       }
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Upload mislukt.", { id: UPLOAD_TOAST_ID });
+      toast.error(err instanceof Error ? err.message : t("uploadErrorFallback"), { id: UPLOAD_TOAST_ID });
     } finally {
       setUploading(false);
     }
@@ -291,14 +299,14 @@ export function MapImageEditor({
         imageHeight: image.imageHeight,
         corners,
       });
-      toast.success("Plattegrond-plaatsing opgeslagen.");
+      toast.success(t("placementSavedToast"));
       router.refresh();
       // Achtergrondtaak, niet blokkerend — zie de toelichting bij useMapTileGeneration
       // hierboven. De hook toont zijn eigen voortgangs-/foutmelding; hier alleen de
       // rejection opvangen zodat er geen onbehandelde promise-fout in de console komt.
       tileGeneration.generate(image.imageUrl, image.imageWidth, image.imageHeight, corners).catch(() => {});
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Opslaan mislukt.");
+      toast.error(err instanceof Error ? err.message : t("saveErrorFallback"));
     } finally {
       setSavingPlacement(false);
     }
@@ -324,10 +332,10 @@ export function MapImageEditor({
         casingColor,
         casingWidth,
       });
-      toast.success("Grid opgeslagen.");
+      toast.success(t("gridSavedToast"));
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Opslaan mislukt.");
+      toast.error(err instanceof Error ? err.message : t("saveErrorFallback"));
     } finally {
       setSavingGrid(false);
     }
@@ -336,32 +344,29 @@ export function MapImageEditor({
   const uploadCard = (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2">
-        <CardTitle>Plattegrond</CardTitle>
+        <CardTitle>{t("title")}</CardTitle>
         {existingMap && <MapVersionHistoryDialog eventId={eventId} eventSlug={eventSlug} />}
       </CardHeader>
       <CardContent className="space-y-3">
         <div className="space-y-1.5">
-          <Label htmlFor="map-quality">Detailniveau</Label>
+          <Label htmlFor="map-quality">{t("qualityLabel")}</Label>
           <Select value={quality} onValueChange={(v) => setQuality(v as MapQualityPreset)} disabled={uploading}>
             <SelectTrigger id="map-quality" className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {Object.entries(MAP_QUALITY_PRESETS).map(([key, p]) => (
+              {Object.keys(MAP_QUALITY_PRESET_VALUES).map((key) => (
                 <SelectItem key={key} value={key}>
-                  {p.label}
+                  {QUALITY_PRESET_LABELS[key as MapQualityPreset]}
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          <p className="text-xs text-muted-foreground">
-            Hoger detailniveau geeft scherpere tekst bij inzoomen, maar een groter bestand en
-            langere verwerkingstijd. Geldt voor de eerstvolgende upload.
-          </p>
+          <p className="text-xs text-muted-foreground">{t("qualityHint")}</p>
         </div>
         <div className="space-y-2">
           <Label htmlFor="map-image">
-            {image ? "Andere plattegrond uploaden" : "Plattegrond uploaden"}
+            {image ? t("uploadAnotherLabel") : t("uploadLabel")}
           </Label>
           <Input
             id="map-image"
@@ -370,9 +375,7 @@ export function MapImageEditor({
             onChange={handleFileChange}
             disabled={uploading}
           />
-          <p className="text-xs text-muted-foreground">
-            PNG, JPG of PDF. Bij een PDF wordt de eerste pagina gebruikt.
-          </p>
+          <p className="text-xs text-muted-foreground">{t("uploadHint")}</p>
         </div>
       </CardContent>
     </Card>
@@ -397,11 +400,8 @@ export function MapImageEditor({
         {uploadCard}
         <Card>
               <CardContent className="pt-6">
-                <p className="mb-2 text-sm font-medium">Wat pas je aan?</p>
-                <p className="mb-3 text-xs text-muted-foreground">
-                  De plattegrond en het grid zijn los van elkaar te verplaatsen, draaien en
-                  schalen — kies hieronder welke van de twee de handvatten op de kaart besturen.
-                </p>
+                <p className="mb-2 text-sm font-medium">{t("whatToAdjust")}</p>
+                <p className="mb-3 text-xs text-muted-foreground">{t("adjustHint")}</p>
                 <div className="flex gap-2">
                   <Button
                     variant={mode === "image" ? "default" : "outline"}
@@ -409,7 +409,7 @@ export function MapImageEditor({
                     className="flex-1"
                     onClick={() => setMode("image")}
                   >
-                    Plattegrond
+                    {t("modeMap")}
                   </Button>
                   <Button
                     variant={mode === "grid" ? "default" : "outline"}
@@ -418,7 +418,7 @@ export function MapImageEditor({
                     style={mode === "grid" ? { backgroundColor: "#9333ea" } : undefined}
                     onClick={() => setMode("grid")}
                   >
-                    Grid
+                    {t("modeGrid")}
                   </Button>
                 </div>
               </CardContent>
@@ -427,17 +427,13 @@ export function MapImageEditor({
             {mode === "image" && (
               <Card>
                 <CardHeader>
-                  <CardTitle>Plaatsing plattegrond</CardTitle>
+                  <CardTitle>{t("placementTitle")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Sleep de hoeken om uit te rekken, de rand-punten om één zijde te schalen, de
-                    blauwe knop om te draaien, het groene blokje om uniform te vergroten/
-                    verkleinen, of het zwarte pijltjes-icoon om te verplaatsen.
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t("placementHint")}</p>
                   <div className="flex items-center gap-3">
                     <Label htmlFor="opacity" className="w-28 shrink-0 text-sm">
-                      Doorzichtigheid
+                      {t("opacityLabel")}
                     </Label>
                     <Slider
                       id="opacity"
@@ -453,7 +449,7 @@ export function MapImageEditor({
                     disabled={!corners || savingPlacement}
                     className="w-full"
                   >
-                    {savingPlacement ? "Bezig..." : "Plaatsing opslaan"}
+                    {savingPlacement ? tc("saving") : t("savePlacement")}
                   </Button>
                 </CardContent>
               </Card>
@@ -462,16 +458,13 @@ export function MapImageEditor({
             {mode === "grid" && (
               <Card>
                 <CardHeader>
-                  <CardTitle>Grid</CardTitle>
+                  <CardTitle>{t("gridTitle")}</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Sleep het grid net als de plattegrond passend — onafhankelijk van de
-                    plattegrond zelf. Handig als het grid net niet precies uitlijnt.
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t("gridHint")}</p>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <Label htmlFor="columns">Kolommen</Label>
+                      <Label htmlFor="columns">{t("columnsLabel")}</Label>
                       <Input
                         id="columns"
                         type="number"
@@ -481,7 +474,7 @@ export function MapImageEditor({
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="rows">Rijen</Label>
+                      <Label htmlFor="rows">{t("rowsLabel")}</Label>
                       <Input
                         id="rows"
                         type="number"
@@ -492,7 +485,7 @@ export function MapImageEditor({
                     </div>
                   </div>
                   <div className="space-y-1">
-                    <Label htmlFor="labelOrientation">Label-richting</Label>
+                    <Label htmlFor="labelOrientation">{t("labelOrientationLabel")}</Label>
                     <Select
                       value={labelOrientation}
                       onValueChange={(v) => setLabelOrientation(v as GridLabelOrientation)}
@@ -501,31 +494,25 @@ export function MapImageEditor({
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="row-column">
-                          Rij = letter, kolom = cijfer (bv. B3)
-                        </SelectItem>
-                        <SelectItem value="column-row">
-                          Kolom = letter, rij = cijfer (bv. C2)
-                        </SelectItem>
+                        <SelectItem value="row-column">{t("orientationRowColumn")}</SelectItem>
+                        <SelectItem value="column-row">{t("orientationColumnRow")}</SelectItem>
                       </SelectContent>
                     </Select>
-                    <p className="text-xs text-muted-foreground">
-                      Moet overeenkomen met de labels die al op de plattegrond staan afgedrukt.
-                    </p>
+                    <p className="text-xs text-muted-foreground">{t("orientationHint")}</p>
                   </div>
                   <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                     <div className="space-y-1">
-                      <Label htmlFor="labelPrefix">Label-prefix</Label>
+                      <Label htmlFor="labelPrefix">{t("labelPrefixLabel")}</Label>
                       <Input
                         id="labelPrefix"
                         value={labelPrefix}
                         onChange={(e) => setLabelPrefix(e.target.value)}
-                        placeholder="bv. 10"
+                        placeholder={t("labelPrefixPlaceholder")}
                         maxLength={12}
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="labelLetterStart">Startletter</Label>
+                      <Label htmlFor="labelLetterStart">{t("startLetterLabel")}</Label>
                       <Select
                         value={String.fromCharCode(65 + labelLetterStart)}
                         onValueChange={(v) => setLabelLetterStart((v ?? "A").charCodeAt(0) - 65)}
@@ -545,7 +532,7 @@ export function MapImageEditor({
                       </Select>
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="labelNumberStart">Startnummer</Label>
+                      <Label htmlFor="labelNumberStart">{t("startNumberLabel")}</Label>
                       <Input
                         id="labelNumberStart"
                         type="number"
@@ -554,30 +541,27 @@ export function MapImageEditor({
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="labelLetterGroupSize">Subcellen per letter</Label>
+                      <Label htmlFor="labelLetterGroupSize">{t("subcellsLabel")}</Label>
                       <Input
                         id="labelLetterGroupSize"
                         type="number"
                         min={0}
                         value={labelLetterGroupSize}
                         onChange={(e) => setLabelLetterGroupSize(Number(e.target.value))}
-                        placeholder="0 = uit"
+                        placeholder={t("subcellsPlaceholder")}
                       />
                     </div>
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    Handig als deze plattegrond maar een deel is van een grotere, al bestaande
-                    grid-indeling. Voorbeeld met deze instellingen:{" "}
+                    {t("subcellsHintBefore")}{" "}
                     <span className="font-mono font-medium text-foreground">
                       {labelExampleCodes}
                     </span>
-                    . Laat &quot;Subcellen per letter&quot; op 0 voor gewone codes zoals A1, B2 —
-                    zet 'm bv. op 4 als elke letter-zone (zoals &quot;E&quot;) op de plattegrond
-                    zelf al in 4 genummerde stukken is verdeeld.
+                    {t("subcellsHintAfter")}
                   </p>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <Label htmlFor="lineColor">Lijnkleur</Label>
+                      <Label htmlFor="lineColor">{t("lineColorLabel")}</Label>
                       <div className="flex items-center gap-2">
                         <input
                           id="lineColor"
@@ -594,7 +578,7 @@ export function MapImageEditor({
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="lineWidth">Lijndikte (px)</Label>
+                      <Label htmlFor="lineWidth">{t("lineWidthLabel")}</Label>
                       <Input
                         id="lineWidth"
                         type="number"
@@ -607,7 +591,7 @@ export function MapImageEditor({
                   </div>
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
-                      <Label htmlFor="casingColor">Buitenlijn-kleur</Label>
+                      <Label htmlFor="casingColor">{t("casingColorLabel")}</Label>
                       <div className="flex items-center gap-2">
                         <input
                           id="casingColor"
@@ -624,7 +608,7 @@ export function MapImageEditor({
                       </div>
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="casingWidth">Buitenlijn-dikte (px)</Label>
+                      <Label htmlFor="casingWidth">{t("casingWidthLabel")}</Label>
                       <Input
                         id="casingWidth"
                         type="number"
@@ -635,15 +619,13 @@ export function MapImageEditor({
                       />
                     </div>
                   </div>
-                  <p className="-mt-2 text-xs text-muted-foreground">
-                    Zet de buitenlijn-dikte op 0 om 'm helemaal te verbergen.
-                  </p>
+                  <p className="-mt-2 text-xs text-muted-foreground">{t("casingHint")}</p>
                   <Button
                     onClick={handleSaveGrid}
                     disabled={!gridCorners || savingGrid}
                     className="w-full"
                   >
-                    {savingGrid ? "Bezig..." : "Grid opslaan"}
+                    {savingGrid ? tc("saving") : t("saveGrid")}
                   </Button>
                 </CardContent>
               </Card>

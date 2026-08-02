@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { gridConfig, type GridLabelOrientation } from "@/db/schema";
 import { requireEventPermission } from "@/lib/event-access";
@@ -25,27 +26,28 @@ export async function saveGridConfig(input: {
   casingWidth: number;
 }) {
   const { session } = await requireEventPermission(input.eventId, "edit_map");
+  const t = await getTranslations("actionErrors");
 
   if (input.columns <= 0 || input.rows <= 0) {
-    throw new Error("Rijen/kolommen moeten groter dan 0 zijn.");
+    throw new Error(t("rowsColumnsPositive"));
   }
   if (!/^#[0-9a-fA-F]{6}$/.test(input.lineColor) || !/^#[0-9a-fA-F]{6}$/.test(input.casingColor)) {
-    throw new Error("Ongeldige kleur.");
+    throw new Error(t("invalidColor"));
   }
   if (input.lineWidth <= 0 || input.casingWidth < 0) {
-    throw new Error("Lijndikte moet groter dan 0 zijn.");
+    throw new Error(t("lineWidthPositive"));
   }
   if (input.labelPrefix.length > 12) {
-    throw new Error("Label-prefix mag maximaal 12 tekens zijn.");
+    throw new Error(t("labelPrefixMaxLength"));
   }
   if (!Number.isInteger(input.labelLetterStart) || input.labelLetterStart < 0) {
-    throw new Error("Startletter is ongeldig.");
+    throw new Error(t("invalidStartLetter"));
   }
   if (!Number.isInteger(input.labelNumberStart)) {
-    throw new Error("Startnummer is ongeldig.");
+    throw new Error(t("invalidStartNumberGrid"));
   }
   if (!Number.isInteger(input.labelLetterGroupSize) || input.labelLetterGroupSize < 0) {
-    throw new Error("Subcellen per letter is ongeldig.");
+    throw new Error(t("invalidSubcellsPerLetter"));
   }
 
   const { corners } = input;

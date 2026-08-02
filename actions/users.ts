@@ -3,6 +3,7 @@
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { count, desc, eq } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { user, member, organization } from "@/db/schema";
 import { auth } from "@/lib/auth";
@@ -60,7 +61,8 @@ export async function listAllUsers({ page = 1 }: { page?: number } = {}) {
 export async function setPlatformRole(userId: string, role: "admin" | "user") {
   const session = await requirePlatformAdmin();
   if (userId === session.user.id && role !== "admin") {
-    throw new Error("Je kunt je eigen platformbeheerder-rol niet verwijderen.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("cannotRemoveOwnPlatformAdmin"));
   }
 
   await auth.api.setRole({
@@ -74,7 +76,8 @@ export async function setPlatformRole(userId: string, role: "admin" | "user") {
 export async function banUser(userId: string, reason?: string) {
   const session = await requirePlatformAdmin();
   if (userId === session.user.id) {
-    throw new Error("Je kunt jezelf niet bannen.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("cannotBanSelf"));
   }
 
   await auth.api.banUser({
@@ -101,7 +104,8 @@ export async function getUser(userId: string) {
 
   const found = await db.query.user.findFirst({ where: eq(user.id, userId) });
   if (!found) {
-    throw new Error("Gebruiker niet gevonden.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("userNotFound"));
   }
   return found;
 }
@@ -125,8 +129,9 @@ export async function updateUserProfile(userId: string, input: { name: string; e
 
   const name = input.name.trim();
   const email = input.email.trim();
-  if (!name) throw new Error("Naam is verplicht.");
-  if (!email) throw new Error("E-mail is verplicht.");
+  const t = await getTranslations("actionErrors");
+  if (!name) throw new Error(t("nameRequired"));
+  if (!email) throw new Error(t("emailRequired"));
 
   await auth.api.adminUpdateUser({
     headers: await headers(),

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { MessageSquare } from "lucide-react";
 import { listMyMessages } from "@/actions/broadcasts";
 import { Badge } from "@/components/ui/badge";
@@ -12,10 +13,6 @@ type MessageRow = Awaited<ReturnType<typeof listMyMessages>>[number];
 
 const POLL_INTERVAL_MS = 10_000;
 
-function formatTime(d: Date) {
-  return new Date(d).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
-}
-
 export function MessagesSheet({
   eventId,
   currentUserId,
@@ -25,6 +22,8 @@ export function MessagesSheet({
   currentUserId: string;
   initialMessages: MessageRow[];
 }) {
+  const t = useTranslations("messagesSheet");
+  const locale = useLocale();
   const [messages, setMessages] = useState(initialMessages);
   const [open, setOpen] = useState(false);
   const [lastSeenCount, setLastSeenCount] = useState(initialMessages.length);
@@ -41,6 +40,13 @@ export function MessagesSheet({
   }, [eventId]);
 
   const unreadCount = Math.max(0, messages.length - lastSeenCount);
+
+  function formatTime(d: Date) {
+    return new Date(d).toLocaleTimeString(locale === "en" ? "en-US" : "nl-NL", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
 
   return (
     <Sheet
@@ -61,11 +67,11 @@ export function MessagesSheet({
             {unreadCount}
           </Badge>
         )}
-        <span className="sr-only">Berichten</span>
+        <span className="sr-only">{t("triggerSr")}</span>
       </SheetTrigger>
       <SheetContent side="right">
         <SheetHeader>
-          <SheetTitle>Berichten</SheetTitle>
+          <SheetTitle>{t("title")}</SheetTitle>
         </SheetHeader>
         <div className="flex flex-col gap-2 overflow-y-auto px-4 pb-4">
           {messages.length === 0 && (
@@ -74,7 +80,7 @@ export function MessagesSheet({
                 <EmptyMedia variant="icon">
                   <MessageSquare />
                 </EmptyMedia>
-                <EmptyTitle>Nog geen berichten ontvangen</EmptyTitle>
+                <EmptyTitle>{t("emptyTitle")}</EmptyTitle>
               </EmptyHeader>
             </Empty>
           )}
@@ -82,7 +88,7 @@ export function MessagesSheet({
             <div key={m.id} className="space-y-0.5 rounded-md border p-2.5">
               <div className="flex items-center gap-1.5">
                 <span className="text-sm font-medium">{m.senderName}</span>
-                {m.recipientId === currentUserId && <Badge variant="secondary">Voor jou</Badge>}
+                {m.recipientId === currentUserId && <Badge variant="secondary">{t("forYouBadge")}</Badge>}
                 <span className="ml-auto text-xs text-muted-foreground">{formatTime(m.createdAt)}</span>
               </div>
               <p className="text-sm">{m.message}</p>

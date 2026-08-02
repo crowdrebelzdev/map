@@ -13,6 +13,10 @@ vi.mock("@/db", () => ({ db: dbMock }));
 const requireSessionMock = vi.fn();
 vi.mock("@/lib/get-session", () => ({ requireSession: requireSessionMock }));
 
+vi.mock("next-intl/server", () => ({
+  getTranslations: async () => (key: string) => key,
+}));
+
 const { getEventAccess, hasAnyEventAccess, hasEventPermission, requireEventPermission, requireAnyEventAccess } =
   await import("@/lib/event-access");
 
@@ -96,9 +100,7 @@ describe("requireEventPermission / requireAnyEventAccess", () => {
     dbMock.query.event.findFirst.mockResolvedValue(undefined);
     dbMock.query.eventMember.findFirst.mockResolvedValue({ permissions: [] });
 
-    await expect(requireEventPermission(EVENT_ID, "manage_pois")).rejects.toThrow(
-      "Niet toegestaan voor dit evenement.",
-    );
+    await expect(requireEventPermission(EVENT_ID, "manage_pois")).rejects.toThrow("notAllowedForEvent");
   });
 
   it("resolves for a super admin", async () => {
@@ -111,6 +113,6 @@ describe("requireEventPermission / requireAnyEventAccess", () => {
     dbMock.query.event.findFirst.mockResolvedValue(undefined);
     dbMock.query.eventMember.findFirst.mockResolvedValue(undefined);
 
-    await expect(requireAnyEventAccess(EVENT_ID)).rejects.toThrow("Niet toegestaan voor dit evenement.");
+    await expect(requireAnyEventAccess(EVENT_ID)).rejects.toThrow("notAllowedForEvent");
   });
 });

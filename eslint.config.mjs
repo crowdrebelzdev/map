@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored/generated — not source we own (pdf.worker.min.mjs is a minified
+    // third-party file; sw.js and tile-worker.js are esbuild output).
+    "public/**",
   ]),
 ]);
 

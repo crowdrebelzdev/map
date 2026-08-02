@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -26,6 +27,8 @@ import { createUserInOrg } from "@/actions/users";
 
 export function CreateUserForm() {
   const router = useRouter();
+  const t = useTranslations("createUserForm");
+  const tc = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -39,7 +42,7 @@ export function CreateUserForm() {
 
     try {
       await createUserInOrg({ name, email, password, role });
-      toast.success("Gebruiker aangemaakt.");
+      toast.success(t("successToast"));
       setName("");
       setEmail("");
       setPassword("");
@@ -47,7 +50,7 @@ export function CreateUserForm() {
       setOpen(false);
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Aanmaken mislukt.");
+      toast.error(err instanceof Error ? err.message : t("errorFallback"));
     } finally {
       setSaving(false);
     }
@@ -57,19 +60,19 @@ export function CreateUserForm() {
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button />}>
         <Plus />
-        Nieuwe gebruiker
+        {t("newUser")}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Nieuwe gebruiker</DialogTitle>
+          <DialogTitle>{t("newUser")}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-1">
-            <Label htmlFor="user-name">Naam</Label>
+            <Label htmlFor="user-name">{tc("name")}</Label>
             <Input id="user-name" value={name} onChange={(e) => setName(e.target.value)} required />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="user-email">E-mail</Label>
+            <Label htmlFor="user-email">{tc("email")}</Label>
             <Input
               id="user-email"
               type="email"
@@ -79,7 +82,7 @@ export function CreateUserForm() {
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="user-password">Tijdelijk wachtwoord</Label>
+            <Label htmlFor="user-password">{t("passwordLabel")}</Label>
             <Input
               id="user-password"
               type="password"
@@ -90,23 +93,23 @@ export function CreateUserForm() {
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="user-role">Rol</Label>
+            <Label htmlFor="user-role">{tc("role")}</Label>
             <Select value={role} onValueChange={(v) => setRole(v as "member" | "owner")}>
               <SelectTrigger id="user-role" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="member">Teamlid</SelectItem>
-                <SelectItem value="owner">Organisatiebeheerder</SelectItem>
+                <SelectItem value="member">{t("roleTeamMember")}</SelectItem>
+                <SelectItem value="owner">{t("roleOrgAdmin")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <DialogFooter>
             <Button variant="outline" type="button" onClick={() => setOpen(false)} disabled={saving}>
-              Annuleren
+              {tc("cancel")}
             </Button>
             <Button type="submit" disabled={saving}>
-              {saving ? "Bezig..." : "Gebruiker aanmaken"}
+              {saving ? tc("saving") : t("createButton")}
             </Button>
           </DialogFooter>
         </form>

@@ -1,8 +1,9 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 
-export function PaginationControls({
+export async function PaginationControls({
   page,
   totalPages,
   basePath,
@@ -13,14 +14,13 @@ export function PaginationControls({
   basePath: string;
 }) {
   if (totalPages <= 1) return null;
+  const t = await getTranslations("paginationControls");
 
   const sep = basePath.includes("?") ? "&" : "?";
 
   return (
     <div className="flex items-center justify-between pt-2">
-      <p className="text-sm text-muted-foreground">
-        Pagina {page} van {totalPages}
-      </p>
+      <p className="text-sm text-muted-foreground">{t("pageOf", { page, total: totalPages })}</p>
       <div className="flex items-center gap-1.5">
         <Link
           href={`${basePath}${sep}page=${page - 1}`}
@@ -32,7 +32,7 @@ export function PaginationControls({
           })}
         >
           <ChevronLeft />
-          Vorige
+          {t("previous")}
         </Link>
         <Link
           href={`${basePath}${sep}page=${page + 1}`}
@@ -43,7 +43,7 @@ export function PaginationControls({
             className: page >= totalPages ? "pointer-events-none opacity-50" : undefined,
           })}
         >
-          Volgende
+          {t("next")}
           <ChevronRight />
         </Link>
       </div>

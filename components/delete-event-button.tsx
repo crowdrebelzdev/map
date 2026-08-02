@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { deleteEvent } from "@/actions/events";
@@ -20,6 +21,8 @@ import {
 
 export function DeleteEventButton({ eventId, eventName }: { eventId: string; eventName: string }) {
   const router = useRouter();
+  const t = useTranslations("deleteEventButton");
+  const tc = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -27,11 +30,11 @@ export function DeleteEventButton({ eventId, eventName }: { eventId: string; eve
     startTransition(async () => {
       try {
         await deleteEvent(eventId);
-        toast.success(`"${eventName}" verwijderd.`);
+        toast.success(t("deletedToast", { name: eventName }));
         setOpen(false);
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
+        toast.error(err instanceof Error ? err.message : t("errorFallback"));
       }
     });
   }
@@ -44,20 +47,17 @@ export function DeleteEventButton({ eventId, eventName }: { eventId: string; eve
         }
       >
         <Trash2 />
-        <span className="sr-only">Verwijderen</span>
+        <span className="sr-only">{tc("remove")}</span>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>Evenement verwijderen?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Dit verwijdert &quot;{eventName}&quot; inclusief de plattegrond, het grid en alle POI&apos;s
-            definitief. Dit kan niet ongedaan worden gemaakt.
-          </AlertDialogDescription>
+          <AlertDialogTitle>{t("confirmTitle")}</AlertDialogTitle>
+          <AlertDialogDescription>{t("confirmDescription", { name: eventName })}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isPending}>Annuleren</AlertDialogCancel>
+          <AlertDialogCancel disabled={isPending}>{tc("cancel")}</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={handleDelete} disabled={isPending}>
-            {isPending ? "Bezig..." : "Verwijderen"}
+            {isPending ? tc("saving") : tc("remove")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

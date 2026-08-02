@@ -1,6 +1,7 @@
 "use server";
 
 import { and, eq, gt } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { liveLocation, user } from "@/db/schema";
 import { requireSession } from "@/lib/get-session";
@@ -20,7 +21,8 @@ export async function updateLiveLocation(
   const session = await requireSession();
   const access = await getEventAccess(eventId, { id: session.user.id, role: session.user.role ?? null });
   if (!hasAnyEventAccess(access)) {
-    throw new Error("Geen toegang tot dit evenement.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("noEventAccess"));
   }
 
   await db
@@ -36,7 +38,8 @@ export async function getLiveLocations(eventId: string) {
   const session = await requireSession();
   const access = await getEventAccess(eventId, { id: session.user.id, role: session.user.role ?? null });
   if (!hasEventPermission(access, "view_live_locations")) {
-    throw new Error("Niet toegestaan voor dit evenement.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("notAllowedForEvent"));
   }
 
   return db

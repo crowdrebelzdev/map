@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, asc, count, desc, eq, gt, gte, isNull, or, sql } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { broadcast, eventMember, user } from "@/db/schema";
 import { requireAnyEventAccess, requireEventPermission } from "@/lib/event-access";
@@ -18,13 +19,14 @@ export async function sendBroadcast(
   recipientId?: string | null,
 ) {
   const { session } = await requireEventPermission(eventId, "manage_incidents");
+  const t = await getTranslations("actionErrors");
 
   const trimmed = message.trim();
   if (!trimmed) {
-    throw new Error("Bericht mag niet leeg zijn.");
+    throw new Error(t("messageRequired"));
   }
   if (trimmed.length > MAX_MESSAGE_LENGTH) {
-    throw new Error(`Bericht mag maximaal ${MAX_MESSAGE_LENGTH} tekens zijn.`);
+    throw new Error(t("maxMessageLength", { max: MAX_MESSAGE_LENGTH }));
   }
 
   if (recipientId) {
@@ -32,7 +34,7 @@ export async function sendBroadcast(
       where: and(eq(eventMember.eventId, eventId), eq(eventMember.userId, recipientId)),
     });
     if (!recipient) {
-      throw new Error("Ongeldige ontvanger.");
+      throw new Error(t("invalidRecipient"));
     }
   }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { AlertTriangle, Siren } from "lucide-react";
 import { toast } from "sonner";
 import { listIncidents, resolveIncident } from "@/actions/incidents";
@@ -14,17 +15,6 @@ type IncidentRow = Awaited<ReturnType<typeof listIncidents>>[number];
 
 const POLL_INTERVAL_MS = 10_000;
 
-const CATEGORY_LABELS: Record<string, string> = {
-  medical: "Medisch",
-  security: "Veiligheid",
-  technical: "Technisch",
-  other: "Overig",
-};
-
-function formatTime(d: Date) {
-  return new Date(d).toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
-}
-
 export function IncidentsSheet({
   eventId,
   eventSlug,
@@ -34,6 +24,23 @@ export function IncidentsSheet({
   eventSlug: string;
   initialIncidents: IncidentRow[];
 }) {
+  const t = useTranslations("incidentsSheet");
+  const tIncidentControls = useTranslations("incidentControls");
+  const locale = useLocale();
+  const CATEGORY_LABELS: Record<string, string> = {
+    medical: tIncidentControls("categoryMedical"),
+    security: tIncidentControls("categorySecurity"),
+    technical: tIncidentControls("categoryTechnical"),
+    other: tIncidentControls("categoryOther"),
+  };
+
+  function formatTime(d: Date) {
+    return new Date(d).toLocaleTimeString(locale === "en" ? "en-US" : "nl-NL", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
   const [incidents, setIncidents] = useState(initialIncidents);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
 
@@ -55,9 +62,9 @@ export function IncidentsSheet({
       setIncidents((prev) =>
         prev.map((i) => (i.id === incidentId ? { ...i, status: "resolved" as const } : i)),
       );
-      toast.success("Melding afgehandeld.");
+      toast.success(t("resolvedToast"));
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Afhandelen mislukt.");
+      toast.error(err instanceof Error ? err.message : t("resolveErrorFallback"));
     } finally {
       setResolvingId(null);
     }
@@ -74,7 +81,7 @@ export function IncidentsSheet({
         }
       >
         {hasOpenSos ? <Siren size={15} /> : <AlertTriangle size={15} />}
-        Meldingen
+        {t("trigger")}
         {openCount > 0 && (
           <Badge variant={hasOpenSos ? "destructive" : "secondary"} className="ml-0.5">
             {openCount}
@@ -83,7 +90,7 @@ export function IncidentsSheet({
       </SheetTrigger>
       <SheetContent side="right">
         <SheetHeader>
-          <SheetTitle>Meldingen</SheetTitle>
+          <SheetTitle>{t("trigger")}</SheetTitle>
         </SheetHeader>
         <div className="flex flex-col gap-2 overflow-y-auto px-4 pb-4">
           {incidents.length === 0 && (
@@ -92,7 +99,7 @@ export function IncidentsSheet({
                 <EmptyMedia variant="icon">
                   <AlertTriangle />
                 </EmptyMedia>
-                <EmptyTitle>Nog geen meldingen</EmptyTitle>
+                <EmptyTitle>{t("emptyTitle")}</EmptyTitle>
               </EmptyHeader>
             </Empty>
           )}
@@ -108,10 +115,12 @@ export function IncidentsSheet({
                 <div className="flex items-center gap-1.5">
                   {i.type === "sos" && <AlertTriangle size={14} className="text-destructive" />}
                   <span className="text-sm font-medium">
-                    {i.type === "sos" ? "SOS" : (CATEGORY_LABELS[i.category ?? "other"] ?? "Melding")}
+                    {i.type === "sos"
+                      ? t("sosLabel")
+                      : (CATEGORY_LABELS[i.category ?? "other"] ?? t("genericIncidentLabel"))}
                   </span>
                   <Badge variant={i.status === "open" ? "secondary" : "outline"}>
-                    {i.status === "open" ? "Open" : "Afgehandeld"}
+                    {i.status === "open" ? t("statusOpen") : t("statusResolved")}
                   </Badge>
                 </div>
                 {i.description && <p className="text-sm text-muted-foreground">{i.description}</p>}
@@ -126,7 +135,7 @@ export function IncidentsSheet({
                   onClick={() => handleResolve(i.id)}
                   disabled={resolvingId === i.id}
                 >
-                  Afhandelen
+                  {t("resolveButton")}
                 </Button>
               )}
             </div>

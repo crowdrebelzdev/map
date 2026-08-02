@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -47,16 +48,16 @@ const ALL_DAYS_VALUE = "__all__";
 const INHERIT_ICON_VALUE = "__inherit__";
 const NO_ICON_VALUE = "__none__";
 type IconComboboxOption = { value: string; label: string; Icon?: PoiIconOption["Icon"] };
-const INHERIT_ICON_OPTION: IconComboboxOption = { value: INHERIT_ICON_VALUE, label: "Categorie-standaard" };
-const NO_ICON_OPTION: IconComboboxOption = { value: NO_ICON_VALUE, label: "Geen icoon" };
-const POI_ICON_COMBOBOX_OPTIONS: IconComboboxOption[] = [INHERIT_ICON_OPTION, NO_ICON_OPTION, ...POI_ICON_OPTIONS];
 
 function PoiIconCombobox({ value, onChange }: { value: string | null; onChange: (value: string | null) => void }) {
-  const selected =
-    POI_ICON_COMBOBOX_OPTIONS.find((o) => o.value === (value ?? INHERIT_ICON_VALUE)) ?? INHERIT_ICON_OPTION;
+  const t = useTranslations("poiEditSheet");
+  const inheritOption: IconComboboxOption = { value: INHERIT_ICON_VALUE, label: t("inheritIconOption") };
+  const noIconOption: IconComboboxOption = { value: NO_ICON_VALUE, label: t("noIconOption") };
+  const options: IconComboboxOption[] = [inheritOption, noIconOption, ...POI_ICON_OPTIONS];
+  const selected = options.find((o) => o.value === (value ?? INHERIT_ICON_VALUE)) ?? inheritOption;
   return (
     <Combobox
-      items={POI_ICON_COMBOBOX_OPTIONS}
+      items={options}
       value={selected}
       onValueChange={(opt: IconComboboxOption | null) =>
         onChange(opt && opt.value !== INHERIT_ICON_VALUE ? opt.value : null)
@@ -66,9 +67,9 @@ function PoiIconCombobox({ value, onChange }: { value: string | null; onChange: 
         opt.label.toLowerCase().includes(query.trim().toLowerCase())
       }
     >
-      <ComboboxInput placeholder="Zoek icoon..." className="h-8 text-xs" />
+      <ComboboxInput placeholder={t("iconSearchPlaceholder")} className="h-8 text-xs" />
       <ComboboxContent className="max-h-72">
-        <ComboboxEmpty>Geen iconen gevonden.</ComboboxEmpty>
+        <ComboboxEmpty>{t("noIconsFound")}</ComboboxEmpty>
         <ComboboxList>
           {(opt: IconComboboxOption) => (
             <ComboboxItem key={opt.value} value={opt}>
@@ -95,12 +96,13 @@ function ColorOverrideField({
   fallback: string;
   onChange: (v: string | null) => void;
 }) {
+  const t = useTranslations("poiEditSheet");
   const enabled = value !== null;
   return (
     <div className="space-y-1">
       <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
         <Checkbox checked={enabled} onCheckedChange={(v) => onChange(v ? fallback : null)} />
-        {label} aanpassen
+        {t("adjustLabel", { label })}
       </label>
       {enabled && (
         <input
@@ -146,6 +148,8 @@ export function PoiEditSheet({
   onDraftChange?: (draft: PreviewPoiMarker | null) => void;
 }) {
   const router = useRouter();
+  const t = useTranslations("poiEditSheet");
+  const tc = useTranslations("common");
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const eventDayById = useMemo(() => new Map(eventDays.map((d) => [d.id, d])), [eventDays]);
   const editingPoi = editPoiId ? (pois.find((p) => p.id === editPoiId) ?? null) : null;
@@ -175,9 +179,14 @@ export function PoiEditSheet({
   }, [map]);
 
   // Re-populate the whole form whenever *what's being edited* changes identity — a
-  // different POI, or a fresh map click starting a new one.
+  // different POI, or a fresh map click starting a new one. Not converted to the
+  // key-remount pattern (see AreaEditSheet for that version): unlike an area, the
+  // "new POI" case resets on every `pendingLatLng` object identity change (each map
+  // click while the sheet is already open for a new POI), which a string `key` can't
+  // express without also changing pendingLatLng's shape in the parent.
   useEffect(() => {
     if (editingPoi) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setName(editingPoi.name);
       setDescription(editingPoi.description ?? "");
       setCategoryId(editingPoi.categoryId);
@@ -272,7 +281,7 @@ export function PoiEditSheet({
           owner,
           extraFieldValues,
         });
-        toast.success("POI bijgewerkt.");
+        toast.success(t("updatedToast"));
       } else {
         if (!pendingLatLng || !transform) return;
         const pixel = latLngToPixel(transform, pendingLatLng);
@@ -295,12 +304,12 @@ export function PoiEditSheet({
           lat: pendingLatLng.lat,
           lng: pendingLatLng.lng,
         });
-        toast.success("POI toegevoegd.");
+        toast.success(t("addedToast"));
       }
       onClose();
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Opslaan mislukt.");
+      toast.error(err instanceof Error ? err.message : t("errorFallback"));
     } finally {
       setSaving(false);
     }
@@ -316,19 +325,19 @@ export function PoiEditSheet({
         className="absolute right-3 top-3 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         <X className="size-4" />
-        <span className="sr-only">Sluiten</span>
+        <span className="sr-only">{tc("close")}</span>
       </button>
-      <p className="pr-8 font-semibold">{editingPoi ? "POI bewerken" : "POI toevoegen"}</p>
+      <p className="pr-8 font-semibold">{editingPoi ? t("editTitle") : t("addTitle")}</p>
       <div className="space-y-3 pt-3">
           <Field>
-            <FieldLabel htmlFor="poi-name">Naam / label</FieldLabel>
+            <FieldLabel htmlFor="poi-name">{t("nameLabel")}</FieldLabel>
             <Input id="poi-name" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <Field>
-            <FieldLabel htmlFor="poi-category">Categorie</FieldLabel>
+            <FieldLabel htmlFor="poi-category">{tc("category")}</FieldLabel>
             <Select value={categoryId} onValueChange={(v) => handleCategoryChange(v ?? "")}>
               <SelectTrigger id="poi-category" className="w-full">
-                <SelectValue>{() => categoryById.get(categoryId)?.label ?? "Kies een categorie"}</SelectValue>
+                <SelectValue>{() => categoryById.get(categoryId)?.label ?? t("chooseCategoryPlaceholder")}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {categories.map((c) => (
@@ -341,19 +350,19 @@ export function PoiEditSheet({
           </Field>
           {eventDays.length > 0 && (
             <Field>
-              <FieldLabel htmlFor="poi-day">Dag</FieldLabel>
+              <FieldLabel htmlFor="poi-day">{t("dayLabel")}</FieldLabel>
               <Select value={eventDayId} onValueChange={(v) => setEventDayId(v ?? ALL_DAYS_VALUE)}>
                 <SelectTrigger id="poi-day" className="w-full">
                   <SelectValue>
                     {() =>
                       eventDayId === ALL_DAYS_VALUE
-                        ? "Alle dagen"
-                        : eventDayById.get(eventDayId)?.label || eventDayById.get(eventDayId)?.date || "Alle dagen"
+                        ? t("allDays")
+                        : eventDayById.get(eventDayId)?.label || eventDayById.get(eventDayId)?.date || t("allDays")
                     }
                   </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={ALL_DAYS_VALUE}>Alle dagen</SelectItem>
+                  <SelectItem value={ALL_DAYS_VALUE}>{t("allDays")}</SelectItem>
                   {eventDays.map((d) => (
                     <SelectItem key={d.id} value={d.id}>
                       {d.label ? `${d.label} (${d.date})` : d.date}
@@ -364,34 +373,34 @@ export function PoiEditSheet({
             </Field>
           )}
           <Field>
-            <FieldLabel htmlFor="poi-description">Beschrijving (optioneel)</FieldLabel>
+            <FieldLabel htmlFor="poi-description">{t("descriptionLabel")}</FieldLabel>
             <Input id="poi-description" value={description} onChange={(e) => setDescription(e.target.value)} />
           </Field>
           <Field>
-            <FieldLabel htmlFor="poi-owner">Eigenaar (vrij)</FieldLabel>
-            <Input id="poi-owner" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder="Bijv. Beveiliging" />
+            <FieldLabel htmlFor="poi-owner">{t("ownerLabel")}</FieldLabel>
+            <Input id="poi-owner" value={owner} onChange={(e) => setOwner(e.target.value)} placeholder={t("ownerPlaceholder")} />
           </Field>
           <Field>
-            <FieldLabel>Icoon</FieldLabel>
+            <FieldLabel>{t("iconLabel")}</FieldLabel>
             <PoiIconCombobox value={icon} onChange={setIcon} />
           </Field>
           <div className="grid grid-cols-2 gap-2">
             <ColorOverrideField
-              label="Vulkleur"
+              label={t("fillColorLabel")}
               value={fillColor}
               fallback={categoryById.get(categoryId)?.color ?? "#2563eb"}
               onChange={setFillColor}
             />
-            <ColorOverrideField label="Randkleur" value={borderColor} fallback="#ffffff" onChange={setBorderColor} />
+            <ColorOverrideField label={t("borderColorLabel")} value={borderColor} fallback="#ffffff" onChange={setBorderColor} />
           </div>
           <Field>
-            <FieldLabel>Tijdvenster (optioneel)</FieldLabel>
+            <FieldLabel>{t("timeWindowLabel")}</FieldLabel>
             <div className="flex items-center gap-2">
               <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="flex-1" />
-              <span className="text-xs text-muted-foreground">tot</span>
+              <span className="text-xs text-muted-foreground">{t("timeWindowTo")}</span>
               <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="flex-1" />
             </div>
-            <FieldDescription>Leeg laten = altijd zichtbaar (binnen de gekozen dag).</FieldDescription>
+            <FieldDescription>{t("timeWindowHint")}</FieldDescription>
           </Field>
           {selectedCategoryExtraFields.length > 0 && (
             <div className="space-y-2 rounded-md border p-2">
@@ -411,10 +420,10 @@ export function PoiEditSheet({
           <FreeInfoEditor rows={freeRows} onChange={handleFreeRowsChange} />
           <div className="flex gap-2 pt-2">
             <Button onClick={handleSave} disabled={!name.trim() || saving}>
-              {saving ? "Bezig..." : editingPoi ? "Wijzigingen opslaan" : "Opslaan"}
+              {saving ? tc("saving") : editingPoi ? t("saveChanges") : tc("save")}
             </Button>
             <Button variant="ghost" onClick={onClose}>
-              Annuleren
+              {tc("cancel")}
             </Button>
           </div>
       </div>

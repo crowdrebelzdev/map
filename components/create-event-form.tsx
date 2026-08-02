@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { createEvent } from "@/actions/events";
@@ -37,6 +38,8 @@ export function CreateEventForm({
   templates?: { id: string; name: string }[];
 }) {
   const router = useRouter();
+  const t = useTranslations("createEventForm");
+  const tc = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [templateId, setTemplateId] = useState(NO_TEMPLATE_VALUE);
   const [isPending, startTransition] = useTransition();
@@ -48,12 +51,12 @@ export function CreateEventForm({
     setDeletingTemplate(true);
     try {
       await deleteEventTemplate(templateId);
-      toast.success("Sjabloon verwijderd.");
+      toast.success(t("templateDeletedToast"));
       setTemplateId(NO_TEMPLATE_VALUE);
       setConfirmDeleteTemplate(false);
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
+      toast.error(err instanceof Error ? err.message : t("deleteErrorFallback"));
     } finally {
       setDeletingTemplate(false);
     }
@@ -63,12 +66,12 @@ export function CreateEventForm({
     startTransition(async () => {
       try {
         const created = await createEvent(formData);
-        toast.success(`"${created.name}" aangemaakt.`);
+        toast.success(t("createdToast", { name: created.name }));
         setOpen(false);
         setTemplateId(NO_TEMPLATE_VALUE);
         router.push(`/org/events/${created.slug}/map`);
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Aanmaken mislukt.");
+        toast.error(err instanceof Error ? err.message : t("createErrorFallback"));
       }
     });
   }
@@ -77,20 +80,20 @@ export function CreateEventForm({
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button />}>
         <Plus />
-        Nieuw evenement
+        {t("newEvent")}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Nieuw evenement</DialogTitle>
+          <DialogTitle>{t("newEvent")}</DialogTitle>
         </DialogHeader>
         <form action={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="name">Naam</Label>
-            <Input id="name" name="name" placeholder="Bijv. Zomerfestival 2026" required />
+            <Label htmlFor="name">{tc("name")}</Label>
+            <Input id="name" name="name" placeholder={t("namePlaceholder")} required />
           </div>
           {templates.length > 0 && (
             <div className="space-y-2">
-              <Label htmlFor="templateId">Sjabloon (optioneel)</Label>
+              <Label htmlFor="templateId">{t("templateLabel")}</Label>
               <input type="hidden" name="templateId" value={templateId === NO_TEMPLATE_VALUE ? "" : templateId} />
               <div className="flex gap-2">
                 <Select value={templateId} onValueChange={(v) => setTemplateId(v ?? NO_TEMPLATE_VALUE)}>
@@ -98,10 +101,10 @@ export function CreateEventForm({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={NO_TEMPLATE_VALUE}>Geen — standaardcategorieën</SelectItem>
-                    {templates.map((t) => (
-                      <SelectItem key={t.id} value={t.id}>
-                        {t.name}
+                    <SelectItem value={NO_TEMPLATE_VALUE}>{t("noTemplate")}</SelectItem>
+                    {templates.map((tpl) => (
+                      <SelectItem key={tpl.id} value={tpl.id}>
+                        {tpl.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -116,31 +119,29 @@ export function CreateEventForm({
                     disabled={deletingTemplate}
                   >
                     <Trash2 />
-                    <span className="sr-only">Sjabloon verwijderen</span>
+                    <span className="sr-only">{t("deleteTemplateSr")}</span>
                   </Button>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">
-                Neemt de POI-categorieën van het sjabloon over.
-              </p>
+              <p className="text-xs text-muted-foreground">{t("templateHint")}</p>
               <AlertDialog open={confirmDeleteTemplate} onOpenChange={setConfirmDeleteTemplate}>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Sjabloon verwijderen?</AlertDialogTitle>
+                    <AlertDialogTitle>{t("confirmDeleteTemplateTitle")}</AlertDialogTitle>
                     <AlertDialogDescription>
-                      Weet je zeker dat je &quot;
-                      {templates.find((t) => t.id === templateId)?.name}&quot; wilt verwijderen? Dit kan
-                      niet ongedaan worden gemaakt.
+                      {t("confirmDeleteTemplateDescription", {
+                        name: templates.find((tpl) => tpl.id === templateId)?.name ?? "",
+                      })}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel disabled={deletingTemplate}>Annuleren</AlertDialogCancel>
+                    <AlertDialogCancel disabled={deletingTemplate}>{tc("cancel")}</AlertDialogCancel>
                     <AlertDialogAction
                       variant="destructive"
                       onClick={handleDeleteTemplate}
                       disabled={deletingTemplate}
                     >
-                      {deletingTemplate ? "Bezig..." : "Verwijderen"}
+                      {deletingTemplate ? tc("saving") : tc("remove")}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
@@ -149,10 +150,10 @@ export function CreateEventForm({
           )}
           <DialogFooter>
             <Button variant="outline" type="button" onClick={() => setOpen(false)} disabled={isPending}>
-              Annuleren
+              {tc("cancel")}
             </Button>
             <Button type="submit" disabled={isPending}>
-              {isPending ? "Bezig..." : "Aanmaken"}
+              {isPending ? tc("saving") : t("create")}
             </Button>
           </DialogFooter>
         </form>

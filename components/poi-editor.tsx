@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Download, Layers, MapPin, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,8 @@ export function FreeInfoEditor({
   rows: PoiExtraFieldValue[];
   onChange: (rows: PoiExtraFieldValue[]) => void;
 }) {
+  const t = useTranslations("freeInfoEditor");
+
   function updateRow(i: number, patch: Partial<PoiExtraFieldValue>) {
     onChange(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
   }
@@ -74,19 +77,19 @@ export function FreeInfoEditor({
 
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs text-muted-foreground">Extra informatie (vrij)</Label>
+      <Label className="text-xs text-muted-foreground">{t("label")}</Label>
       {rows.map((row, i) => (
         <div key={row.key} className="flex items-center gap-1.5">
           <Input
             value={row.label}
             onChange={(e) => updateRow(i, { label: e.target.value })}
-            placeholder="Naam (bv. Openingstijden)"
+            placeholder={t("namePlaceholder")}
             className="h-7 flex-1 text-xs"
           />
           <Input
             value={row.value}
             onChange={(e) => updateRow(i, { value: e.target.value })}
-            placeholder="Waarde"
+            placeholder={t("valuePlaceholder")}
             className="h-7 flex-1 text-xs"
           />
           <Button
@@ -96,13 +99,13 @@ export function FreeInfoEditor({
             onClick={() => removeRow(i)}
           >
             <Trash2 />
-            <span className="sr-only">Regel verwijderen</span>
+            <span className="sr-only">{t("removeRowSr")}</span>
           </Button>
         </div>
       ))}
       <Button variant="outline" size="xs" onClick={addRow} className="gap-1">
         <Plus className="size-3" />
-        Regel toevoegen
+        {t("addRow")}
       </Button>
     </div>
   );
@@ -130,6 +133,8 @@ export function PoiList({
   onSelectPoi: (p: PoiRow) => void;
 }) {
   const router = useRouter();
+  const t = useTranslations("poiList");
+  const tc = useTranslations("common");
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const eventDayById = useMemo(() => new Map(eventDays.map((d) => [d.id, d])), [eventDays]);
   const sortedCategories = useMemo(
@@ -162,11 +167,11 @@ export function PoiList({
     setDeletingId(poiId);
     try {
       await deletePoi(eventId, eventSlug, poiId);
-      toast.success("POI verwijderd.");
+      toast.success(t("deletedToast"));
       setConfirmDeletePoi(null);
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
+      toast.error(err instanceof Error ? err.message : t("deleteErrorFallback"));
     } finally {
       setDeletingId(null);
     }
@@ -175,22 +180,20 @@ export function PoiList({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Bestaande POI&apos;s ({pois.length})</CardTitle>
+        <CardTitle>{t("existingPois", { count: pois.length })}</CardTitle>
         <div className="flex items-center gap-1.5">
           <PoiCsvImportDialog eventId={eventId} eventSlug={eventSlug} />
           {pois.length > 0 && (
             <Button variant="outline" size="icon-sm" onClick={handleExportCsv}>
               <Download />
-              <span className="sr-only">Exporteren als CSV</span>
+              <span className="sr-only">{t("exportCsvSr")}</span>
             </Button>
           )}
         </div>
       </CardHeader>
       <CardContent className="space-y-2">
         {editMode && pois.length > 0 && (
-          <p className="text-xs text-muted-foreground">
-            Klik op de kaart om een POI toe te voegen, of klik een bestaande om 'm te bewerken.
-          </p>
+          <p className="text-xs text-muted-foreground">{t("editHint")}</p>
         )}
         {pois.length === 0 ? (
           <Empty className="border-0 p-0">
@@ -198,11 +201,9 @@ export function PoiList({
               <EmptyMedia variant="icon">
                 <MapPin />
               </EmptyMedia>
-              <EmptyTitle>Nog geen POI&apos;s</EmptyTitle>
+              <EmptyTitle>{t("emptyTitle")}</EmptyTitle>
               <EmptyDescription>
-                {editMode
-                  ? "Klik op de kaart om je eerste POI toe te voegen."
-                  : "Schakel Bewerken in om POI's toe te voegen."}
+                {editMode ? t("emptyEditMode") : t("emptyViewMode")}
               </EmptyDescription>
             </EmptyHeader>
           </Empty>
@@ -249,7 +250,7 @@ export function PoiList({
                             onClick={() => setConfirmDeletePoi(p)}
                             disabled={deletingId === p.id}
                           >
-                            Verwijderen
+                            {tc("remove")}
                           </Button>
                         )}
                       </div>
@@ -268,20 +269,19 @@ export function PoiList({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>POI verwijderen?</AlertDialogTitle>
+            <AlertDialogTitle>{t("confirmDeleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Weet je zeker dat je &quot;{confirmDeletePoi?.name}&quot; wilt verwijderen? Dit kan niet
-              ongedaan worden gemaakt.
+              {t("confirmDeleteDescription", { name: confirmDeletePoi?.name ?? "" })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deletingId !== null}>Annuleren</AlertDialogCancel>
+            <AlertDialogCancel disabled={deletingId !== null}>{tc("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               onClick={() => confirmDeletePoi && handleDelete(confirmDeletePoi.id)}
               disabled={deletingId !== null}
             >
-              {deletingId !== null ? "Bezig..." : "Verwijderen"}
+              {deletingId !== null ? tc("saving") : tc("remove")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -307,6 +307,7 @@ export function PoiCategoryLayerPicker({
     for (const p of pois) map.set(p.categoryId, (map.get(p.categoryId) ?? 0) + 1);
     return map;
   }, [pois]);
+  const t = useTranslations("poiCategoryLayerPicker");
   const sortedCategories = useMemo(
     () => [...categories].sort((a, b) => a.label.localeCompare(b.label)),
     [categories],
@@ -315,21 +316,18 @@ export function PoiCategoryLayerPicker({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Kies een categorie</CardTitle>
+        <CardTitle>{t("title")}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        <p className="text-xs text-muted-foreground">
-          Categorieën zijn als het ware lagen — kies er eerst één om op te focussen, dan pas je
-          POI&apos;s toe of bewerkt ze binnen die laag.
-        </p>
+        <p className="text-xs text-muted-foreground">{t("description")}</p>
         {categories.length === 0 ? (
           <Empty className="border-0 p-0">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <Layers />
               </EmptyMedia>
-              <EmptyTitle>Nog geen categorieën</EmptyTitle>
-              <EmptyDescription>Maak er eerst één aan via het tabblad "Categorieën".</EmptyDescription>
+              <EmptyTitle>{t("emptyTitle")}</EmptyTitle>
+              <EmptyDescription>{t("emptyDescription")}</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
@@ -376,6 +374,9 @@ export function PoiFocusedCategoryList({
   onBack: () => void;
 }) {
   const router = useRouter();
+  const t = useTranslations("poiFocusedCategoryList");
+  const tPoiList = useTranslations("poiList");
+  const tc = useTranslations("common");
   const eventDayById = useMemo(() => new Map(eventDays.map((d) => [d.id, d])), [eventDays]);
   const sortedPois = useMemo(
     () => [...pois].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" })),
@@ -395,6 +396,7 @@ export function PoiFocusedCategoryList({
   // A different category was focused (or the list changed under us) — a stale selection
   // referencing POIs no longer shown here would be confusing.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSelectedIds(new Set());
   }, [category.id]);
 
@@ -417,11 +419,11 @@ export function PoiFocusedCategoryList({
     setDeletingId(poiId);
     try {
       await deletePoi(eventId, eventSlug, poiId);
-      toast.success("POI verwijderd.");
+      toast.success(tPoiList("deletedToast"));
       setConfirmDeletePoi(null);
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
+      toast.error(err instanceof Error ? err.message : tPoiList("deleteErrorFallback"));
     } finally {
       setDeletingId(null);
     }
@@ -431,12 +433,12 @@ export function PoiFocusedCategoryList({
     setBulkBusy(true);
     try {
       await bulkDeletePois(eventId, eventSlug, [...selectedIds]);
-      toast.success(`${selectedIds.size} POI('s) verwijderd.`);
+      toast.success(t("bulkDeletedToast", { count: selectedIds.size }));
       setSelectedIds(new Set());
       setConfirmBulkDelete(false);
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
+      toast.error(err instanceof Error ? err.message : tPoiList("deleteErrorFallback"));
     } finally {
       setBulkBusy(false);
     }
@@ -446,12 +448,12 @@ export function PoiFocusedCategoryList({
     setBulkBusy(true);
     try {
       await bulkMovePois(eventId, eventSlug, [...selectedIds], { categoryId: targetCategoryId });
-      toast.success(`${selectedIds.size} POI('s) verplaatst.`);
+      toast.success(t("bulkMovedToast", { count: selectedIds.size }));
       setSelectedIds(new Set());
       setMoveTargetId("");
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Verplaatsen mislukt.");
+      toast.error(err instanceof Error ? err.message : t("moveErrorFallback"));
     } finally {
       setBulkBusy(false);
     }
@@ -472,18 +474,15 @@ export function PoiFocusedCategoryList({
         </button>
       </CardHeader>
       <CardContent className="space-y-2">
-        <p className="text-xs text-muted-foreground">
-          Klik op de kaart om een POI toe te voegen aan &quot;{category.label}&quot;, of klik een
-          bestaande om 'm te bewerken.
-        </p>
+        <p className="text-xs text-muted-foreground">{t("editHint", { category: category.label })}</p>
         {sortedPois.length === 0 ? (
           <Empty className="border-0 p-0">
             <EmptyHeader>
               <EmptyMedia variant="icon">
                 <MapPin />
               </EmptyMedia>
-              <EmptyTitle>Nog geen POI&apos;s in deze categorie</EmptyTitle>
-              <EmptyDescription>Klik op de kaart om de eerste toe te voegen.</EmptyDescription>
+              <EmptyTitle>{t("emptyTitle")}</EmptyTitle>
+              <EmptyDescription>{t("emptyDescription")}</EmptyDescription>
             </EmptyHeader>
           </Empty>
         ) : (
@@ -491,7 +490,7 @@ export function PoiFocusedCategoryList({
             <div className="flex items-center gap-2 border-b pb-2">
               <Checkbox checked={allSelected} onCheckedChange={toggleSelectAll} />
               <span className="text-xs text-muted-foreground">
-                {selectedIds.size > 0 ? `${selectedIds.size} geselecteerd` : "Alles selecteren"}
+                {selectedIds.size > 0 ? t("selectedCount", { count: selectedIds.size }) : t("selectAll")}
               </span>
             </div>
 
@@ -507,8 +506,8 @@ export function PoiFocusedCategoryList({
                   disabled={bulkBusy || otherCategories.length === 0}
                 >
                   <SelectTrigger className="h-8 flex-1 text-xs">
-                    <SelectValue placeholder="Verplaats naar categorie...">
-                      {(v: string) => otherCategories.find((c) => c.id === v)?.label ?? "Verplaats naar categorie..."}
+                    <SelectValue placeholder={t("moveToCategoryPlaceholder")}>
+                      {(v: string) => otherCategories.find((c) => c.id === v)?.label ?? t("moveToCategoryPlaceholder")}
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
@@ -525,7 +524,7 @@ export function PoiFocusedCategoryList({
                   onClick={() => setConfirmBulkDelete(true)}
                   disabled={bulkBusy}
                 >
-                  Verwijderen ({selectedIds.size})
+                  {t("deleteSelected", { count: selectedIds.size })}
                 </Button>
               </div>
             )}
@@ -560,7 +559,7 @@ export function PoiFocusedCategoryList({
                   onClick={() => setConfirmDeletePoi(p)}
                   disabled={deletingId === p.id}
                 >
-                  Verwijderen
+                  {tc("remove")}
                 </Button>
               </div>
             ))}
@@ -574,20 +573,19 @@ export function PoiFocusedCategoryList({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>POI verwijderen?</AlertDialogTitle>
+            <AlertDialogTitle>{tPoiList("confirmDeleteTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Weet je zeker dat je &quot;{confirmDeletePoi?.name}&quot; wilt verwijderen? Dit kan niet
-              ongedaan worden gemaakt.
+              {tPoiList("confirmDeleteDescription", { name: confirmDeletePoi?.name ?? "" })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deletingId !== null}>Annuleren</AlertDialogCancel>
+            <AlertDialogCancel disabled={deletingId !== null}>{tc("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               onClick={() => confirmDeletePoi && handleDelete(confirmDeletePoi.id)}
               disabled={deletingId !== null}
             >
-              {deletingId !== null ? "Bezig..." : "Verwijderen"}
+              {deletingId !== null ? tc("saving") : tc("remove")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -596,15 +594,13 @@ export function PoiFocusedCategoryList({
       <AlertDialog open={confirmBulkDelete} onOpenChange={setConfirmBulkDelete}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>{selectedIds.size} POI&apos;s verwijderen?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Dit kan niet ongedaan worden gemaakt.
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t("confirmBulkDeleteTitle", { count: selectedIds.size })}</AlertDialogTitle>
+            <AlertDialogDescription>{t("confirmBulkDeleteDescription")}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={bulkBusy}>Annuleren</AlertDialogCancel>
+            <AlertDialogCancel disabled={bulkBusy}>{tc("cancel")}</AlertDialogCancel>
             <AlertDialogAction variant="destructive" onClick={handleBulkDelete} disabled={bulkBusy}>
-              {bulkBusy ? "Bezig..." : "Verwijderen"}
+              {bulkBusy ? tc("saving") : tc("remove")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

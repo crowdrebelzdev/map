@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useLocale, useTranslations } from "next-intl";
 import { History } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -19,22 +20,6 @@ type ActivityRow = { id: string; action: string; summary: string; createdAt: Dat
 
 const PAGE_SIZE = 30;
 
-// Groups the free-text `action` strings written by `logActivity(...)` call sites (see
-// actions/poi.ts, areas.ts, poi-categories.ts, area-categories.ts, grid.ts, map.ts,
-// event-members.ts) into the filter dropdown below.
-const ACTION_GROUPS: { prefix: string; label: string }[] = [
-  { prefix: "poi.", label: "POI's" },
-  { prefix: "area.", label: "Areas" },
-  { prefix: "category.", label: "Categorieën" },
-  { prefix: "grid.", label: "Grid" },
-  { prefix: "map.", label: "Kaart" },
-  { prefix: "team.", label: "Team" },
-];
-
-function formatDate(d: Date) {
-  return new Date(d).toLocaleString("nl-NL", { dateStyle: "medium", timeStyle: "short" });
-}
-
 export function ActivityLogView({
   eventId,
   entries: initialEntries,
@@ -42,6 +27,29 @@ export function ActivityLogView({
   eventId: string;
   entries: ActivityRow[];
 }) {
+  const t = useTranslations("activityLogView");
+  const tc = useTranslations("common");
+  const locale = useLocale();
+
+  function formatDate(d: Date) {
+    return new Date(d).toLocaleString(locale === "en" ? "en-US" : "nl-NL", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  }
+
+  // Groups the free-text `action` strings written by `logActivity(...)` call sites (see
+  // actions/poi.ts, areas.ts, poi-categories.ts, area-categories.ts, grid.ts, map.ts,
+  // event-members.ts) into the filter dropdown below.
+  const ACTION_GROUPS: { prefix: string; label: string }[] = [
+    { prefix: "poi.", label: t("filterPois") },
+    { prefix: "area.", label: t("filterAreas") },
+    { prefix: "category.", label: t("filterCategories") },
+    { prefix: "grid.", label: t("filterGrid") },
+    { prefix: "map.", label: t("filterMap") },
+    { prefix: "team.", label: t("filterTeam") },
+  ];
+
   const [entries, setEntries] = useState(initialEntries);
   const [actionPrefix, setActionPrefix] = useState<string>("");
   const [search, setSearch] = useState("");
@@ -83,10 +91,10 @@ export function ActivityLogView({
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2">
-        <CardTitle>Activiteit</CardTitle>
+        <CardTitle>{t("title")}</CardTitle>
         <div className="flex items-center gap-2">
           <Input
-            placeholder="Zoeken..."
+            placeholder={t("searchPlaceholder")}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             onBlur={() => reload(actionPrefix, search)}
@@ -104,11 +112,11 @@ export function ActivityLogView({
           >
             <SelectTrigger className="h-8 w-36 text-xs">
               <SelectValue>
-                {(v: string) => ACTION_GROUPS.find((g) => g.prefix === v)?.label ?? "Alles"}
+                {(v: string) => ACTION_GROUPS.find((g) => g.prefix === v)?.label ?? t("filterAll")}
               </SelectValue>
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">Alles</SelectItem>
+              <SelectItem value="__all__">{t("filterAll")}</SelectItem>
               {ACTION_GROUPS.map((g) => (
                 <SelectItem key={g.prefix} value={g.prefix}>
                   {g.label}
@@ -125,7 +133,7 @@ export function ActivityLogView({
               <EmptyMedia variant="icon">
                 <History />
               </EmptyMedia>
-              <EmptyTitle>Geen activiteit gevonden</EmptyTitle>
+              <EmptyTitle>{t("emptyTitle")}</EmptyTitle>
             </EmptyHeader>
           </Empty>
         ) : (
@@ -149,7 +157,7 @@ export function ActivityLogView({
                 onClick={loadMore}
                 disabled={loading}
               >
-                {loading ? "Bezig..." : "Meer laden"}
+                {loading ? tc("saving") : t("loadMore")}
               </Button>
             )}
           </>

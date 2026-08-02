@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { ArrowLeft } from "lucide-react";
 import { getLiveLocations } from "@/actions/live-location";
 import {
@@ -65,6 +66,8 @@ export function LiveOpsView({
   topSearches: TopSearch[];
   recipients: { id: string; name: string }[];
 }) {
+  const t = useTranslations("liveOpsView");
+  const tPublicMap = useTranslations("publicMap");
   const [rawLiveUsers, setRawLiveUsers] = useState<EventMapLiveUser[]>(initialLiveUsers);
 
   useEffect(() => {
@@ -98,12 +101,12 @@ export function LiveOpsView({
             className={buttonVariants({ variant: "ghost", size: "icon-sm" })}
           >
             <ArrowLeft />
-            <span className="sr-only">Terug naar evenement</span>
+            <span className="sr-only">{t("backToEvent")}</span>
           </Link>
           <span className="truncate font-semibold">{eventName}</span>
           {canViewLive && (
             <Badge variant="secondary" className="shrink-0">
-              {liveUsers.length} {liveUsers.length === 1 ? "persoon" : "personen"} actief
+              {t("activeCount", { count: liveUsers.length })}
             </Badge>
           )}
         </div>
@@ -150,7 +153,7 @@ export function LiveOpsView({
           />
         ) : (
           <div className="p-4 text-sm text-muted-foreground">
-            Voor dit evenement is nog geen kaart ingesteld.
+            {tPublicMap("noMapConfigured")}
           </div>
         )}
       </div>

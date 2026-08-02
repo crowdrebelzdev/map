@@ -28,6 +28,10 @@ export function PushSubscribeButton({ eventId }: { eventId: string }) {
 
   useEffect(() => {
     if (!VAPID_PUBLIC_KEY || !("serviceWorker" in navigator) || !("PushManager" in window)) return;
+    // Feature-detection + the actual subscription-status fetch below can only run
+    // client-side after mount (navigator/serviceWorker aren't available during render) —
+    // not the reset-on-prop-change pattern the lint rule is meant to catch.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSupported(true);
     navigator.serviceWorker.ready
       .then((registration) => registration.pushManager.getSubscription())

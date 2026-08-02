@@ -1,4 +1,5 @@
 import { and, eq } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { event, eventMember, member as memberTable, type EventMemberPermission } from "@/db/schema";
 import { requireSession } from "@/lib/get-session";
@@ -50,31 +51,34 @@ export async function requireEventPermission(eventId: string, permission: EventM
   const session = await requireSession();
   const access = await getEventAccess(eventId, { id: session.user.id, role: session.user.role ?? null });
   if (!hasEventPermission(access, permission)) {
-    throw new Error("Niet toegestaan voor dit evenement.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("notAllowedForEvent"));
   }
   return { session, access };
 }
 
 /** Shared tab list for the event admin sub-nav — used both by the normal breadcrumb/tabs
  * chrome and by the fullscreen map/POI pages' own slim header, so the two stay in sync. */
-export function buildEventTabs(eventSlug: string, access: EventAccess) {
+export async function buildEventTabs(eventSlug: string, access: EventAccess) {
+  const t = await getTranslations("eventTabs");
+  const tNav = await getTranslations("nav");
   return [
-    { href: `/org/events/${eventSlug}`, label: "Overzicht" },
+    { href: `/org/events/${eventSlug}`, label: t("overview") },
     hasEventPermission(access, "edit_map") && {
       href: `/org/events/${eventSlug}/map`,
-      label: "Kaart & Grid",
+      label: t("mapGrid"),
     },
     (hasEventPermission(access, "manage_pois") || hasEventPermission(access, "manage_categories")) && {
       href: `/org/events/${eventSlug}/pois`,
-      label: "POI's & Categorieën",
+      label: t("poisCategories"),
     },
     (hasEventPermission(access, "view_live_locations") || hasEventPermission(access, "manage_incidents")) && {
       href: `/org/events/${eventSlug}/live`,
-      label: "Live locaties",
+      label: t("liveLocations"),
     },
-    access.isAdmin && { href: `/org/events/${eventSlug}/team`, label: "Team" },
-    access.isAdmin && { href: `/org/events/${eventSlug}/activity`, label: "Activiteit" },
-    access.isAdmin && { href: `/org/events/${eventSlug}/settings`, label: "Instellingen" },
+    access.isAdmin && { href: `/org/events/${eventSlug}/team`, label: t("team") },
+    access.isAdmin && { href: `/org/events/${eventSlug}/activity`, label: t("activity") },
+    access.isAdmin && { href: `/org/events/${eventSlug}/settings`, label: tNav("settings") },
   ].filter((t): t is { href: string; label: string } => !!t);
 }
 
@@ -84,7 +88,8 @@ export async function requireAnyEventAccess(eventId: string) {
   const session = await requireSession();
   const access = await getEventAccess(eventId, { id: session.user.id, role: session.user.role ?? null });
   if (!hasAnyEventAccess(access)) {
-    throw new Error("Niet toegestaan voor dit evenement.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("notAllowedForEvent"));
   }
   return { session, access };
 }

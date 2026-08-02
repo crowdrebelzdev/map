@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -30,7 +31,11 @@ const EDIT_PANEL_CLASSNAME =
   "sm:absolute sm:inset-x-auto sm:inset-y-auto sm:bottom-auto sm:left-auto sm:right-3 sm:top-3 sm:z-10 sm:w-80 sm:max-h-[calc(100%-1.5rem)] sm:rounded-lg sm:border sm:border-t";
 
 /** Right-side sheet for an area's name/category/extra-info — opened once the outline is
- * drawn (or an existing area is picked). The outline itself stays a map/left-panel affair. */
+ * drawn (or an existing area is picked). The outline itself stays a map/left-panel affair.
+ * Thin wrapper around AreaEditForm: only resolves `editingArea` and decides whether to
+ * render at all. Keying the form by the area's identity (see below) is what makes it
+ * re-initialize its fields when the user switches from editing one area to another, or
+ * from "add new" to "edit" — without a reset-on-prop-change effect. */
 export function AreaEditSheet({
   eventId,
   eventSlug,
@@ -50,28 +55,47 @@ export function AreaEditSheet({
   open: boolean;
   onClose: () => void;
 }) {
-  const router = useRouter();
-  const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const editingArea = editAreaId ? (areas.find((a) => a.id === editAreaId) ?? null) : null;
+  if (!open) return null;
+  return (
+    <AreaEditForm
+      key={editingArea?.id ?? "new"}
+      eventId={eventId}
+      eventSlug={eventSlug}
+      categories={categories}
+      editingArea={editingArea}
+      drawingVertices={drawingVertices}
+      onClose={onClose}
+    />
+  );
+}
 
-  const [name, setName] = useState("");
-  const [categoryId, setCategoryId] = useState<string>(categories[0]?.id ?? "");
-  const [extraFieldValues, setExtraFieldValues] = useState<PoiExtraFieldValue[]>([]);
+function AreaEditForm({
+  eventId,
+  eventSlug,
+  categories,
+  editingArea,
+  drawingVertices,
+  onClose,
+}: {
+  eventId: string;
+  eventSlug: string;
+  categories: EventMapAreaCategory[];
+  editingArea: AreaRow | null;
+  drawingVertices: LatLng[] | null;
+  onClose: () => void;
+}) {
+  const router = useRouter();
+  const t = useTranslations("areaEditSheet");
+  const tc = useTranslations("common");
+  const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
+
+  const [name, setName] = useState(editingArea?.name ?? "");
+  const [categoryId, setCategoryId] = useState<string>(editingArea?.categoryId ?? categories[0]?.id ?? "");
+  const [extraFieldValues, setExtraFieldValues] = useState<PoiExtraFieldValue[]>(
+    editingArea && Array.isArray(editingArea.extraFieldValues) ? editingArea.extraFieldValues : [],
+  );
   const [saving, setSaving] = useState(false);
-
-  useEffect(() => {
-    if (!open) return;
-    if (editingArea) {
-      setName(editingArea.name);
-      setCategoryId(editingArea.categoryId);
-      setExtraFieldValues(Array.isArray(editingArea.extraFieldValues) ? editingArea.extraFieldValues : []);
-    } else {
-      setName("");
-      setCategoryId(categories[0]?.id ?? "");
-      setExtraFieldValues([]);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, editingArea?.id]);
 
   const selectedCategoryExtraFields = categoryById.get(categoryId)?.extraFields ?? [];
   const templateKeys = new Set(selectedCategoryExtraFields.map((f) => f.key));
@@ -106,21 +130,19 @@ export function AreaEditSheet({
           vertices: drawingVertices,
           extraFieldValues,
         });
-        toast.success("Area bijgewerkt.");
+        toast.success(t("updatedToast"));
       } else {
         await createArea({ eventId, eventSlug, categoryId, name, vertices: drawingVertices, extraFieldValues });
-        toast.success("Area toegevoegd.");
+        toast.success(t("addedToast"));
       }
       onClose();
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Opslaan mislukt.");
+      toast.error(err instanceof Error ? err.message : t("errorFallback"));
     } finally {
       setSaving(false);
     }
   }
-
-  if (!open) return null;
 
   return (
     <div className={cn(EDIT_PANEL_CLASSNAME)}>
@@ -130,19 +152,19 @@ export function AreaEditSheet({
         className="absolute right-3 top-3 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
       >
         <X className="size-4" />
-        <span className="sr-only">Sluiten</span>
+        <span className="sr-only">{tc("close")}</span>
       </button>
-      <p className="pr-8 font-semibold">{editingArea ? "Area bewerken" : "Area toevoegen"}</p>
+      <p className="pr-8 font-semibold">{editingArea ? t("editTitle") : t("addTitle")}</p>
       <div className="space-y-3 pt-3">
           <Field>
-            <FieldLabel htmlFor="area-name">Naam</FieldLabel>
+            <FieldLabel htmlFor="area-name">{tc("name")}</FieldLabel>
             <Input id="area-name" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
           <Field>
-            <FieldLabel htmlFor="area-category">Categorie</FieldLabel>
+            <FieldLabel htmlFor="area-category">{tc("category")}</FieldLabel>
             <Select value={categoryId} onValueChange={(v) => setCategoryId(v ?? "")}>
               <SelectTrigger id="area-category" className="w-full">
-                <SelectValue>{() => categoryById.get(categoryId)?.label ?? "Kies een categorie"}</SelectValue>
+                <SelectValue>{() => categoryById.get(categoryId)?.label ?? t("chooseCategoryPlaceholder")}</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 {categories.map((c) => (
@@ -171,10 +193,10 @@ export function AreaEditSheet({
           <FreeInfoEditor rows={freeRows} onChange={handleFreeRowsChange} />
           <div className="flex gap-2 pt-2">
             <Button onClick={handleSave} disabled={!name.trim() || saving}>
-              {saving ? "Bezig..." : editingArea ? "Wijzigingen opslaan" : "Opslaan"}
+              {saving ? tc("saving") : editingArea ? t("saveChanges") : tc("save")}
             </Button>
             <Button variant="ghost" onClick={onClose}>
-              Annuleren
+              {tc("cancel")}
             </Button>
           </div>
       </div>

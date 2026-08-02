@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -8,17 +9,19 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/co
 type TopSearch = { type: "grid" | "poi"; term: string; count: number };
 
 export function TopSearchesSheet({ topSearches }: { topSearches: TopSearch[] }) {
+  const t = useTranslations("topSearchesSheet");
+  const tCard = useTranslations("topSearchesCard");
   if (topSearches.length === 0) return null;
 
   return (
     <Sheet>
       <SheetTrigger render={<Button variant="secondary" size="sm" className="gap-1.5" />}>
         <Search size={15} />
-        Zoekopdrachten
+        {t("trigger")}
       </SheetTrigger>
       <SheetContent side="right">
         <SheetHeader>
-          <SheetTitle>Meest gezocht</SheetTitle>
+          <SheetTitle>{tCard("title")}</SheetTitle>
         </SheetHeader>
         <div className="px-4 pb-4">
           <ul className="space-y-1.5">

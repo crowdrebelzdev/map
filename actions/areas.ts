@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { areaCategory, mapArea, type AreaVertex, type PoiExtraFieldValue } from "@/db/schema";
 import { requireEventPermission } from "@/lib/event-access";
@@ -10,16 +11,18 @@ import { sanitizeExtraFieldValues } from "@/lib/extra-fields";
 
 const MAX_VERTICES = 60;
 
-function sanitizeVertices(vertices: AreaVertex[] | undefined): AreaVertex[] {
+type Translator = Awaited<ReturnType<typeof getTranslations>>;
+
+function sanitizeVertices(t: Translator, vertices: AreaVertex[] | undefined): AreaVertex[] {
   if (!vertices || vertices.length < 3) {
-    throw new Error("Een area heeft minimaal 3 punten nodig.");
+    throw new Error(t("areaMinVertices"));
   }
   if (vertices.length > MAX_VERTICES) {
-    throw new Error(`Maximaal ${MAX_VERTICES} punten per area.`);
+    throw new Error(t("maxVertices", { max: MAX_VERTICES }));
   }
   return vertices.map((v) => {
     if (!Number.isFinite(v.lat) || !Number.isFinite(v.lng)) {
-      throw new Error("Ongeldig punt in de omtrek.");
+      throw new Error(t("invalidVertexPoint"));
     }
     return { lat: v.lat, lng: v.lng };
   });
@@ -34,17 +37,18 @@ export async function createArea(input: {
   extraFieldValues?: PoiExtraFieldValue[];
 }) {
   const { session } = await requireEventPermission(input.eventId, "manage_pois");
+  const t = await getTranslations("actionErrors");
 
   const category = await db.query.areaCategory.findFirst({
     where: and(eq(areaCategory.id, input.categoryId), eq(areaCategory.eventId, input.eventId)),
   });
   if (!category) {
-    throw new Error("Ongeldige categorie.");
+    throw new Error(t("invalidCategory"));
   }
   if (!input.name.trim()) {
-    throw new Error("Naam is verplicht.");
+    throw new Error(t("nameRequired"));
   }
-  const vertices = sanitizeVertices(input.vertices);
+  const vertices = sanitizeVertices(t, input.vertices);
   const extraFieldValues = sanitizeExtraFieldValues(input.extraFieldValues);
 
   await db.insert(mapArea).values({
@@ -71,17 +75,18 @@ export async function updateArea(input: {
   extraFieldValues?: PoiExtraFieldValue[];
 }) {
   const { session } = await requireEventPermission(input.eventId, "manage_pois");
+  const t = await getTranslations("actionErrors");
 
   const category = await db.query.areaCategory.findFirst({
     where: and(eq(areaCategory.id, input.categoryId), eq(areaCategory.eventId, input.eventId)),
   });
   if (!category) {
-    throw new Error("Ongeldige categorie.");
+    throw new Error(t("invalidCategory"));
   }
   if (!input.name.trim()) {
-    throw new Error("Naam is verplicht.");
+    throw new Error(t("nameRequired"));
   }
-  const vertices = sanitizeVertices(input.vertices);
+  const vertices = sanitizeVertices(t, input.vertices);
   const extraFieldValues = sanitizeExtraFieldValues(input.extraFieldValues);
 
   await db

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { createEventDay, deleteEventDay } from "@/actions/event-days";
@@ -22,6 +23,8 @@ export function EventDaysManager({
   days: EventDayRow[];
 }) {
   const router = useRouter();
+  const t = useTranslations("eventDaysManager");
+  const tc = useTranslations("common");
   const [date, setDate] = useState("");
   const [label, setLabel] = useState("");
   const [isPending, startTransition] = useTransition();
@@ -31,12 +34,12 @@ export function EventDaysManager({
     startTransition(async () => {
       try {
         await createEventDay({ eventId, eventSlug, date, label });
-        toast.success("Dag toegevoegd.");
+        toast.success(t("addedToast"));
         setDate("");
         setLabel("");
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Toevoegen mislukt.");
+        toast.error(err instanceof Error ? err.message : t("addErrorFallback"));
       }
     });
   }
@@ -45,10 +48,10 @@ export function EventDaysManager({
     startTransition(async () => {
       try {
         await deleteEventDay(eventId, eventSlug, dayId);
-        toast.success("Dag verwijderd.");
+        toast.success(t("deletedToast"));
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
+        toast.error(err instanceof Error ? err.message : t("deleteErrorFallback"));
       }
     });
   }
@@ -56,13 +59,10 @@ export function EventDaysManager({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Dagen ({days.length})</CardTitle>
+        <CardTitle>{t("title", { count: days.length })}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
-        <p className="text-sm text-muted-foreground">
-          Voor meerdaagse evenementen. Zonder dagen is dit evenement gewoon eendaags — POI&apos;s
-          zonder dag zijn dan altijd zichtbaar.
-        </p>
+        <p className="text-sm text-muted-foreground">{t("description")}</p>
         {days.length > 0 && (
           <ul className="space-y-1.5">
             {days.map((d) => (
@@ -79,7 +79,7 @@ export function EventDaysManager({
                   disabled={isPending}
                 >
                   <Trash2 />
-                  <span className="sr-only">Verwijderen</span>
+                  <span className="sr-only">{tc("remove")}</span>
                 </Button>
               </li>
             ))}
@@ -87,20 +87,20 @@ export function EventDaysManager({
         )}
         <div className="flex flex-wrap items-end gap-2">
           <div className="space-y-1">
-            <Label htmlFor="day-date">Datum</Label>
+            <Label htmlFor="day-date">{t("dateLabel")}</Label>
             <Input id="day-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="day-label">Label (optioneel)</Label>
+            <Label htmlFor="day-label">{t("labelLabel")}</Label>
             <Input
               id="day-label"
-              placeholder="bv. Dag 1"
+              placeholder={t("labelPlaceholder")}
               value={label}
               onChange={(e) => setLabel(e.target.value)}
             />
           </div>
           <Button onClick={handleAdd} disabled={!date || isPending}>
-            Toevoegen
+            {t("add")}
           </Button>
         </div>
       </CardContent>

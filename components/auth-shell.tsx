@@ -1,6 +1,7 @@
 "use client";
 
 import { MapPin } from "lucide-react";
+import { useTranslations } from "next-intl";
 import { useBranding } from "@/components/branding-provider";
 
 // Every caller (sign-in, forgot-password, reset-password) is itself a client component, so
@@ -8,6 +9,7 @@ import { useBranding } from "@/components/branding-provider";
 // server-side — a client component can't render an async server component inline.
 export function AuthShell({ children }: { children: React.ReactNode }) {
   const { platformName } = useBranding();
+  const t = useTranslations("authShell");
 
   return (
     <div className="grid min-h-screen lg:grid-cols-2">
@@ -29,9 +31,7 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="text-center">
             <p className="text-xl font-semibold">{platformName}</p>
-            <p className="mt-1 text-sm text-background/60">
-              Kaart, grid en POI-beheer voor evenementen
-            </p>
+            <p className="mt-1 text-sm text-background/60">{t("tagline")}</p>
           </div>
         </div>
       </div>

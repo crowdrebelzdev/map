@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, asc, desc, eq } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { event, eventTemplate, eventTemplateCategory, poiCategory } from "@/db/schema";
 import { requireActiveOrganizationId, requireOrgAdmin, requireOrgAdminForEvent } from "@/lib/org-access";
@@ -11,10 +12,11 @@ import { requireActiveOrganizationId, requireOrgAdmin, requireOrgAdminForEvent }
  * a venue's uploaded image and would need to be redrawn on a new event regardless. */
 export async function saveEventAsTemplate(eventId: string, name: string) {
   await requireOrgAdminForEvent(eventId);
+  const t = await getTranslations("actionErrors");
 
   const trimmedName = name.trim();
   if (!trimmedName) {
-    throw new Error("Naam is verplicht.");
+    throw new Error(t("nameRequired"));
   }
 
   const ev = await db.query.event.findFirst({
@@ -22,7 +24,7 @@ export async function saveEventAsTemplate(eventId: string, name: string) {
     columns: { organizationId: true },
   });
   if (!ev) {
-    throw new Error("Evenement niet gevonden.");
+    throw new Error(t("eventNotFound"));
   }
 
   const categories = await db.query.poiCategory.findMany({
@@ -81,7 +83,8 @@ export async function createEmptyTemplate(name: string) {
 
   const trimmedName = name.trim();
   if (!trimmedName) {
-    throw new Error("Naam is verplicht.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("nameRequired"));
   }
 
   const [template] = await db.insert(eventTemplate).values({ organizationId, name: trimmedName }).returning();
@@ -95,7 +98,8 @@ async function requireOwnedTemplate(templateId: string, organizationId: string) 
     where: and(eq(eventTemplate.id, templateId), eq(eventTemplate.organizationId, organizationId)),
   });
   if (!template) {
-    throw new Error("Sjabloon niet gevonden.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("templateNotFound"));
   }
   return template;
 }
@@ -133,7 +137,8 @@ export async function addTemplateCategory(
   const label = input.label.trim();
   const key = input.key.trim();
   if (!label || !key) {
-    throw new Error("Naam en key zijn verplicht.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("nameAndKeyRequired"));
   }
 
   const existing = await db.query.eventTemplateCategory.findMany({
@@ -162,7 +167,8 @@ export async function updateTemplateCategory(
 
   const label = input.label.trim();
   if (!label) {
-    throw new Error("Naam is verplicht.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("nameRequired"));
   }
 
   await db

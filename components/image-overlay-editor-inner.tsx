@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Map,
   Source,
@@ -126,16 +126,23 @@ export default function ImageOverlayEditor({
 
   const activeCorners = mode === "image" ? corners : gridCorners;
 
+  // "Latest ref" pattern: maplibre's own pointer-event handlers (registered once, see
+  // below) need the current value of these on every call without re-registering on each
+  // change. Written in a layout effect rather than during render — React Compiler
+  // disallows mutating refs during render — but still lands before any paint or user
+  // interaction, so the handlers never see a stale value.
   const modeRef = useRef(mode);
-  modeRef.current = mode;
   const cornersRef = useRef(corners);
-  cornersRef.current = corners;
   const gridCornersRef = useRef(gridCorners);
-  gridCornersRef.current = gridCorners;
   const onCornersChangeRef = useRef(onCornersChange);
-  onCornersChangeRef.current = onCornersChange;
   const onGridCornersChangeRef = useRef(onGridCornersChange);
-  onGridCornersChangeRef.current = onGridCornersChange;
+  useLayoutEffect(() => {
+    modeRef.current = mode;
+    cornersRef.current = corners;
+    gridCornersRef.current = gridCorners;
+    onCornersChangeRef.current = onCornersChange;
+    onGridCornersChangeRef.current = onGridCornersChange;
+  }, [mode, corners, gridCorners, onCornersChange, onGridCornersChange]);
 
   function getActiveCorners(): CornerSet | null {
     return modeRef.current === "image" ? cornersRef.current : gridCornersRef.current;
@@ -364,12 +371,13 @@ export default function ImageOverlayEditor({
   const [searchResults, setSearchResults] = useState<NominatimResult[]>([]);
   const [searching, setSearching] = useState(false);
 
+  // Cleared in render (below) rather than via setState here when the query is too short —
+  // keeps this effect free of a synchronous setState call on that branch.
+  const effectiveResults = searchQuery.trim().length < 3 ? [] : searchResults;
+
   useEffect(() => {
     const query = searchQuery.trim();
-    if (query.length < 3) {
-      setSearchResults([]);
-      return;
-    }
+    if (query.length < 3) return;
     const controller = new AbortController();
     const timeout = setTimeout(async () => {
       setSearching(true);
@@ -545,6 +553,9 @@ export default function ImageOverlayEditor({
               longitude={activeCorners[key].lng}
               latitude={activeCorners[key].lat}
               draggable
+              // react-map-gl's Marker only invokes onDrag from a real pointer-drag event,
+              // never during its own render — safe to read ref-backed state here.
+              // eslint-disable-next-line react-hooks/refs
               onDrag={(e) => handleCornerDrag(key, e.lngLat)}
               anchor="center"
             >
@@ -571,7 +582,11 @@ export default function ImageOverlayEditor({
                 longitude={pos.lng}
                 latitude={pos.lat}
                 draggable
+                // Same reasoning as the corner Marker above: only ever fires from a real
+                // pointer-drag event.
+                // eslint-disable-next-line react-hooks/refs
                 onDragStart={() => handleEdgeDragStart(key)}
+                // eslint-disable-next-line react-hooks/refs
                 onDrag={(e) => handleEdgeDrag(key, e.lngLat)}
                 anchor="center"
               >
@@ -683,13 +698,13 @@ export default function ImageOverlayEditor({
             onChange={(e) => setSearchQuery(e.target.value)}
             className="bg-background shadow-md"
           />
-          {(searchResults.length > 0 || searching) && (
+          {(effectiveResults.length > 0 || searching) && (
             <Card className="mt-1 max-h-60 overflow-y-auto py-2">
               <CardContent className="space-y-1 px-2">
                 {searching && (
                   <p className="px-2 py-1 text-sm text-muted-foreground">Zoeken...</p>
                 )}
-                {searchResults.map((r, i) => (
+                {effectiveResults.map((r, i) => (
                   <button
                     key={i}
                     onClick={() => handleSelectAddress(r)}

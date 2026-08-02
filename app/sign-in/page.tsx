@@ -3,6 +3,7 @@
 import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,7 @@ import { authClient } from "@/lib/auth-client";
 function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const t = useTranslations("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -30,7 +32,7 @@ function SignInForm() {
       const { error } = await authClient.signIn.email({ email, password, rememberMe });
 
       if (error) {
-        setError(error.message ?? "Inloggen mislukt.");
+        setError(error.message ?? t("errorFallback"));
         return;
       }
 
@@ -39,7 +41,7 @@ function SignInForm() {
       router.push(searchParams.get("redirect") ?? "/");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Er ging iets mis. Probeer het opnieuw.");
+      setError(err instanceof Error ? err.message : t("genericError"));
     } finally {
       setLoading(false);
     }
@@ -48,8 +50,8 @@ function SignInForm() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold">Inloggen</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Log in met je crew-account.</p>
+        <h1 className="text-2xl font-semibold">{t("title")}</h1>
+        <p className="mt-1 text-sm text-muted-foreground">{t("subtitle")}</p>
       </div>
 
       {error && (
@@ -61,7 +63,7 @@ function SignInForm() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="space-y-2">
-          <Label htmlFor="email">E-mail</Label>
+          <Label htmlFor="email">{t("emailLabel")}</Label>
           <Input
             id="email"
             type="email"
@@ -73,12 +75,12 @@ function SignInForm() {
         </div>
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <Label htmlFor="password">Wachtwoord</Label>
+            <Label htmlFor="password">{t("passwordLabel")}</Label>
             <Link
               href="/forgot-password"
               className="text-xs text-muted-foreground hover:text-foreground hover:underline"
             >
-              Wachtwoord vergeten?
+              {t("forgotPasswordLink")}
             </Link>
           </div>
           <div className="relative">
@@ -96,7 +98,7 @@ function SignInForm() {
               tabIndex={-1}
               onClick={() => setShowPassword((v) => !v)}
               className="absolute inset-y-0 right-1 z-10 flex items-center px-3 text-muted-foreground hover:text-foreground"
-              aria-label={showPassword ? "Wachtwoord verbergen" : "Wachtwoord tonen"}
+              aria-label={showPassword ? t("hidePassword") : t("showPassword")}
             >
               {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
             </button>
@@ -109,11 +111,11 @@ function SignInForm() {
             onCheckedChange={(checked) => setRememberMe(checked === true)}
           />
           <Label htmlFor="rememberMe" className="text-sm font-normal">
-            Onthoud mij (30 dagen ingelogd blijven)
+            {t("rememberMe")}
           </Label>
         </div>
         <Button type="submit" disabled={loading} className="h-11 w-full font-semibold">
-          {loading ? "Bezig..." : "Inloggen"}
+          {loading ? t("submitting") : t("submit")}
         </Button>
       </form>
     </div>

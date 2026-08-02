@@ -20,7 +20,7 @@ export default async function EventLayout({
     redirect("/org/events");
   }
 
-  const tabs = buildEventTabs(eventSlug, access);
+  const tabs = await buildEventTabs(eventSlug, access);
 
   return (
     <EventChrome eventSlug={eventSlug} eventName={ev.name} tabs={tabs}>

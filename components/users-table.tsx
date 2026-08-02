@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Search } from "lucide-react";
 import { ORG_ROLE_LABELS, ROLE_LABELS } from "@/lib/auth-roles";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +19,8 @@ import {
 type UserRow = { id: string; name: string; email: string; role: string | null; orgRole: string };
 
 export function UsersTable({ users }: { users: UserRow[] }) {
+  const t = useTranslations("usersTable");
+  const tc = useTranslations("common");
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -33,7 +36,7 @@ export function UsersTable({ users }: { users: UserRow[] }) {
       <div className="relative max-w-xs">
         <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Filter op naam of e-mail..."
+          placeholder={t("filterPlaceholder")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="pl-8"
@@ -41,14 +44,14 @@ export function UsersTable({ users }: { users: UserRow[] }) {
       </div>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Geen gebruikers gevonden.</p>
+        <p className="text-sm text-muted-foreground">{t("noResults")}</p>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Naam</TableHead>
-              <TableHead>E-mail</TableHead>
-              <TableHead>Rol</TableHead>
+              <TableHead>{tc("name")}</TableHead>
+              <TableHead>{tc("email")}</TableHead>
+              <TableHead>{tc("role")}</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>

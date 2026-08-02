@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { ChevronRight } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { EventTabs } from "@/components/event-tabs";
@@ -22,6 +23,8 @@ export function EventChrome({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const t = useTranslations("nav");
+  const tChrome = useTranslations("eventChrome");
   const isFullscreen = pathname.endsWith("/map") || pathname.endsWith("/pois");
 
   if (isFullscreen) {
@@ -32,7 +35,7 @@ export function EventChrome({
     <div className="mx-auto max-w-7xl space-y-4">
       <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
         <Link href="/org/events" className="hover:text-foreground hover:underline">
-          Evenementen
+          {t("events")}
         </Link>
         <ChevronRight className="size-3.5" />
         <span className="text-foreground">{eventName}</span>
@@ -45,7 +48,7 @@ export function EventChrome({
           rel="noopener noreferrer"
           className={buttonVariants({ variant: "outline", size: "sm" })}
         >
-          Live kaart bekijken ↗
+          {tChrome("viewLiveMap")}
         </Link>
       </div>
       <EventTabs tabs={tabs} />

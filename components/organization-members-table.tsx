@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { UserMinus } from "lucide-react";
 import { toast } from "sonner";
 import { updateOrgMemberRole, removeOrgMember } from "@/actions/organizations";
@@ -31,6 +32,7 @@ type MemberRow = { id: string; name: string; email: string; role: string };
 
 function RoleSelect({ organizationId, member }: { organizationId: string; member: MemberRow }) {
   const router = useRouter();
+  const t = useTranslations("organizationMembersTable");
   const [isPending, startTransition] = useTransition();
 
   function handleChange(role: string | null) {
@@ -38,10 +40,10 @@ function RoleSelect({ organizationId, member }: { organizationId: string; member
     startTransition(async () => {
       try {
         await updateOrgMemberRole(organizationId, member.id, role as "owner" | "member");
-        toast.success("Rol bijgewerkt.");
+        toast.success(t("roleUpdated"));
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Wijzigen mislukt.");
+        toast.error(err instanceof Error ? err.message : t("roleUpdateError"));
       }
     });
   }
@@ -61,6 +63,8 @@ function RoleSelect({ organizationId, member }: { organizationId: string; member
 
 function RemoveMemberButton({ organizationId, member }: { organizationId: string; member: MemberRow }) {
   const router = useRouter();
+  const t = useTranslations("organizationMembersTable");
+  const tc = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -68,11 +72,11 @@ function RemoveMemberButton({ organizationId, member }: { organizationId: string
     startTransition(async () => {
       try {
         await removeOrgMember(organizationId, member.id);
-        toast.success(`${member.name} verwijderd uit de organisatie.`);
+        toast.success(t("memberRemoved", { name: member.name }));
         setOpen(false);
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
+        toast.error(err instanceof Error ? err.message : t("removeError"));
       }
     });
   }
@@ -83,19 +87,17 @@ function RemoveMemberButton({ organizationId, member }: { organizationId: string
         render={<Button variant="ghost" size="icon-sm" className="text-destructive hover:bg-destructive/10" />}
       >
         <UserMinus />
-        <span className="sr-only">Verwijderen</span>
+        <span className="sr-only">{tc("remove")}</span>
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{member.name} uit de organisatie verwijderen?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Deze gebruiker verliest toegang tot alle evenementen van deze organisatie.
-          </AlertDialogDescription>
+          <AlertDialogTitle>{t("removeConfirmTitle", { name: member.name })}</AlertDialogTitle>
+          <AlertDialogDescription>{t("removeConfirmDescription")}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isPending}>Annuleren</AlertDialogCancel>
+          <AlertDialogCancel disabled={isPending}>{tc("cancel")}</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={handleRemove} disabled={isPending}>
-            {isPending ? "Bezig..." : "Verwijderen"}
+            {isPending ? tc("saving") : tc("remove")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -110,17 +112,19 @@ export function OrganizationMembersTable({
   organizationId: string;
   members: MemberRow[];
 }) {
+  const t = useTranslations("organizationMembersTable");
+  const tc = useTranslations("common");
   if (members.length === 0) {
-    return <p className="text-sm text-muted-foreground">Geen leden.</p>;
+    return <p className="text-sm text-muted-foreground">{t("noMembers")}</p>;
   }
 
   return (
     <Table>
       <TableHeader>
         <TableRow>
-          <TableHead>Naam</TableHead>
-          <TableHead>E-mail</TableHead>
-          <TableHead>Rol</TableHead>
+          <TableHead>{tc("name")}</TableHead>
+          <TableHead>{tc("email")}</TableHead>
+          <TableHead>{tc("role")}</TableHead>
           <TableHead />
         </TableRow>
       </TableHeader>

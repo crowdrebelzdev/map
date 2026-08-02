@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { deleteUser } from "@/actions/users";
@@ -20,6 +21,8 @@ import {
 
 export function DeleteUserButton({ userId, userName }: { userId: string; userName: string }) {
   const router = useRouter();
+  const t = useTranslations("deleteUserButton");
+  const tc = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -27,10 +30,10 @@ export function DeleteUserButton({ userId, userName }: { userId: string; userNam
     startTransition(async () => {
       try {
         await deleteUser(userId);
-        toast.success(`${userName} verwijderd.`);
+        toast.success(t("deletedToast", { name: userName }));
         router.push("/admin/users");
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
+        toast.error(err instanceof Error ? err.message : t("errorFallback"));
         setOpen(false);
       }
     });
@@ -40,20 +43,17 @@ export function DeleteUserButton({ userId, userName }: { userId: string; userNam
     <AlertDialog open={open} onOpenChange={setOpen}>
       <AlertDialogTrigger render={<Button variant="outline" size="sm" className="text-destructive" />}>
         <Trash2 />
-        Verwijderen
+        {tc("remove")}
       </AlertDialogTrigger>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>{userName} verwijderen?</AlertDialogTitle>
-          <AlertDialogDescription>
-            Dit verwijdert het account, alle sessies en gekoppelde inloggegevens definitief. Dit kan niet ongedaan
-            worden gemaakt.
-          </AlertDialogDescription>
+          <AlertDialogTitle>{t("confirmTitle", { name: userName })}</AlertDialogTitle>
+          <AlertDialogDescription>{t("confirmDescription")}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel disabled={isPending}>Annuleren</AlertDialogCancel>
+          <AlertDialogCancel disabled={isPending}>{tc("cancel")}</AlertDialogCancel>
           <AlertDialogAction variant="destructive" onClick={handleDelete} disabled={isPending}>
-            {isPending ? "Bezig..." : "Verwijderen"}
+            {isPending ? tc("saving") : tc("remove")}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

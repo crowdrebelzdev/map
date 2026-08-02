@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import {
   mapArea,
@@ -14,23 +15,25 @@ import { logActivity } from "@/lib/activity-log";
 
 const MAX_EXTRA_FIELDS = 10;
 
-function validateExtraFields(extraFields: PoiExtraFieldDef[]): PoiExtraFieldDef[] {
+type Translator = Awaited<ReturnType<typeof getTranslations>>;
+
+function validateExtraFields(t: Translator, extraFields: PoiExtraFieldDef[]): PoiExtraFieldDef[] {
   if (extraFields.length > MAX_EXTRA_FIELDS) {
-    throw new Error(`Maximaal ${MAX_EXTRA_FIELDS} extra velden per categorie.`);
+    throw new Error(t("maxExtraFields", { max: MAX_EXTRA_FIELDS }));
   }
   const seenKeys = new Set<string>();
   return extraFields.map((field) => {
     const key = field.key.trim();
     const label = field.label.trim();
     if (!key || !label) {
-      throw new Error("Elk extra veld heeft een naam en label nodig.");
+      throw new Error(t("extraFieldNeedsNameAndLabel"));
     }
     if (seenKeys.has(key)) {
-      throw new Error(`Extra veld "${key}" komt dubbel voor.`);
+      throw new Error(t("duplicateExtraField", { key }));
     }
     seenKeys.add(key);
     if (!poiExtraFieldTypeValues.includes(field.type)) {
-      throw new Error("Ongeldig type voor extra veld.");
+      throw new Error(t("invalidExtraFieldType"));
     }
     return { key, label, type: field.type };
   });
@@ -53,9 +56,9 @@ async function uniqueKeyForEvent(eventId: string, label: string) {
   return key;
 }
 
-function validateLabelAndColor(label: string, color: string) {
-  if (!label.trim()) throw new Error("Naam is verplicht.");
-  if (!/^#[0-9a-fA-F]{6}$/.test(color)) throw new Error("Ongeldige kleur.");
+function validateLabelAndColor(t: Translator, label: string, color: string) {
+  if (!label.trim()) throw new Error(t("nameRequired"));
+  if (!/^#[0-9a-fA-F]{6}$/.test(color)) throw new Error(t("invalidColor"));
 }
 
 export async function createAreaCategory(input: {
@@ -66,8 +69,9 @@ export async function createAreaCategory(input: {
   extraFields?: PoiExtraFieldDef[];
 }) {
   const { session } = await requireEventPermission(input.eventId, "manage_categories");
-  validateLabelAndColor(input.label, input.color);
-  const extraFields = validateExtraFields(input.extraFields ?? []);
+  const t = await getTranslations("actionErrors");
+  validateLabelAndColor(t, input.label, input.color);
+  const extraFields = validateExtraFields(t, input.extraFields ?? []);
 
   const key = await uniqueKeyForEvent(input.eventId, input.label);
   const existingCount = await db.query.areaCategory.findMany({
@@ -98,8 +102,9 @@ export async function updateAreaCategory(input: {
   extraFields?: PoiExtraFieldDef[];
 }) {
   const { session } = await requireEventPermission(input.eventId, "manage_categories");
-  validateLabelAndColor(input.label, input.color);
-  const extraFields = validateExtraFields(input.extraFields ?? []);
+  const t = await getTranslations("actionErrors");
+  validateLabelAndColor(t, input.label, input.color);
+  const extraFields = validateExtraFields(t, input.extraFields ?? []);
 
   await db
     .update(areaCategory)
@@ -121,9 +126,8 @@ export async function deleteAreaCategory(eventId: string, eventSlug: string, cat
 
   const inUse = await db.query.mapArea.findFirst({ where: eq(mapArea.categoryId, categoryId) });
   if (inUse) {
-    throw new Error(
-      "Deze categorie is nog in gebruik door areas. Wijs de areas eerst een andere categorie toe.",
-    );
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("categoryInUseAreas"));
   }
 
   const existing = await db.query.areaCategory.findFirst({

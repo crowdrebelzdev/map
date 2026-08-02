@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Download, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { setEventMemberPermissions, removeEventMember } from "@/actions/event-members";
@@ -44,14 +45,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-export const PERMISSION_LABELS: Record<EventMemberPermission, string> = {
-  edit_map: "Kaart & grid bewerken",
-  manage_pois: "POI's beheren",
-  manage_categories: "Categorieën beheren",
-  view_live_locations: "Live locaties bekijken",
-  manage_incidents: "Meldingen & berichten beheren",
-};
-
 type MemberRow = { userId: string; name: string; email: string; permissions: EventMemberPermission[] };
 type CandidateUser = { id: string; name: string; email: string };
 
@@ -67,9 +60,19 @@ export function EventTeamEditor({
   candidates: CandidateUser[];
 }) {
   const router = useRouter();
+  const t = useTranslations("eventTeamEditor");
+  const tc = useTranslations("common");
   const [isPending, startTransition] = useTransition();
   const [addUserId, setAddUserId] = useState("");
   const [confirmRemoveMember, setConfirmRemoveMember] = useState<MemberRow | null>(null);
+
+  const PERMISSION_LABELS: Record<EventMemberPermission, string> = {
+    edit_map: t("permEditMap"),
+    manage_pois: t("permManagePois"),
+    manage_categories: t("permManageCategories"),
+    view_live_locations: t("permViewLive"),
+    manage_incidents: t("permManageIncidents"),
+  };
 
   function applyPreset(member: MemberRow, presetKey: string) {
     const preset = PERMISSION_PRESETS.find((p) => p.key === presetKey);
@@ -77,10 +80,10 @@ export function EventTeamEditor({
     startTransition(async () => {
       try {
         await setEventMemberPermissions(eventId, eventSlug, member.userId, preset.permissions);
-        toast.success(`Preset "${preset.label}" toegepast.`);
+        toast.success(t("presetAppliedToast", { preset: preset.label }));
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Opslaan mislukt.");
+        toast.error(err instanceof Error ? err.message : t("saveErrorFallback"));
       }
     });
   }
@@ -92,10 +95,10 @@ export function EventTeamEditor({
     startTransition(async () => {
       try {
         await setEventMemberPermissions(eventId, eventSlug, member.userId, next);
-        toast.success("Rechten bijgewerkt.");
+        toast.success(t("permissionsUpdatedToast"));
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Opslaan mislukt.");
+        toast.error(err instanceof Error ? err.message : t("saveErrorFallback"));
       }
     });
   }
@@ -104,11 +107,11 @@ export function EventTeamEditor({
     startTransition(async () => {
       try {
         await removeEventMember(eventId, eventSlug, userId);
-        toast.success("Teamlid verwijderd.");
+        toast.success(t("memberRemovedToast"));
         setConfirmRemoveMember(null);
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
+        toast.error(err instanceof Error ? err.message : t("removeErrorFallback"));
       }
     });
   }
@@ -116,11 +119,11 @@ export function EventTeamEditor({
   function handleExportCsv() {
     downloadCsv(
       `team-${eventSlug}.csv`,
-      ["Naam", "E-mail", ...eventMemberPermissionValues.map((p) => PERMISSION_LABELS[p])],
+      [tc("name"), tc("email"), ...eventMemberPermissionValues.map((p) => PERMISSION_LABELS[p])],
       members.map((m) => [
         m.name,
         m.email,
-        ...eventMemberPermissionValues.map((p) => (m.permissions.includes(p) ? "Ja" : "Nee")),
+        ...eventMemberPermissionValues.map((p) => (m.permissions.includes(p) ? t("csvYes") : t("csvNo"))),
       ]),
     );
   }
@@ -130,10 +133,10 @@ export function EventTeamEditor({
     startTransition(async () => {
       try {
         await setEventMemberPermissions(eventId, eventSlug, userId, []);
-        toast.success("Teamlid toegevoegd.");
+        toast.success(t("memberAddedToast"));
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Toevoegen mislukt.");
+        toast.error(err instanceof Error ? err.message : t("addErrorFallback"));
       }
     });
   }
@@ -142,11 +145,11 @@ export function EventTeamEditor({
     <div className="mx-auto max-w-3xl space-y-4">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Team ({members.length})</CardTitle>
+          <CardTitle>{t("teamTitle", { count: members.length })}</CardTitle>
           {members.length > 0 && (
             <Button variant="outline" size="icon-sm" onClick={handleExportCsv}>
               <Download />
-              <span className="sr-only">Exporteren als CSV</span>
+              <span className="sr-only">{t("exportCsvSr")}</span>
             </Button>
           )}
         </CardHeader>
@@ -157,8 +160,8 @@ export function EventTeamEditor({
                 <EmptyMedia variant="icon">
                   <Users />
                 </EmptyMedia>
-                <EmptyTitle>Nog geen teamleden</EmptyTitle>
-                <EmptyDescription>Voeg hieronder een gebruiker toe aan dit team.</EmptyDescription>
+                <EmptyTitle>{t("emptyTitle")}</EmptyTitle>
+                <EmptyDescription>{t("emptyDescription")}</EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
@@ -166,8 +169,8 @@ export function EventTeamEditor({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Naam</TableHead>
-                  <TableHead>Preset</TableHead>
+                  <TableHead>{tc("name")}</TableHead>
+                  <TableHead>{t("presetColumnHeader")}</TableHead>
                   {eventMemberPermissionValues.map((p) => (
                     <TableHead key={p} className="text-center">
                       {PERMISSION_LABELS[p]}
@@ -186,7 +189,7 @@ export function EventTeamEditor({
                     <TableCell>
                       <Select value="" onValueChange={(v) => v && applyPreset(m, v)} disabled={isPending}>
                         <SelectTrigger className="h-8 w-40 text-xs">
-                          <SelectValue placeholder="Kies preset..." />
+                          <SelectValue placeholder={t("choosePresetPlaceholder")} />
                         </SelectTrigger>
                         <SelectContent>
                           {PERMISSION_PRESETS.map((preset) => (
@@ -215,7 +218,7 @@ export function EventTeamEditor({
                         disabled={isPending}
                       >
                         <Trash2 />
-                        <span className="sr-only">Verwijderen</span>
+                        <span className="sr-only">{tc("remove")}</span>
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -229,17 +232,15 @@ export function EventTeamEditor({
 
       <Card>
         <CardHeader>
-          <CardTitle>Teamlid toevoegen</CardTitle>
+          <CardTitle>{t("addMemberTitle")}</CardTitle>
         </CardHeader>
         <CardContent>
           {candidates.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              Alle gebruikers zijn al lid, of maak eerst een nieuwe gebruiker aan bij &quot;Gebruikers&quot;.
-            </p>
+            <p className="text-sm text-muted-foreground">{t("noCandidates")}</p>
           ) : (
             <Select value={addUserId} onValueChange={(v) => v && handleAdd(v)}>
               <SelectTrigger className="w-full">
-                <SelectValue placeholder="Kies een gebruiker..." />
+                <SelectValue placeholder={t("chooseUserPlaceholder")} />
               </SelectTrigger>
               <SelectContent>
                 {candidates.map((c) => (
@@ -259,19 +260,19 @@ export function EventTeamEditor({
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Teamlid verwijderen?</AlertDialogTitle>
+            <AlertDialogTitle>{t("confirmRemoveTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Weet je zeker dat je &quot;{confirmRemoveMember?.name}&quot; uit dit team wilt verwijderen?
+              {t("confirmRemoveDescription", { name: confirmRemoveMember?.name ?? "" })}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isPending}>Annuleren</AlertDialogCancel>
+            <AlertDialogCancel disabled={isPending}>{tc("cancel")}</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               onClick={() => confirmRemoveMember && handleRemove(confirmRemoveMember.userId)}
               disabled={isPending}
             >
-              {isPending ? "Bezig..." : "Verwijderen"}
+              {isPending ? tc("saving") : tc("remove")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

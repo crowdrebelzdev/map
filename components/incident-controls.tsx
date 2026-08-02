@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { AlertTriangle, MessageSquarePlus } from "lucide-react";
 import { toast } from "sonner";
 import { createIncident } from "@/actions/incidents";
@@ -19,13 +20,6 @@ import {
 } from "@/components/ui/dialog";
 import type { LatLng } from "@/lib/geo";
 
-const CATEGORY_OPTIONS = [
-  { value: "medical", label: "Medisch" },
-  { value: "security", label: "Veiligheid" },
-  { value: "technical", label: "Technisch" },
-  { value: "other", label: "Overig" },
-];
-
 export function IncidentControls({
   eventId,
   eventSlug,
@@ -35,6 +29,14 @@ export function IncidentControls({
   eventSlug: string;
   position: LatLng | null;
 }) {
+  const t = useTranslations("incidentControls");
+  const tc = useTranslations("common");
+  const CATEGORY_OPTIONS = [
+    { value: "medical", label: t("categoryMedical") },
+    { value: "security", label: t("categorySecurity") },
+    { value: "technical", label: t("categoryTechnical") },
+    { value: "other", label: t("categoryOther") },
+  ];
   const [reportOpen, setReportOpen] = useState(false);
   const [sosOpen, setSosOpen] = useState(false);
   const [category, setCategory] = useState("other");
@@ -56,12 +58,12 @@ export function IncidentControls({
         lat: position.lat,
         lng: position.lng,
       });
-      toast.success("Melding verstuurd.");
+      toast.success(t("sentToast"));
       setDescription("");
       setCategory("other");
       setReportOpen(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Versturen mislukt.");
+      toast.error(err instanceof Error ? err.message : t("sendErrorFallback"));
     } finally {
       setSending(false);
     }
@@ -72,10 +74,10 @@ export function IncidentControls({
     setSosSending(true);
     try {
       await createIncident({ eventId, eventSlug, type: "sos", lat: position.lat, lng: position.lng });
-      toast.success("SOS verstuurd — het command center is gewaarschuwd.");
+      toast.success(t("sosSentToast"));
       setSosOpen(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "SOS versturen mislukt.");
+      toast.error(err instanceof Error ? err.message : t("sosErrorFallback"));
     } finally {
       setSosSending(false);
     }
@@ -90,16 +92,16 @@ export function IncidentControls({
           }
         >
           <MessageSquarePlus size={14} />
-          Melding
+          {t("reportTrigger")}
         </DialogTrigger>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Melding maken</DialogTitle>
-            <DialogDescription>Wordt verstuurd met je huidige locatie.</DialogDescription>
+            <DialogTitle>{t("reportTitle")}</DialogTitle>
+            <DialogDescription>{t("reportDescription")}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleReportSubmit} className="space-y-3">
             <div className="space-y-1">
-              <Label htmlFor="incident-category">Type</Label>
+              <Label htmlFor="incident-category">{t("typeLabel")}</Label>
               <Select value={category} onValueChange={(v) => setCategory(v ?? "other")}>
                 <SelectTrigger id="incident-category" className="w-full">
                   <SelectValue />
@@ -114,7 +116,7 @@ export function IncidentControls({
               </Select>
             </div>
             <div className="space-y-1">
-              <Label htmlFor="incident-description">Beschrijving</Label>
+              <Label htmlFor="incident-description">{t("descriptionLabel")}</Label>
               <Textarea
                 id="incident-description"
                 value={description}
@@ -124,10 +126,10 @@ export function IncidentControls({
             </div>
             <DialogFooter>
               <Button variant="outline" type="button" onClick={() => setReportOpen(false)} disabled={sending}>
-                Annuleren
+                {tc("cancel")}
               </Button>
               <Button type="submit" disabled={sending || !description.trim()}>
-                {sending ? "Bezig..." : "Versturen"}
+                {sending ? tc("saving") : t("send")}
               </Button>
             </DialogFooter>
           </form>
@@ -141,21 +143,19 @@ export function IncidentControls({
           }
         >
           <AlertTriangle size={14} />
-          SOS
+          {t("sosTrigger")}
         </DialogTrigger>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>SOS versturen?</DialogTitle>
-            <DialogDescription>
-              Dit stuurt direct een urgente melding met je huidige locatie naar het command center.
-            </DialogDescription>
+            <DialogTitle>{t("sosConfirmTitle")}</DialogTitle>
+            <DialogDescription>{t("sosConfirmDescription")}</DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setSosOpen(false)} disabled={sosSending}>
-              Annuleren
+              {tc("cancel")}
             </Button>
             <Button variant="destructive" onClick={handleSosConfirm} disabled={sosSending}>
-              {sosSending ? "Bezig..." : "Ja, verstuur SOS"}
+              {sosSending ? tc("saving") : t("sosConfirmButton")}
             </Button>
           </DialogFooter>
         </DialogContent>

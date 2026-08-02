@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { toast } from "sonner";
 import { updatePlatformSettings } from "@/actions/platform-settings";
 import type { PlatformSettings } from "@/lib/platform-settings";
@@ -14,26 +15,28 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
-const EVENT_ACCESS_OPTIONS: { value: PublicAccessMode; label: string }[] = [
-  { value: "members_only", label: "Alleen inzichtelijk voor gebruikers" },
-  { value: "public_anonymous", label: "Publiekelijk toegankelijk — zonder naam" },
-  { value: "public_named", label: "Publiekelijk toegankelijk — met invullen naam" },
-];
-
 export function PlatformSettingsForm({ settings }: { settings: PlatformSettings }) {
   const router = useRouter();
+  const t = useTranslations("platformSettingsForm");
+  const tc = useTranslations("common");
   const [form, setForm] = useState(settings);
   const [saving, setSaving] = useState(false);
+
+  const EVENT_ACCESS_OPTIONS: { value: PublicAccessMode; label: string }[] = [
+    { value: "members_only", label: t("accessMembersOnly") },
+    { value: "public_anonymous", label: t("accessPublicAnonymous") },
+    { value: "public_named", label: t("accessPublicNamed") },
+  ];
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSaving(true);
     try {
       await updatePlatformSettings(form);
-      toast.success("Instellingen opgeslagen.");
+      toast.success(t("successToast"));
       router.refresh();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Opslaan mislukt.");
+      toast.error(err instanceof Error ? err.message : t("errorFallback"));
     } finally {
       setSaving(false);
     }
@@ -43,8 +46,8 @@ export function PlatformSettingsForm({ settings }: { settings: PlatformSettings 
     <form onSubmit={handleSubmit} className="space-y-4">
       <Card>
         <CardHeader>
-          <CardTitle>Onderhoudsmodus</CardTitle>
-          <CardDescription>Toont een melding boven de hele app voor alle bezoekers.</CardDescription>
+          <CardTitle>{t("maintenanceTitle")}</CardTitle>
+          <CardDescription>{t("maintenanceDescription")}</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="flex items-center gap-2.5">
@@ -53,15 +56,15 @@ export function PlatformSettingsForm({ settings }: { settings: PlatformSettings 
               checked={form.maintenanceMode}
               onCheckedChange={(v) => setForm((f) => ({ ...f, maintenanceMode: v }))}
             />
-            <Label htmlFor="maintenance-mode">Onderhoudsmodus aan</Label>
+            <Label htmlFor="maintenance-mode">{t("maintenanceModeOn")}</Label>
           </div>
           <div className="space-y-1">
-            <Label htmlFor="maintenance-message">Bericht</Label>
+            <Label htmlFor="maintenance-message">{t("messageLabel")}</Label>
             <Textarea
               id="maintenance-message"
               value={form.maintenanceMessage ?? ""}
               onChange={(e) => setForm((f) => ({ ...f, maintenanceMessage: e.target.value }))}
-              placeholder="Er is momenteel onderhoud bezig."
+              placeholder={t("messagePlaceholder")}
               rows={2}
             />
           </div>
@@ -70,10 +73,8 @@ export function PlatformSettingsForm({ settings }: { settings: PlatformSettings 
 
       <Card>
         <CardHeader>
-          <CardTitle>Organisaties</CardTitle>
-          <CardDescription>
-            Standaard staat dit uit — nieuwe organisaties ontstaan dan alleen via /admin.
-          </CardDescription>
+          <CardTitle>{t("organizationsTitle")}</CardTitle>
+          <CardDescription>{t("organizationsDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex items-center gap-2.5">
@@ -82,18 +83,18 @@ export function PlatformSettingsForm({ settings }: { settings: PlatformSettings 
               checked={form.allowOrgSelfRegistration}
               onCheckedChange={(v) => setForm((f) => ({ ...f, allowOrgSelfRegistration: v }))}
             />
-            <Label htmlFor="org-self-registration">Gebruikers kunnen zelf een organisatie aanmaken</Label>
+            <Label htmlFor="org-self-registration">{t("selfRegistrationLabel")}</Label>
           </div>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle>Branding</CardTitle>
+          <CardTitle>{t("brandingTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="grid gap-3 sm:grid-cols-3">
           <div className="space-y-1">
-            <Label htmlFor="platform-name">Platformnaam</Label>
+            <Label htmlFor="platform-name">{t("platformNameLabel")}</Label>
             <Input
               id="platform-name"
               value={form.platformName}
@@ -102,7 +103,7 @@ export function PlatformSettingsForm({ settings }: { settings: PlatformSettings 
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="logo-initial">Logo-letter</Label>
+            <Label htmlFor="logo-initial">{t("logoInitialLabel")}</Label>
             <Input
               id="logo-initial"
               value={form.logoInitial}
@@ -112,7 +113,7 @@ export function PlatformSettingsForm({ settings }: { settings: PlatformSettings 
             />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="brand-color">Merkkleur</Label>
+            <Label htmlFor="brand-color">{t("brandColorLabel")}</Label>
             <div className="flex items-center gap-2">
               <input
                 id="brand-color"
@@ -132,8 +133,8 @@ export function PlatformSettingsForm({ settings }: { settings: PlatformSettings 
 
       <Card>
         <CardHeader>
-          <CardTitle>Evenementen</CardTitle>
-          <CardDescription>Standaard toegangsniveau voor nieuw aangemaakte evenementen.</CardDescription>
+          <CardTitle>{t("eventsTitle")}</CardTitle>
+          <CardDescription>{t("eventsDescription")}</CardDescription>
         </CardHeader>
         <CardContent>
           <RadioGroup
@@ -155,7 +156,7 @@ export function PlatformSettingsForm({ settings }: { settings: PlatformSettings 
 
       <div className="flex justify-end">
         <Button type="submit" disabled={saving}>
-          {saving ? "Bezig..." : "Instellingen opslaan"}
+          {saving ? tc("saving") : t("submit")}
         </Button>
       </div>
     </form>

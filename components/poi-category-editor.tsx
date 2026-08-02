@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { createElement, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Trash2, Plus, Shapes } from "lucide-react";
 import { toast } from "sonner";
 import { createPoiCategory, updatePoiCategory, deletePoiCategory } from "@/actions/poi-categories";
@@ -62,15 +63,8 @@ import type { poiCategory, PoiExtraFieldDef, PoiExtraFieldType } from "@/db/sche
 type PoiCategoryRow = typeof poiCategory.$inferSelect;
 
 const NO_ICON_VALUE = "__none__";
-const EXTRA_FIELD_TYPES: { value: PoiExtraFieldType; label: string }[] = [
-  { value: "text", label: "Tekst" },
-  { value: "url", label: "Link" },
-  { value: "phone", label: "Telefoonnummer" },
-];
 
 type IconComboboxOption = { value: string; label: string; Icon?: PoiIconOption["Icon"] };
-const NO_ICON_OPTION: IconComboboxOption = { value: NO_ICON_VALUE, label: "Geen icoon" };
-const ICON_COMBOBOX_OPTIONS: IconComboboxOption[] = [NO_ICON_OPTION, ...POI_ICON_OPTIONS];
 
 function IconCombobox({
   value,
@@ -79,11 +73,13 @@ function IconCombobox({
   value: string | null;
   onChange: (value: string | null) => void;
 }) {
-  const selected =
-    ICON_COMBOBOX_OPTIONS.find((o) => o.value === (value ?? NO_ICON_VALUE)) ?? NO_ICON_OPTION;
+  const t = useTranslations("poiCategoryEditor");
+  const noIconOption: IconComboboxOption = { value: NO_ICON_VALUE, label: t("noIconOption") };
+  const options: IconComboboxOption[] = [noIconOption, ...POI_ICON_OPTIONS];
+  const selected = options.find((o) => o.value === (value ?? NO_ICON_VALUE)) ?? noIconOption;
   return (
     <Combobox
-      items={ICON_COMBOBOX_OPTIONS}
+      items={options}
       value={selected}
       onValueChange={(opt: IconComboboxOption | null) =>
         onChange(opt && opt.value !== NO_ICON_VALUE ? opt.value : null)
@@ -93,9 +89,9 @@ function IconCombobox({
         opt.label.toLowerCase().includes(query.trim().toLowerCase())
       }
     >
-      <ComboboxInput placeholder="Zoek icoon (of 'geen')..." className="h-8 text-xs" />
+      <ComboboxInput placeholder={t("iconSearchPlaceholder")} className="h-8 text-xs" />
       <ComboboxContent className="max-h-72">
-        <ComboboxEmpty>Geen iconen gevonden.</ComboboxEmpty>
+        <ComboboxEmpty>{t("noIconsFound")}</ComboboxEmpty>
         <ComboboxList>
           {(opt: IconComboboxOption) => (
             <ComboboxItem key={opt.value} value={opt}>
@@ -112,10 +108,14 @@ function IconCombobox({
 }
 
 export function IconPreview({ color, icon }: { color: string; icon: string | null }) {
+  // getPoiIcon looks up a stable, module-level Lucide icon constant — not a fresh
+  // component definition per render — but its return type still reads as "a component
+  // created during render" to the compiler when used as a JSX tag. createElement sidesteps
+  // that heuristic; functionally identical to `<Icon className="..." />`.
   const Icon = getPoiIcon(icon);
   return (
     <div style={getShapeContainerStyle("circle", color, 28)}>
-      {Icon && <Icon className="size-3.5 text-white" />}
+      {Icon && createElement(Icon, { className: "size-3.5 text-white" })}
     </div>
   );
 }
@@ -127,6 +127,13 @@ export function ExtraFieldsEditor({
   fields: PoiExtraFieldDef[];
   onChange: (fields: PoiExtraFieldDef[]) => void;
 }) {
+  const t = useTranslations("poiCategoryEditor");
+  const extraFieldTypes: { value: PoiExtraFieldType; label: string }[] = [
+    { value: "text", label: t("extraFieldTypeText") },
+    { value: "url", label: t("extraFieldTypeUrl") },
+    { value: "phone", label: t("extraFieldTypePhone") },
+  ];
+
   function updateField(index: number, patch: Partial<PoiExtraFieldDef>) {
     onChange(fields.map((f, i) => (i === index ? { ...f, ...patch } : f)));
   }
@@ -139,7 +146,7 @@ export function ExtraFieldsEditor({
 
   return (
     <div className="space-y-1.5">
-      <Label className="text-xs text-muted-foreground">Extra velden</Label>
+      <Label className="text-xs text-muted-foreground">{t("extraFieldsLabel")}</Label>
       {fields.map((field, i) => (
         <div key={i} className="flex items-center gap-1.5">
           <Input
@@ -151,7 +158,7 @@ export function ExtraFieldsEditor({
                 key: field.key || label.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-"),
               });
             }}
-            placeholder="Bijv. Telefoon"
+            placeholder={t("extraFieldNamePlaceholder")}
             className="h-7 flex-1 text-xs"
           />
           <Select
@@ -162,9 +169,9 @@ export function ExtraFieldsEditor({
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {EXTRA_FIELD_TYPES.map((t) => (
-                <SelectItem key={t.value} value={t.value}>
-                  {t.label}
+              {extraFieldTypes.map((ft) => (
+                <SelectItem key={ft.value} value={ft.value}>
+                  {ft.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -176,13 +183,13 @@ export function ExtraFieldsEditor({
             onClick={() => removeField(i)}
           >
             <Trash2 />
-            <span className="sr-only">Veld verwijderen</span>
+            <span className="sr-only">{t("removeFieldSr")}</span>
           </Button>
         </div>
       ))}
       <Button variant="outline" size="xs" onClick={addField} className="gap-1">
         <Plus className="size-3" />
-        Veld toevoegen
+        {t("addField")}
       </Button>
     </div>
   );
@@ -201,16 +208,17 @@ export function AutoNumberEditor({
   next: number;
   onChange: (patch: Partial<{ enabled: boolean; prefix: string; suffix: string; next: number }>) => void;
 }) {
+  const t = useTranslations("poiCategoryEditor");
   return (
     <div className="space-y-1.5">
       <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
         <Checkbox checked={enabled} onCheckedChange={(v) => onChange({ enabled: !!v })} />
-        Automatisch nummeren
+        {t("autoNumberLabel")}
       </label>
       {enabled && (
         <div className="grid grid-cols-3 gap-1.5">
           <Input
-            placeholder="Prefix"
+            placeholder={t("prefixPlaceholder")}
             value={prefix}
             onChange={(e) => onChange({ prefix: e.target.value })}
             className="h-7 text-xs"
@@ -218,13 +226,13 @@ export function AutoNumberEditor({
           <Input
             type="number"
             min={1}
-            placeholder="Volgnr."
+            placeholder={t("nextPlaceholder")}
             value={next}
             onChange={(e) => onChange({ next: Math.max(1, Number(e.target.value) || 1) })}
             className="h-7 text-xs"
           />
           <Input
-            placeholder="Suffix"
+            placeholder={t("suffixPlaceholder")}
             value={suffix}
             onChange={(e) => onChange({ suffix: e.target.value })}
             className="h-7 text-xs"
@@ -245,6 +253,8 @@ function CategoryRow({
   category: PoiCategoryRow;
 }) {
   const router = useRouter();
+  const t = useTranslations("poiCategoryEditor");
+  const tc = useTranslations("common");
   const [label, setLabel] = useState(category.label);
   const [color, setColor] = useState(category.color);
   const [icon, setIcon] = useState<string | null>(category.icon);
@@ -281,10 +291,10 @@ function CategoryRow({
           autoNumberSuffix,
           autoNumberNext,
         });
-        toast.success("Categorie opgeslagen.");
+        toast.success(t("categorySavedToast"));
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Opslaan mislukt.");
+        toast.error(err instanceof Error ? err.message : t("saveErrorFallback"));
       }
     });
   }
@@ -293,11 +303,11 @@ function CategoryRow({
     startTransition(async () => {
       try {
         await deletePoiCategory(eventId, eventSlug, category.id);
-        toast.success("Categorie verwijderd.");
+        toast.success(t("categoryDeletedToast"));
         setConfirmDeleteOpen(false);
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
+        toast.error(err instanceof Error ? err.message : t("deleteErrorFallback"));
       }
     });
   }
@@ -313,7 +323,7 @@ function CategoryRow({
       </AccordionTrigger>
       <AccordionContent className="space-y-3 border-t p-3">
         <Field>
-          <FieldLabel htmlFor={`category-color-${category.id}`}>Kleur</FieldLabel>
+          <FieldLabel htmlFor={`category-color-${category.id}`}>{tc("color")}</FieldLabel>
           <input
             id={`category-color-${category.id}`}
             type="color"
@@ -323,7 +333,7 @@ function CategoryRow({
           />
         </Field>
         <Field>
-          <FieldLabel htmlFor={`category-name-${category.id}`}>Naam</FieldLabel>
+          <FieldLabel htmlFor={`category-name-${category.id}`}>{tc("name")}</FieldLabel>
           <Input
             id={`category-name-${category.id}`}
             value={label}
@@ -331,7 +341,7 @@ function CategoryRow({
           />
         </Field>
         <Field>
-          <FieldLabel>Icoon</FieldLabel>
+          <FieldLabel>{tc("icon")}</FieldLabel>
           <div className="flex items-center gap-2">
             <IconPreview color={color} icon={icon} />
             <div className="min-w-0 flex-1">
@@ -354,7 +364,7 @@ function CategoryRow({
         />
         <div className="flex items-center gap-2 pt-1">
           <Button onClick={handleSave} disabled={!dirty || isPending} className="flex-1">
-            Opslaan
+            {tc("save")}
           </Button>
           <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
             <AlertDialogTrigger
@@ -368,20 +378,19 @@ function CategoryRow({
               }
             >
               <Trash2 />
-              <span className="sr-only">Verwijderen</span>
+              <span className="sr-only">{tc("remove")}</span>
             </AlertDialogTrigger>
             <AlertDialogContent>
               <AlertDialogHeader>
-                <AlertDialogTitle>Categorie verwijderen?</AlertDialogTitle>
+                <AlertDialogTitle>{t("confirmDeleteCategoryTitle")}</AlertDialogTitle>
                 <AlertDialogDescription>
-                  Weet je zeker dat je &quot;{label}&quot; wilt verwijderen? Dit kan alleen als er geen
-                  POI&apos;s meer aan deze categorie hangen, en kan niet ongedaan worden gemaakt.
+                  {t("confirmDeleteCategoryDescription", { name: label })}
                 </AlertDialogDescription>
               </AlertDialogHeader>
               <AlertDialogFooter>
-                <AlertDialogCancel disabled={isPending}>Annuleren</AlertDialogCancel>
+                <AlertDialogCancel disabled={isPending}>{tc("cancel")}</AlertDialogCancel>
                 <AlertDialogAction variant="destructive" onClick={handleDelete} disabled={isPending}>
-                  {isPending ? "Bezig..." : "Verwijderen"}
+                  {isPending ? tc("saving") : tc("remove")}
                 </AlertDialogAction>
               </AlertDialogFooter>
             </AlertDialogContent>
@@ -402,6 +411,8 @@ export function PoiCategoryEditor({
   categories: PoiCategoryRow[];
 }) {
   const router = useRouter();
+  const t = useTranslations("poiCategoryEditor");
+  const tc = useTranslations("common");
   const [newLabel, setNewLabel] = useState("");
   const [newColor, setNewColor] = useState("#2563eb");
   const [newIcon, setNewIcon] = useState<string | null>(null);
@@ -428,7 +439,7 @@ export function PoiCategoryEditor({
           autoNumberSuffix: newAutoNumberSuffix,
           autoNumberNext: newAutoNumberNext,
         });
-        toast.success("Categorie toegevoegd.");
+        toast.success(t("categoryAddedToast"));
         setNewLabel("");
         setNewIcon(null);
         setNewExtraFields([]);
@@ -438,7 +449,7 @@ export function PoiCategoryEditor({
         setNewAutoNumberNext(1);
         router.refresh();
       } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Aanmaken mislukt.");
+        toast.error(err instanceof Error ? err.message : t("createErrorFallback"));
       }
     });
   }
@@ -449,7 +460,7 @@ export function PoiCategoryEditor({
     <div className="space-y-4">
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Categorieën ({categories.length})</CardTitle>
+          <CardTitle>{t("categoriesTitle", { count: categories.length })}</CardTitle>
           <SaveAsTemplateButton eventId={eventId} />
         </CardHeader>
         <CardContent>
@@ -459,10 +470,8 @@ export function PoiCategoryEditor({
                 <EmptyMedia variant="icon">
                   <Shapes />
                 </EmptyMedia>
-                <EmptyTitle>Nog geen categorieën</EmptyTitle>
-                <EmptyDescription>
-                  Maak hieronder je eerste categorie aan om POI&apos;s te kunnen indelen.
-                </EmptyDescription>
+                <EmptyTitle>{t("emptyCategoriesTitle")}</EmptyTitle>
+                <EmptyDescription>{t("emptyCategoriesDescription")}</EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
@@ -477,11 +486,11 @@ export function PoiCategoryEditor({
 
       <Card>
         <CardHeader>
-          <CardTitle>Nieuwe categorie</CardTitle>
+          <CardTitle>{t("newCategoryTitle")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <Field>
-            <FieldLabel htmlFor="new-category-color">Kleur</FieldLabel>
+            <FieldLabel htmlFor="new-category-color">{tc("color")}</FieldLabel>
             <input
               id="new-category-color"
               type="color"
@@ -491,16 +500,16 @@ export function PoiCategoryEditor({
             />
           </Field>
           <Field>
-            <FieldLabel htmlFor="new-category-label">Naam</FieldLabel>
+            <FieldLabel htmlFor="new-category-label">{tc("name")}</FieldLabel>
             <Input
               id="new-category-label"
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}
-              placeholder="Bijv. Kassa's"
+              placeholder={t("namePlaceholder")}
             />
           </Field>
           <Field>
-            <FieldLabel>Icoon</FieldLabel>
+            <FieldLabel>{tc("icon")}</FieldLabel>
             <div className="flex items-center gap-2">
               <IconPreview color={newColor} icon={newIcon} />
               <div className="min-w-0 flex-1">
@@ -522,7 +531,7 @@ export function PoiCategoryEditor({
             }}
           />
           <Button onClick={handleCreate} disabled={!newLabel.trim() || isPending} className="w-full">
-            Toevoegen
+            {tc("add")}
           </Button>
         </CardContent>
       </Card>

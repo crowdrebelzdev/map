@@ -2,6 +2,7 @@
 
 import { headers } from "next/headers";
 import { eq } from "drizzle-orm";
+import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { auth } from "@/lib/auth";
 import { session as sessionTable } from "@/db/schema";
@@ -24,7 +25,8 @@ export async function revokeUserSession(sessionToken: string) {
     columns: { userId: true },
   });
   if (!target) {
-    throw new Error("Sessie niet gevonden.");
+    const t = await getTranslations("actionErrors");
+    throw new Error(t("sessionNotFound"));
   }
   await requireOrgAdminForUser(target.userId);
   await auth.api.revokeUserSession({ headers: await headers(), body: { sessionToken } });

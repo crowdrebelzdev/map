@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import { setUserPasswordAdmin } from "@/actions/users";
@@ -17,6 +18,8 @@ import {
 } from "@/components/ui/dialog";
 
 export function SetUserPasswordButton({ userId, userName }: { userId: string; userName: string }) {
+  const t = useTranslations("setUserPasswordButton");
+  const tc = useTranslations("common");
   const [open, setOpen] = useState(false);
   const [password, setPassword] = useState("");
   const [saving, setSaving] = useState(false);
@@ -26,11 +29,11 @@ export function SetUserPasswordButton({ userId, userName }: { userId: string; us
     setSaving(true);
     try {
       await setUserPasswordAdmin(userId, password);
-      toast.success(`Nieuw wachtwoord ingesteld voor ${userName}.`);
+      toast.success(t("successToast", { name: userName }));
       setPassword("");
       setOpen(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Instellen mislukt.");
+      toast.error(err instanceof Error ? err.message : t("errorFallback"));
     } finally {
       setSaving(false);
     }
@@ -40,15 +43,15 @@ export function SetUserPasswordButton({ userId, userName }: { userId: string; us
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger render={<Button variant="outline" size="sm" />}>
         <KeyRound />
-        Wachtwoord instellen
+        {t("trigger")}
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Nieuw wachtwoord voor {userName}</DialogTitle>
+          <DialogTitle>{t("title", { name: userName })}</DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="space-y-1">
-            <Label htmlFor="new-password">Nieuw wachtwoord</Label>
+            <Label htmlFor="new-password">{t("newPasswordLabel")}</Label>
             <Input
               id="new-password"
               type="password"
@@ -60,10 +63,10 @@ export function SetUserPasswordButton({ userId, userName }: { userId: string; us
           </div>
           <DialogFooter>
             <Button variant="outline" type="button" onClick={() => setOpen(false)} disabled={saving}>
-              Annuleren
+              {tc("cancel")}
             </Button>
             <Button type="submit" disabled={saving}>
-              {saving ? "Bezig..." : "Instellen"}
+              {saving ? tc("saving") : t("submit")}
             </Button>
           </DialogFooter>
         </form>

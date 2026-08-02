@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Search } from "lucide-react";
 import { ArchiveEventButton } from "@/components/archive-event-button";
 import { DeleteEventButton } from "@/components/delete-event-button";
@@ -22,6 +23,8 @@ import {
 type EventRow = { id: string; name: string; slug: string; archivedAt: Date | null };
 
 export function EventsTable({ events, isAdmin }: { events: EventRow[]; isAdmin: boolean }) {
+  const t = useTranslations("eventsTable");
+  const tc = useTranslations("common");
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -37,7 +40,7 @@ export function EventsTable({ events, isAdmin }: { events: EventRow[]; isAdmin: 
       <div className="relative max-w-xs">
         <Search className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
-          placeholder="Filter op naam of slug..."
+          placeholder={t("filterPlaceholder")}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           className="pl-8"
@@ -45,13 +48,13 @@ export function EventsTable({ events, isAdmin }: { events: EventRow[]; isAdmin: 
       </div>
 
       {filtered.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Geen evenementen gevonden.</p>
+        <p className="text-sm text-muted-foreground">{t("noResults")}</p>
       ) : (
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Naam</TableHead>
-              <TableHead>Slug</TableHead>
+              <TableHead>{tc("name")}</TableHead>
+              <TableHead>{tc("slug")}</TableHead>
               <TableHead />
             </TableRow>
           </TableHeader>
@@ -61,7 +64,7 @@ export function EventsTable({ events, isAdmin }: { events: EventRow[]; isAdmin: 
                 <TableCell className="font-medium">
                   <div className="flex items-center gap-2">
                     {e.name}
-                    {e.archivedAt && <Badge variant="secondary">Gearchiveerd</Badge>}
+                    {e.archivedAt && <Badge variant="secondary">{tc("archived")}</Badge>}
                   </div>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{e.slug}</TableCell>
@@ -71,7 +74,7 @@ export function EventsTable({ events, isAdmin }: { events: EventRow[]; isAdmin: 
                       href={`/org/events/${e.slug}/map`}
                       className={buttonVariants({ variant: "outline", size: "sm" })}
                     >
-                      Beheren
+                      {tc("manage")}
                     </Link>
                     {isAdmin && <DuplicateEventButton eventId={e.id} eventName={e.name} />}
                     {isAdmin && (

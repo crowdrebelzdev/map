@@ -561,13 +561,26 @@ export default function EventMapView({
           .getContainer()
           .querySelector(".maplibregl-ctrl-attrib")
           ?.classList.remove("maplibregl-compact-show");
+        // No plattegrond configured for this event at all — nothing else to wait for, so
+        // the map is as "ready" as it'll ever be as soon as the base style has loaded (the
+        // `onSourceData` check below only ever fires for the plattegrond's own source, so
+        // without one this would otherwise wait forever).
+        if (!mapImage && !mapReadyFiredRef.current) {
+          mapReadyFiredRef.current = true;
+          onMapReady?.();
+        }
       }}
-      onIdle={() => {
-        // "idle" (unlike "load") only fires once every current source has actually
-        // finished loading its tiles/image — the right moment to hand control back to a
-        // parent waiting to swap away a static placeholder. Fires repeatedly over the
-        // map's lifetime (e.g. after every pan/zoom), so only forward the first one.
-        if (!mapReadyFiredRef.current) {
+      onSourceData={(e) => {
+        // Specifically the plattegrond's own source (tiles or the flat-image fallback —
+        // exactly one of the two exists whenever `mapImage` is set), not just "the style
+        // finished loading" (`onLoad`) or "nothing is pending right now" (the `idle` event
+        // this used to key off of): `loaded` only flips true *after* `onLoad` already ran,
+        // and the Source below is only added to the map on the *next* render after that —
+        // maplibre-gl's own `idle` event can fire in the gap between those two, before the
+        // plattegrond source was even added yet, handing control back to the parent while
+        // the map underneath still has nothing plattegrond-related loaded or even queued.
+        if (mapReadyFiredRef.current) return;
+        if ((e.sourceId === "event-map-tiles" || e.sourceId === "event-map-image") && e.isSourceLoaded) {
           mapReadyFiredRef.current = true;
           onMapReady?.();
         }

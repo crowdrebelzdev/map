@@ -254,7 +254,13 @@ export function OperationalMap({
           },
           tiles:
             tileUrlTemplate && map.tileMinZoom != null && map.tileMaxZoom != null
-              ? { urlTemplate: tileUrlTemplate, minZoom: map.tileMinZoom, maxZoom: map.tileMaxZoom }
+              ? {
+                  urlTemplate: tileUrlTemplate,
+                  minZoom: map.tileMinZoom,
+                  maxZoom: map.tileMaxZoom,
+                  // Maps tiled before this column existed were always generated at 512px.
+                  tileSize: map.tileSize ?? 512,
+                }
               : null,
         }}
         gridCells={gridCells}

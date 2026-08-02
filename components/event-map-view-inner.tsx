@@ -18,7 +18,6 @@ import type { CornerSet, GridCell, LatLng } from "@/lib/geo";
 import { computeTransform, gridCellsToGeoJSON, isPointInPolygon, latLngToPixel, polygonsIntersect } from "@/lib/geo";
 import { cn } from "@/lib/utils";
 import { getPoiIcon, getShapeContainerStyle } from "@/lib/poi-icons";
-import { DEFAULT_TILE_SIZE } from "@/lib/map-tiling";
 import type { PoiExtraFieldDef, PoiExtraFieldValue } from "@/db/schema";
 
 const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
@@ -100,7 +99,7 @@ export type EventMapImage = {
    * plattegrond at every zoom level without the multi-megabyte single-image download. Absent
    * (or the tiles not loading for some other reason) falls back to `imageUrl` exactly as
    * before — the two are never both absent, so the map is never left with nothing to show. */
-  tiles?: { urlTemplate: string; minZoom: number; maxZoom: number } | null;
+  tiles?: { urlTemplate: string; minZoom: number; maxZoom: number; tileSize: number } | null;
 };
 
 /** A not-yet-saved POI, rendered with the exact same pill styling as a real marker so what
@@ -592,7 +591,11 @@ export default function EventMapView({
           id="event-map-tiles"
           type="raster"
           tiles={[mapImage.tiles.urlTemplate]}
-          tileSize={DEFAULT_TILE_SIZE}
+          // The size *this specific tile set* was actually generated at (see
+          // eventMap.tileSize's schema comment) — not DEFAULT_TILE_SIZE, which only governs
+          // *new* generations and can change over time without invalidating tiles already
+          // rendered under a different size.
+          tileSize={mapImage.tiles.tileSize}
           minzoom={mapImage.tiles.minZoom}
           maxzoom={mapImage.tiles.maxZoom}
           bounds={cornersToBounds(mapImage.corners).flat() as [number, number, number, number]}

@@ -70,6 +70,13 @@ export const eventMap = pgTable("event_map", {
   tileVersion: text("tile_version"),
   tileMinZoom: integer("tile_min_zoom"),
   tileMaxZoom: integer("tile_max_zoom"),
+  // The `tileSize` this specific tile set was generated at (see lib/map-tiling.ts's
+  // DEFAULT_TILE_SIZE) — recorded per-map rather than assumed from the current constant so
+  // changing that constant for *new* generations can never mismatch already-generated tiles
+  // still being served (maplibre-gl requests different (z, x, y) coordinates depending on
+  // tileSize — a mismatch means a blank/broken map, not just lower quality). Null means 512,
+  // the only size ever used before this column existed.
+  tileSize: integer("tile_size"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -105,6 +112,7 @@ export const eventMapVersion = pgTable(
     tileVersion: text("tile_version"),
     tileMinZoom: integer("tile_min_zoom"),
     tileMaxZoom: integer("tile_max_zoom"),
+    tileSize: integer("tile_size"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [index("event_map_version_event_idx").on(table.eventId, table.createdAt)],

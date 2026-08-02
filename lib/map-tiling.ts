@@ -146,13 +146,15 @@ export function tileLatLngBounds(z: number, x: number, y: number) {
 
 export type MapTile = { z: number; x: number; y: number; image: RgbaImage };
 
-// 512 rather than the more common 256: for the same ground coverage, a 512px tile is 4x
-// fewer HTTP requests than 256px ones — meaningful here since a lot of the upload time is
-// per-request overhead (connection + S3 processing), not raw bytes, for tiles this small
-// either way. Must match the `tileSize` the raster source is rendered with (see
-// event-map-view-inner.tsx) — a mismatch there would make maplibre-gl misinterpret each
-// tile's pixel dimensions.
-export const DEFAULT_TILE_SIZE = 512;
+// 1024 rather than 256/512: for the same ground coverage, doubling tileSize again quarters
+// the tile count with zero quality loss (maxZoom just shifts one level shallower to match —
+// see suggestZoomRange) — meaningful here since a lot of the upload time is per-request
+// overhead (connection + S3 processing), not raw bytes, for tiles this small either way.
+// Only governs *new* tile generations: an already-generated tile set's actual size is
+// recorded per-map (eventMap.tileSize) and used at render time instead, specifically so
+// changing this constant later can never mismatch tiles already generated at a different
+// size — see that column's schema comment and event-map-view-inner.tsx's raster Source.
+export const DEFAULT_TILE_SIZE = 1024;
 
 /**
  * Suggests a sane [minZoom, maxZoom] for a warped raster: `maxZoom` is the highest zoom

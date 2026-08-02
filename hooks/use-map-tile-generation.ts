@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { toast } from "sonner";
 import { distanceMeters, type CornerSet } from "@/lib/geo";
 import { tileVersionFromImageUrl, DEFAULT_TILE_SIZE } from "@/lib/map-tiling";
@@ -28,6 +28,10 @@ const TOAST_ID = "map-tile-generation";
 function progressSuffix(done: number, total: number): string {
   return total > 0 ? ` (${done}/${total})` : "";
 }
+
+// Shown on every loading toast while this runs — see the beforeunload guard below for why
+// leaving really does lose all progress, not just pause it.
+const STAY_ON_PAGE_NOTICE = " Sluit deze pagina niet.";
 
 async function decodeToImageData(imageUrl: string): Promise<ImageData> {
   const response = await fetch(imageUrl);
@@ -141,6 +145,22 @@ export function useMapTileGeneration(eventId: string, eventSlug: string) {
   const [status, setStatus] = useState<TileGenerationStatus>("idle");
   const [progress, setProgress] = useState({ done: 0, total: 0 });
 
+  // Warns before leaving/closing the tab while tiles are being warped or uploaded — both
+  // happen entirely in the browser (a Web Worker, then direct-to-S3 fetches), so navigating
+  // away mid-run doesn't just pause it, it abandons it, wasting everything done so far.
+  // Browsers ignore custom text here for security reasons (any non-empty returnValue just
+  // triggers their own generic "leave site?" prompt) — the actual explanation lives in the
+  // toast message below instead, which stays readable regardless.
+  useEffect(() => {
+    if (status !== "warping" && status !== "uploading") return;
+    function handleBeforeUnload(e: BeforeUnloadEvent) {
+      e.preventDefault();
+      e.returnValue = "";
+    }
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [status]);
+
   const generate = useCallback(
     async (imageUrl: string, imageWidth: number, imageHeight: number, corners: CornerSet) => {
       setStatus("warping");
@@ -148,7 +168,7 @@ export function useMapTileGeneration(eventId: string, eventSlug: string) {
       // `toast.loading` doesn't auto-dismiss (unlike toast.success/error), which is the
       // point here — this can legitimately take a while (warping a large plattegrond, then
       // uploading potentially hundreds of tiles), and should stay visible as long as it is.
-      toast.loading("Tegels voorbereiden...", { id: TOAST_ID });
+      toast.loading(`Tegels voorbereiden...${STAY_ON_PAGE_NOTICE}`, { id: TOAST_ID });
 
       try {
         const sourceImageData = await decodeToImageData(imageUrl);
@@ -174,13 +194,13 @@ export function useMapTileGeneration(eventId: string, eventSlug: string) {
           { sourceImageData, imageWidth, imageHeight, corners, metersPerPixel, tileSize: DEFAULT_TILE_SIZE },
           (done, total) => {
             setProgress({ done, total });
-            toast.loading(`Tegels voorbereiden${progressSuffix(done, total)}...`, { id: TOAST_ID });
+            toast.loading(`Tegels voorbereiden${progressSuffix(done, total)}...${STAY_ON_PAGE_NOTICE}`, { id: TOAST_ID });
           },
         );
 
         setStatus("uploading");
         setProgress({ done: 0, total: tiles.length });
-        toast.loading(`Tegels uploaden${progressSuffix(0, tiles.length)}...`, { id: TOAST_ID });
+        toast.loading(`Tegels uploaden${progressSuffix(0, tiles.length)}...${STAY_ON_PAGE_NOTICE}`, { id: TOAST_ID });
 
         const versionId = tileVersionFromImageUrl(imageUrl);
         const plan = await prepareMapTileUpload(
@@ -191,7 +211,7 @@ export function useMapTileGeneration(eventId: string, eventSlug: string) {
 
         const onUploadProgress = (done: number) => {
           setProgress({ done, total: tiles.length });
-          toast.loading(`Tegels uploaden${progressSuffix(done, tiles.length)}...`, { id: TOAST_ID });
+          toast.loading(`Tegels uploaden${progressSuffix(done, tiles.length)}...${STAY_ON_PAGE_NOTICE}`, { id: TOAST_ID });
         };
         if (plan.mode === "s3") {
           await uploadTilesToS3(tiles, plan.uploads, onUploadProgress);
@@ -199,7 +219,7 @@ export function useMapTileGeneration(eventId: string, eventSlug: string) {
           await uploadTilesLocally(eventId, versionId, tiles, onUploadProgress);
         }
 
-        await finalizeMapTiles(eventId, eventSlug, versionId, minZoom, maxZoom);
+        await finalizeMapTiles(eventId, eventSlug, versionId, minZoom, maxZoom, DEFAULT_TILE_SIZE);
         setStatus("done");
         toast.success("Tegels zijn klaar en actief op de kaart.", { id: TOAST_ID });
       } catch (err) {

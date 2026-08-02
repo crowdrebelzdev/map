@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { History } from "lucide-react";
+import { History, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -13,7 +13,18 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { listMapVersions, restoreMapVersion } from "@/actions/map";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { listMapVersions, restoreMapVersion, deleteMapVersion } from "@/actions/map";
 import type { eventMapVersion } from "@/db/schema";
 
 type VersionRow = typeof eventMapVersion.$inferSelect;
@@ -27,6 +38,7 @@ export function MapVersionHistoryDialog({ eventId, eventSlug }: { eventId: strin
   const [loading, setLoading] = useState(false);
   const [versions, setVersions] = useState<VersionRow[] | null>(null);
   const [restoringId, setRestoringId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   async function handleOpenChange(next: boolean) {
     setOpen(next);
@@ -53,6 +65,19 @@ export function MapVersionHistoryDialog({ eventId, eventSlug }: { eventId: strin
       toast.error(err instanceof Error ? err.message : "Herstellen mislukt.");
     } finally {
       setRestoringId(null);
+    }
+  }
+
+  async function handleDelete(versionId: string) {
+    setDeletingId(versionId);
+    try {
+      await deleteMapVersion(eventId, eventSlug, versionId);
+      setVersions((prev) => prev?.filter((v) => v.id !== versionId) ?? prev);
+      toast.success("Versie verwijderd.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Verwijderen mislukt.");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -92,10 +117,41 @@ export function MapVersionHistoryDialog({ eventId, eventSlug }: { eventId: strin
                   variant="outline"
                   size="sm"
                   onClick={() => handleRestore(v.id)}
-                  disabled={restoringId !== null}
+                  disabled={restoringId !== null || deletingId !== null}
                 >
                   {restoringId === v.id ? "Bezig..." : "Herstellen"}
                 </Button>
+                <AlertDialog>
+                  <AlertDialogTrigger
+                    render={
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="shrink-0 text-destructive"
+                        disabled={restoringId !== null || deletingId !== null}
+                      />
+                    }
+                  >
+                    <Trash2 className="size-3.5" />
+                    <span className="sr-only">Versie verwijderen</span>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Deze versie verwijderen?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Verwijdert deze plattegrond-versie en de bijbehorende afbeelding/tegels
+                        definitief (tenzij die nog worden gebruikt door de huidige kaart of een
+                        andere versie). Dit kan niet ongedaan worden gemaakt.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Annuleren</AlertDialogCancel>
+                      <AlertDialogAction variant="destructive" onClick={() => handleDelete(v.id)}>
+                        Verwijderen
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </li>
             ))}
           </ul>

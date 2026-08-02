@@ -518,7 +518,12 @@ export function PoiWorkspace({
                   },
                   tiles:
                     tileUrlTemplate && map.tileMinZoom != null && map.tileMaxZoom != null
-                      ? { urlTemplate: tileUrlTemplate, minZoom: map.tileMinZoom, maxZoom: map.tileMaxZoom }
+                      ? {
+                          urlTemplate: tileUrlTemplate,
+                          minZoom: map.tileMinZoom,
+                          maxZoom: map.tileMaxZoom,
+                          tileSize: map.tileSize ?? 512,
+                        }
                       : null,
                 }
               : null

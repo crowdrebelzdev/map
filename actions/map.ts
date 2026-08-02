@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { db } from "@/db";
 import { eventMap, eventMapVersion } from "@/db/schema";
 import { requireEventPermission } from "@/lib/event-access";
@@ -12,6 +12,7 @@ import {
   getMapTileUploadPlan,
   saveMapTilesLocal,
   deleteMapTiles,
+  deleteMapImage,
   type MapImageUploadPlan,
   type TileUploadPlan,
 } from "@/lib/storage";
@@ -168,6 +169,58 @@ export async function restoreMapVersion(eventId: string, eventSlug: string, vers
   revalidatePath(`/org/events/${eventSlug}/map`);
 }
 
+/**
+ * Permanently deletes one snapshotted version — freeing up its storage (a tile set can be
+ * thousands of files) for admins who'd rather not keep every past re-upload forever. Unlike
+ * `deleteMapImage`/`deleteMapTiles` elsewhere in this file, this can't assume the version's
+ * image/tiles are exclusively its own: `saveMapCorners` reuses the same `imageUrl` (and thus
+ * the same tile set) across multiple snapshots whenever only the *placement* changed, not the
+ * image itself — so before touching storage, this checks whether the current live map or any
+ * *other* remaining version still points at the same image/display image/tile set, and only
+ * deletes what nothing else references. Getting this wrong would silently break the live map
+ * or another, still-wanted version.
+ */
+export async function deleteMapVersion(eventId: string, eventSlug: string, versionId: string) {
+  const { session } = await requireEventPermission(eventId, "edit_map");
+
+  const version = await db.query.eventMapVersion.findFirst({
+    where: and(eq(eventMapVersion.id, versionId), eq(eventMapVersion.eventId, eventId)),
+  });
+  if (!version) {
+    throw new Error("Versie niet gevonden.");
+  }
+
+  const [current, otherVersions] = await Promise.all([
+    db.query.eventMap.findFirst({ where: eq(eventMap.eventId, eventId) }),
+    db.query.eventMapVersion.findMany({
+      where: and(eq(eventMapVersion.eventId, eventId), ne(eventMapVersion.id, versionId)),
+    }),
+  ]);
+  const others = [...(current ? [current] : []), ...otherVersions];
+
+  if (version.tileVersion && !others.some((o) => o.tileVersion === version.tileVersion)) {
+    await deleteMapTiles(eventId, version.tileVersion).catch(() => {
+      // Best-effort — an orphaned tile set costs storage, not correctness.
+    });
+  }
+  if (!others.some((o) => o.imageUrl === version.imageUrl)) {
+    await deleteMapImage(eventId, version.imageUrl).catch(() => {});
+  }
+  if (
+    version.displayImageUrl &&
+    version.displayImageUrl !== version.imageUrl &&
+    !others.some((o) => o.displayImageUrl === version.displayImageUrl)
+  ) {
+    await deleteMapImage(eventId, version.displayImageUrl).catch(() => {});
+  }
+
+  await db.delete(eventMapVersion).where(eq(eventMapVersion.id, versionId));
+
+  logActivity(eventId, session.user.id, "map.version_delete", `${session.user.name} heeft een eerdere plattegrond-versie verwijderd.`);
+
+  revalidatePath(`/org/events/${eventSlug}/map`);
+}
+
 // --- Plattegrond tegels ---
 //
 // Generated client-side (warping + tiling happens in the browser, off the main thread — see
@@ -218,6 +271,7 @@ export async function finalizeMapTiles(
   versionId: string,
   minZoom: number,
   maxZoom: number,
+  tileSize: number,
 ) {
   const { session } = await requireEventPermission(eventId, "edit_map");
 
@@ -228,7 +282,7 @@ export async function finalizeMapTiles(
 
   await db
     .update(eventMap)
-    .set({ tileVersion: versionId, tileMinZoom: minZoom, tileMaxZoom: maxZoom })
+    .set({ tileVersion: versionId, tileMinZoom: minZoom, tileMaxZoom: maxZoom, tileSize })
     .where(eq(eventMap.eventId, eventId));
 
   if (current.tileVersion && current.tileVersion !== versionId) {

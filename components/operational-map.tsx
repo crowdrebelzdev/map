@@ -12,6 +12,7 @@ import { PoiFilterSheet } from "@/components/poi-filter-sheet";
 import { PoiSizeControl } from "@/components/poi-size-control";
 import { BroadcastListener } from "@/components/broadcast-listener";
 import { PushSubscribeButton } from "@/components/push-subscribe-button";
+import { useHeaderSlot } from "@/components/header-slot";
 import { VisitorNameGate } from "@/components/visitor-name-gate";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { LocaleToggle } from "@/components/locale-toggle";
@@ -131,6 +132,21 @@ export function OperationalMap({
   const { isOnline, offlineStatus, offlineProgress, handleDownloadOffline, showOfflineTip, dismissOfflineTip } =
     useOfflineMap(map, tileUrlTemplate);
 
+  // Puts the notification-subscribe button into NavBar's own header row (a no-op when
+  // there's no NavBar to render it in, e.g. an anonymous visitor — see header-slot.tsx) so
+  // it isn't only reachable from the floating icon stack below, which gets hidden on wide
+  // screens once NavBar is showing (see `hasNavBar` below) to avoid showing it twice.
+  // `hidden md:block` here (not just `hasNavBar` above) because NavBar itself never hides on
+  // narrow screens — without this, staff on mobile would see the button in both places,
+  // since the floating one also only hides starting at the `md` breakpoint.
+  useHeaderSlot(
+    isStaff ? (
+      <div className="hidden md:block">
+        <PushSubscribeButton eventId={eventId} />
+      </div>
+    ) : null,
+  );
+
   const offlineDownloadButton = useMemo(() => {
     const icon =
       offlineStatus === "done" ? (
@@ -204,6 +220,13 @@ export function OperationalMap({
   });
 
   const needsNameGate = !isStaff && publicAccessMode === "public_named";
+  // NavBar (see app/events/layout.tsx) renders exactly when there's a session — same
+  // condition `currentUserId` is derived from server-side. Used below to hide the
+  // locale/theme/notification buttons that would otherwise be duplicated (once here, once
+  // in NavBar) on a wide-enough screen for NavBar's own copies to be visible. Left alone on
+  // narrow screens regardless: an anonymous visitor (no NavBar, any screen size) still needs
+  // these here, and on a narrow screen NavBar's copies aren't a realistic alternative anyway.
+  const hasNavBar = currentUserId != null;
 
   if (!map) {
     const empty = <div className="p-4 text-sm text-muted-foreground">{t("noMapConfigured")}</div>;
@@ -266,7 +289,10 @@ export function OperationalMap({
           the item above it isn't shown. */}
       <div
         className="pointer-events-none fixed inset-x-0 top-0 z-20 flex flex-col items-center gap-1.5 px-16"
-        style={{ paddingTop: "max(0.875rem, env(safe-area-inset-top))" }}
+        // Adds NavBar's height (0 when it isn't rendered, e.g. for an anonymous public
+        // visitor — see app/events/layout.tsx) on top of the usual safe-area-aware gap, so
+        // this renders below NavBar instead of underneath/behind it.
+        style={{ paddingTop: "calc(var(--navbar-height, 0px) + max(0.875rem, env(safe-area-inset-top)))" }}
       >
         {currentCell && !showGpsHint && (
           <div className="pointer-events-auto flex items-center gap-2.5 rounded-full bg-primary py-2 pr-4 pl-3 shadow-lg">
@@ -319,7 +345,11 @@ export function OperationalMap({
           stack below, so it never has to share a row with the (centered) grid-location pill. */}
       <div
         className="pointer-events-none fixed right-3 top-0 z-10 flex flex-col-reverse gap-2"
-        style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-top))", top: "max(0.75rem, env(safe-area-inset-top))" }}
+        // See the top-anchored stack above for why `--navbar-height` is added here too.
+        style={{
+          paddingBottom: "max(0.75rem, env(safe-area-inset-top))",
+          top: "calc(var(--navbar-height, 0px) + max(0.75rem, env(safe-area-inset-top)))",
+        }}
       >
         <PoiFilterSheet
           categories={categories}
@@ -332,10 +362,22 @@ export function OperationalMap({
           areas={areas}
         />
         <PoiSizeControl sizeMultiplier={poiSizeMultiplier} onChange={setPoiSizeMultiplier} />
-        <LocaleToggle variant="secondary" size="icon" className="pointer-events-auto shrink-0 shadow-md" />
-        <ThemeToggle variant="secondary" size="icon" className="pointer-events-auto shrink-0 shadow-md" />
+        <LocaleToggle
+          variant="secondary"
+          size="icon"
+          className={cn("pointer-events-auto shrink-0 shadow-md", hasNavBar && "md:hidden")}
+        />
+        <ThemeToggle
+          variant="secondary"
+          size="icon"
+          className={cn("pointer-events-auto shrink-0 shadow-md", hasNavBar && "md:hidden")}
+        />
         {offlineDownloadButton}
-        {isStaff && <PushSubscribeButton eventId={eventId} />}
+        {isStaff && (
+          <div className={cn(hasNavBar && "md:hidden")}>
+            <PushSubscribeButton eventId={eventId} />
+          </div>
+        )}
       </div>
 
       {isStaff && <BroadcastListener eventId={eventId} />}

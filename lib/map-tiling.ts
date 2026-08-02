@@ -195,10 +195,22 @@ export function suggestZoomRange(
   let maxZoom = 0;
   while (maxZoom < 22 && effectiveMetersPerPixelAtZoom(maxZoom) > bounds.metersPerPixel) maxZoom++;
 
+  // A raster source's `minzoom` is a hard cutoff in maplibre-gl, unlike `maxzoom` — zoom out
+  // past it and the plattegrond renders nothing at all rather than a stretched-out coarser
+  // tile (there's no automatic "underzoom" the way there is "overzoom" beyond maxzoom). A
+  // margin of just one zoom level below "fits in ~1 tile" is too thin in practice: a mobile
+  // viewport's own `fitBounds` (different aspect ratio/padding than desktop) can easily land
+  // below that on initial load, or a visitor casually pinch-zooms out a bit further — both
+  // make the plattegrond disappear entirely rather than just look coarser. Once the whole
+  // bounds already fits in one tile, every zoom level lower still only ever needs that same
+  // one tile (there's nothing left to subdivide), so a generous margin costs at most one
+  // extra tile per level — essentially free — which is why this goes 6 levels deep rather
+  // than the 1 it used to.
+  const MIN_ZOOM_MARGIN = 6;
   const spanMeters = Math.max(bounds.maxEast - bounds.minEast, bounds.maxNorth - bounds.minNorth);
   let minZoom = 0;
   while (minZoom < maxZoom && standardMetersPerPixelAtZoom(minZoom) * 256 > spanMeters) minZoom++;
-  minZoom = Math.max(0, minZoom - 1);
+  minZoom = Math.max(0, minZoom - MIN_ZOOM_MARGIN);
 
   return { minZoom, maxZoom };
 }

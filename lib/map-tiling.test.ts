@@ -149,12 +149,13 @@ describe("generateTiles", () => {
     const bounds = computeWarpedRasterBounds(AXIS_ALIGNED, bounds_metersPerPixel(AXIS_ALIGNED, 64));
     const transform = computeTransform(100, 100, AXIS_ALIGNED);
     const source = solidImage(100, 100, [1, 2, 3]);
-    // suggestZoomRange's own minZoom..+2, rather than an arbitrary fixed 10..12: at a fixed
-    // low zoom the bounds can be too small a speck in too large a tile to have any sampled
-    // pixel land inside it at all, making every tile fully transparent (and skipped) — this
-    // needs zoom levels where the bounds is known to actually show up in some tile.
-    const { minZoom } = suggestZoomRange(bounds);
-    const tiles = generateTiles(source, transform, bounds, { minZoom, maxZoom: minZoom + 2, tileSize: 16 });
+    // A fixed deep zoom (not suggestZoomRange's own minZoom *or* maxZoom — neither reliably
+    // puts this particular small test image's content inside a sampled tile pixel, same as
+    // the neighboring "carries the source image's color" test found for this identical
+    // bounds setup): too shallow a zoom and the bounds can be too small a speck in too large
+    // a tile to have any sampled pixel land inside it at all, making every tile fully
+    // transparent (and skipped).
+    const tiles = generateTiles(source, transform, bounds, { minZoom: 20, maxZoom: 20, tileSize: 16 });
     expect(tiles.length).toBeGreaterThan(0);
     for (const t of tiles) {
       const max = 2 ** t.z - 1;
@@ -191,8 +192,9 @@ describe("generateTiles", () => {
     const source = makeCheckerboard(100, 100, 10);
     const transform = computeTransform(100, 100, AXIS_ALIGNED);
     const bounds = computeWarpedRasterBounds(AXIS_ALIGNED, bounds_metersPerPixel(AXIS_ALIGNED, 100));
-    const { minZoom } = suggestZoomRange(bounds);
-    const tiles = generateTiles(source, transform, bounds, { minZoom, maxZoom: minZoom, tileSize: 100 });
+    // maxZoom, not minZoom — see the similar comment above for why.
+    const { maxZoom } = suggestZoomRange(bounds);
+    const tiles = generateTiles(source, transform, bounds, { minZoom: maxZoom, maxZoom, tileSize: 100 });
 
     // A checkerboard has both black and white squares — if rotation/indexing were broken
     // (e.g. flipped or collapsed to one sample), the tiles would come out a single flat
@@ -214,10 +216,14 @@ describe("generateTiles", () => {
     const source = makeCheckerboard(50, 50, 5);
     const transform = computeTransform(50, 50, CORNERS);
     // A deliberately coarse resolution so the bounding-box margin around the rotated quad
-    // is a comfortably large number of pixels, not a razor-thin edge case.
+    // is a comfortably large number of pixels, not a razor-thin edge case — `minZoom` itself
+    // is now too coarse for that (it deliberately goes several levels below "content still
+    // shows up at all", see suggestZoomRange's own comment), so this steps back up from it
+    // by roughly the same amount its margin grew by.
     const bounds = computeWarpedRasterBounds(CORNERS, bounds_metersPerPixel(CORNERS, 50));
     const { minZoom } = suggestZoomRange(bounds);
-    const tiles = generateTiles(source, transform, bounds, { minZoom, maxZoom: minZoom, tileSize: 50 });
+    const zoom = minZoom + 5;
+    const tiles = generateTiles(source, transform, bounds, { minZoom: zoom, maxZoom: zoom, tileSize: 50 });
 
     // The bounding box's own NW corner sits outside the rotated quad for a placement that
     // isn't axis-aligned — must render transparent, not stretched source-edge pixels.
@@ -230,8 +236,9 @@ describe("generateTiles", () => {
     const source = solidImage(200, 150, [255, 255, 255]);
     const transform = computeTransform(200, 150, CORNERS);
     const bounds = computeWarpedRasterBounds(CORNERS, bounds_metersPerPixel(CORNERS, 200));
-    const { minZoom } = suggestZoomRange(bounds);
-    const tiles = generateTiles(source, transform, bounds, { minZoom, maxZoom: minZoom, tileSize: 64 });
+    // maxZoom, not minZoom — see the similar comment further up for why.
+    const { maxZoom } = suggestZoomRange(bounds);
+    const tiles = generateTiles(source, transform, bounds, { minZoom: maxZoom, maxZoom, tileSize: 64 });
 
     // At least one generated tile should be opaque somewhere — a sanity check that the
     // whole pipeline doesn't invert/misplace the mapping and produce an all-transparent result.

@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
-import { MapPin, LocateFixed, X, Download, Check, WifiOff } from "lucide-react";
+import { MapPin, LocateFixed, X, Download, Check, WifiOff, Smartphone } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,7 @@ import {
 import { useVisibilityFilter } from "@/hooks/use-visibility-filter";
 import { useGpsPosition, type GpsStatus } from "@/hooks/use-gps-position";
 import { useOfflineMap } from "@/hooks/use-offline-map";
+import { useAddToHomeScreen } from "@/hooks/use-add-to-home-screen";
 import { useLiveLocationSharing } from "@/hooks/use-live-location-sharing";
 import { useGridData } from "@/hooks/use-grid-data";
 import { useMapSearch } from "@/hooks/use-map-search";
@@ -131,6 +132,8 @@ export function OperationalMap({
 
   const { isOnline, offlineStatus, offlineProgress, handleDownloadOffline, showOfflineTip, dismissOfflineTip } =
     useOfflineMap(map, tileUrlTemplate);
+  const { showHint: showHomeScreenTip, dismissHint: dismissHomeScreenTip, platform, canPromptInstall, promptInstall } =
+    useAddToHomeScreen(eventId, offlineStatus === "done");
 
   // Puts the notification-subscribe button into NavBar's own header row (a no-op when
   // there's no NavBar to render it in, e.g. an anonymous visitor — see header-slot.tsx) so
@@ -342,6 +345,28 @@ export function OperationalMap({
             >
               <X size={13} />
               <span className="sr-only">{t("offlineTipDismiss")}</span>
+            </button>
+          </div>
+        )}
+
+        {showHomeScreenTip && (
+          <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-foreground/90 py-1.5 pr-2 pl-3 text-xs font-medium text-background shadow-md backdrop-blur-sm">
+            <Smartphone size={13} className="shrink-0" />
+            <span>{platform === "ios" ? t("homeScreenTipMessageIos") : t("homeScreenTipMessageAndroid")}</span>
+            {canPromptInstall && (
+              <button
+                onClick={promptInstall}
+                className="shrink-0 rounded-full bg-background px-2 py-1 text-foreground"
+              >
+                {t("homeScreenTipAdd")}
+              </button>
+            )}
+            <button
+              onClick={dismissHomeScreenTip}
+              className="shrink-0 rounded-full p-1 text-background/70 hover:text-background"
+            >
+              <X size={13} />
+              <span className="sr-only">{t("homeScreenTipDismiss")}</span>
             </button>
           </div>
         )}

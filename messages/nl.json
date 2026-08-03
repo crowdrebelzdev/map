@@ -23,7 +23,11 @@
     "offlineSaveError": "Offline opslaan mislukt. Probeer het opnieuw.",
     "offlineTipMessage": "Tip: download deze kaart, dan werkt hij ook zonder bereik.",
     "offlineTipDownload": "Download nu",
-    "offlineTipDismiss": "Sluiten"
+    "offlineTipDismiss": "Sluiten",
+    "homeScreenTipMessageIos": "Tip: tik op Delen → 'Zet op beginscherm' om deze kaart nog sneller te openen.",
+    "homeScreenTipMessageAndroid": "Tip: zet deze kaart op je beginscherm om 'm nog sneller te openen.",
+    "homeScreenTipAdd": "Toevoegen",
+    "homeScreenTipDismiss": "Sluiten"
   },
   "visitorNameGate": {
     "welcome": "Welkom",

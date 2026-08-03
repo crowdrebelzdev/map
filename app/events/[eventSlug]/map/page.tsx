@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import { asc, eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
@@ -15,6 +16,28 @@ import { OperationalMap } from "@/components/operational-map";
 // event, without touching proxy.ts (which deliberately has no DB access, see its comment).
 const ANONYMOUS_VIEW_WINDOW_MS = 60_000;
 const ANONYMOUS_VIEW_MAX = 30;
+
+// Lets a visitor "Add to Home Screen" a shortcut straight to this event's map — see
+// manifest.webmanifest/route.ts for why this is per-event instead of one root manifest.
+// `appleWebApp`/`icons.apple` cover iOS Safari, which ignores the manifest file itself.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ eventSlug: string }>;
+}): Promise<Metadata> {
+  const { eventSlug } = await params;
+  const ev = await requireEventBySlug(eventSlug);
+  return {
+    title: ev.name,
+    manifest: `/events/${eventSlug}/map/manifest.webmanifest`,
+    appleWebApp: {
+      capable: true,
+      title: ev.name,
+      statusBarStyle: "default",
+    },
+    icons: { apple: "/manifest-icon" },
+  };
+}
 
 export default async function StaffEventMapPage({
   params,

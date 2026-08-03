@@ -23,7 +23,11 @@
     "offlineSaveError": "Offline save failed. Please try again.",
     "offlineTipMessage": "Tip: download this map so it also works without signal.",
     "offlineTipDownload": "Download now",
-    "offlineTipDismiss": "Dismiss"
+    "offlineTipDismiss": "Dismiss",
+    "homeScreenTipMessageIos": "Tip: tap Share → 'Add to Home Screen' to open this map even faster.",
+    "homeScreenTipMessageAndroid": "Tip: add this map to your home screen to open it even faster.",
+    "homeScreenTipAdd": "Add",
+    "homeScreenTipDismiss": "Dismiss"
   },
   "visitorNameGate": {
     "welcome": "Welcome",

@@ -24,9 +24,13 @@
     "offlineTipMessage": "Tip: download deze kaart, dan werkt hij ook zonder bereik.",
     "offlineTipDownload": "Download nu",
     "offlineTipDismiss": "Sluiten",
-    "homeScreenTipMessageIos": "Tip: tik op Delen → 'Zet op beginscherm' om deze kaart nog sneller te openen.",
+    "homeScreenTipMessageIosSafari": "Tip: tik op Delen → 'Zet op beginscherm' om deze kaart nog sneller te openen.",
+    "homeScreenTipMessageIosOther": "Tip: open deze pagina in Safari om 'm aan je beginscherm toe te voegen — dat gaat hier niet.",
     "homeScreenTipMessageAndroid": "Tip: zet deze kaart op je beginscherm om 'm nog sneller te openen.",
+    "homeScreenTipMessageAndroidManual": "Tip: zet deze kaart op je beginscherm via het menu (⋮) van je browser.",
+    "homeScreenTipOpenSafari": "Open in Safari",
     "homeScreenTipAdd": "Toevoegen",
+    "homeScreenTipLinkCopied": "Link gekopieerd — plak 'm in Safari als 'ie niet vanzelf opent.",
     "homeScreenTipDismiss": "Sluiten"
   },
   "visitorNameGate": {

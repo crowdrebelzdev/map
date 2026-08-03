@@ -132,8 +132,15 @@ export function OperationalMap({
 
   const { isOnline, offlineStatus, offlineProgress, handleDownloadOffline, showOfflineTip, dismissOfflineTip } =
     useOfflineMap(map, tileUrlTemplate);
-  const { showHint: showHomeScreenTip, dismissHint: dismissHomeScreenTip, platform, canPromptInstall, promptInstall } =
-    useAddToHomeScreen(eventId, offlineStatus === "done");
+  const {
+    showHint: showHomeScreenTip,
+    dismissHint: dismissHomeScreenTip,
+    platform,
+    canPromptInstall,
+    promptInstall,
+    safariHandoffHref,
+    handleSafariHandoffClick,
+  } = useAddToHomeScreen(eventId, offlineStatus === "done");
 
   // Puts the notification-subscribe button into NavBar's own header row (a no-op when
   // there's no NavBar to render it in, e.g. an anonymous visitor — see header-slot.tsx) so
@@ -352,8 +359,25 @@ export function OperationalMap({
         {showHomeScreenTip && (
           <div className="pointer-events-auto flex items-center gap-2 rounded-full bg-foreground/90 py-1.5 pr-2 pl-3 text-xs font-medium text-background shadow-md backdrop-blur-sm">
             <Smartphone size={13} className="shrink-0" />
-            <span>{platform === "ios" ? t("homeScreenTipMessageIos") : t("homeScreenTipMessageAndroid")}</span>
-            {canPromptInstall && (
+            <span>
+              {platform === "ios-safari"
+                ? t("homeScreenTipMessageIosSafari")
+                : platform === "ios-other"
+                  ? t("homeScreenTipMessageIosOther")
+                  : canPromptInstall
+                    ? t("homeScreenTipMessageAndroid")
+                    : t("homeScreenTipMessageAndroidManual")}
+            </span>
+            {platform === "ios-other" && safariHandoffHref && (
+              <a
+                href={safariHandoffHref}
+                onClick={handleSafariHandoffClick}
+                className="shrink-0 rounded-full bg-background px-2 py-1 text-foreground"
+              >
+                {t("homeScreenTipOpenSafari")}
+              </a>
+            )}
+            {platform === "android" && canPromptInstall && (
               <button
                 onClick={promptInstall}
                 className="shrink-0 rounded-full bg-background px-2 py-1 text-foreground"

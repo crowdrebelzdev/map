@@ -24,9 +24,13 @@
     "offlineTipMessage": "Tip: download this map so it also works without signal.",
     "offlineTipDownload": "Download now",
     "offlineTipDismiss": "Dismiss",
-    "homeScreenTipMessageIos": "Tip: tap Share → 'Add to Home Screen' to open this map even faster.",
+    "homeScreenTipMessageIosSafari": "Tip: tap Share → 'Add to Home Screen' to open this map even faster.",
+    "homeScreenTipMessageIosOther": "Tip: open this page in Safari to add it to your home screen — that doesn't work here.",
     "homeScreenTipMessageAndroid": "Tip: add this map to your home screen to open it even faster.",
+    "homeScreenTipMessageAndroidManual": "Tip: add this map to your home screen via your browser's menu (⋮).",
+    "homeScreenTipOpenSafari": "Open in Safari",
     "homeScreenTipAdd": "Add",
+    "homeScreenTipLinkCopied": "Link copied — paste it into Safari if it doesn't open automatically.",
     "homeScreenTipDismiss": "Dismiss"
   },
   "visitorNameGate": {

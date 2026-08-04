@@ -158,16 +158,21 @@ export default function ImageOverlayEditor({
   const [displayBearing, setDisplayBearing] = useState(bearing);
 
   function handleMoveEnd(rawBearing: number) {
+    // MapLibre reports bearing in its own range (e.g. -40 for a counter-clockwise turn, not
+    // 320) while `snappedBearing` normalizes into [0, 360). Comparing those two forms directly
+    // was the bug: for any "negative" raw bearing, they'd never look equal even when they're
+    // the same angle, so this always thought a snap-animation was needed — and if MapLibre's
+    // own easeTo treated that as a genuine no-op (target angle already reached), it never fired
+    // a follow-up moveend, so the committed value below never ran at all. Always commit here,
+    // synchronously, using normalized numbers throughout; the easeTo below is purely cosmetic
+    // (settling the last visual degree or two into place) and never gates the actual save state.
+    const normalized = normalizeBearing(rawBearing);
     const snapped = snappedBearing(rawBearing);
-    if (snapped !== rawBearing) {
-      // Ease the rest of the way to the exact right angle — this fires its own onMoveEnd
-      // once the animation finishes, which re-enters this function with snapped === raw
-      // (a no-op on the check above), so the settle-and-report below happens exactly once.
+    setDisplayBearing(snapped);
+    onBearingChangeRef.current(snapped);
+    if (snapped !== normalized) {
       mapRef.current?.getMap().easeTo({ bearing: snapped, duration: 200 });
-      return;
     }
-    setDisplayBearing(rawBearing);
-    onBearingChangeRef.current(rawBearing);
   }
 
   function handleResetBearing() {

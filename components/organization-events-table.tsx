@@ -1,3 +1,5 @@
+"use client";
+
 import Link from "next/link";
 import { useLocale, useTranslations } from "next-intl";
 import { Badge } from "@/components/ui/badge";

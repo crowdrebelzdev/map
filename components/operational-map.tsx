@@ -102,7 +102,11 @@ export function OperationalMap({
   const [poiSizeMultiplier, setPoiSizeMultiplier] = useState(1);
   const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
   const [selectedDayId, setSelectedDayId] = useState<string>(() => {
-    const todayIso = new Date().toISOString().slice(0, 10);
+    // Local date parts, not toISOString() (which is UTC) — otherwise this picks the wrong
+    // day near local midnight for any visitor offset from UTC, while `nowHHMM` below (already
+    // local) would keep filtering POIs against the *other* day's schedule.
+    const now = new Date();
+    const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
     return eventDays.find((d) => d.date === todayIso)?.id ?? ALL_DAYS_VALUE;
   });
   const visiblePois = useMemo(() => {

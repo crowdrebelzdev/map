@@ -1,4 +1,4 @@
-import { getLocale, getTranslations } from "next-intl/server";
+import { getTranslations } from "next-intl/server";
 import { getUser, listUserOrganizations } from "@/actions/users";
 import { ROLE_LABELS } from "@/lib/auth-roles";
 import { SetPlatformRoleButton } from "@/components/set-platform-role-button";
@@ -7,6 +7,7 @@ import { EditUserForm } from "@/components/edit-user-form";
 import { SetUserPasswordButton } from "@/components/set-user-password-button";
 import { DeleteUserButton } from "@/components/delete-user-button";
 import { UserOrganizationsTable } from "@/components/user-organizations-table";
+import { UserCreatedAt } from "@/components/user-created-at";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -15,11 +16,7 @@ export default async function PlatformUserDetailPage({
 }: {
   params: Promise<{ userId: string }>;
 }) {
-  const [t, locale, { userId }] = await Promise.all([
-    getTranslations("platformUserDetail"),
-    getLocale(),
-    params,
-  ]);
+  const [t, { userId }] = await Promise.all([getTranslations("platformUserDetail"), params]);
 
   const [user, organizations] = await Promise.all([getUser(userId), listUserOrganizations(userId)]);
   const isPlatformAdmin = user.role === "admin";
@@ -49,9 +46,7 @@ export default async function PlatformUserDetailPage({
           {banned && user.banReason && (
             <p className="w-full text-sm text-muted-foreground">{t("banReason", { reason: user.banReason })}</p>
           )}
-          <p className="w-full text-xs text-muted-foreground">
-            {t("createdAt", { date: user.createdAt.toLocaleDateString(locale === "en" ? "en-US" : "nl-NL") })}
-          </p>
+          <UserCreatedAt createdAt={user.createdAt} />
         </CardContent>
       </Card>
 

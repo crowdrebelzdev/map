@@ -32,6 +32,22 @@ import {
 
 const BASEMAP_STYLE = "https://tiles.openfreemap.org/styles/liberty";
 
+// How close (in degrees) a drag-rotate has to end up to a cardinal/intercardinal-ish right
+// angle (0/90/180/270) before it snaps the rest of the way there — makes it much easier to
+// land the base map exactly "recht" (straight) by feel, without having to fight for the
+// exact pixel that lands on precisely 0.00000°.
+const ROTATION_SNAP_THRESHOLD_DEG = 4;
+
+function normalizeBearing(raw: number): number {
+  return ((raw % 360) + 360) % 360;
+}
+
+function snappedBearing(raw: number): number {
+  const normalized = normalizeBearing(raw);
+  const nearest = Math.round(normalized / 90) * 90;
+  return Math.abs(normalized - nearest) <= ROTATION_SNAP_THRESHOLD_DEG ? nearest % 360 : normalized;
+}
+
 export type EditMode = "image" | "grid";
 
 export type ImageOverlayEditorProps = {
@@ -136,6 +152,27 @@ export default function ImageOverlayEditor({
   useLayoutEffect(() => {
     onBearingChangeRef.current = onBearingChange;
   }, [onBearingChange]);
+
+  // Live readout for the compass widget below — updates continuously while dragging, unlike
+  // `bearing`/`onBearingChange` which only need the settled value once a rotate ends.
+  const [displayBearing, setDisplayBearing] = useState(bearing);
+
+  function handleMoveEnd(rawBearing: number) {
+    const snapped = snappedBearing(rawBearing);
+    if (snapped !== rawBearing) {
+      // Ease the rest of the way to the exact right angle — this fires its own onMoveEnd
+      // once the animation finishes, which re-enters this function with snapped === raw
+      // (a no-op on the check above), so the settle-and-report below happens exactly once.
+      mapRef.current?.getMap().easeTo({ bearing: snapped, duration: 200 });
+      return;
+    }
+    setDisplayBearing(rawBearing);
+    onBearingChangeRef.current(rawBearing);
+  }
+
+  function handleResetBearing() {
+    mapRef.current?.getMap().easeTo({ bearing: 0, duration: 300 });
+  }
 
   const activeCorners = mode === "image" ? corners : gridCorners;
 
@@ -432,7 +469,8 @@ export default function ImageOverlayEditor({
         // that's how `bearing` gets set. maxPitch stays locked at 0 regardless: tilt isn't
         // part of what this feature captures, and it'd only make corner-placement harder.
         maxPitch={0}
-        onMoveEnd={(e) => onBearingChangeRef.current(e.viewState.bearing)}
+        onMove={(e) => setDisplayBearing(e.viewState.bearing)}
+        onMoveEnd={(e) => handleMoveEnd(e.viewState.bearing)}
         onLoad={() => {
           setLoaded(true);
           const map = mapRef.current?.getMap();
@@ -707,6 +745,34 @@ export default function ImageOverlayEditor({
           </Marker>
         )}
       </Map>
+
+      <div className="absolute bottom-3 left-3">
+        <button
+          type="button"
+          onClick={handleResetBearing}
+          title="Klik om de kaart weer recht naar het noorden te draaien"
+          className="flex flex-col items-center gap-0.5 rounded-full border bg-background/95 p-1.5 shadow-md backdrop-blur-sm transition hover:bg-muted"
+        >
+          <svg width="36" height="36" viewBox="0 0 40 40">
+            <circle cx="20" cy="20" r="17" fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="1.5" />
+            <g style={{ transform: `rotate(${-displayBearing}deg)`, transformOrigin: "20px 20px" }}>
+              <line x1="20" y1="4" x2="20" y2="8" stroke="currentColor" strokeOpacity="0.3" strokeWidth="1.5" />
+              <line x1="20" y1="32" x2="20" y2="36" stroke="currentColor" strokeOpacity="0.3" strokeWidth="1.5" />
+              <line x1="4" y1="20" x2="8" y2="20" stroke="currentColor" strokeOpacity="0.3" strokeWidth="1.5" />
+              <line x1="32" y1="20" x2="36" y2="20" stroke="currentColor" strokeOpacity="0.3" strokeWidth="1.5" />
+              <polygon points="20,6 23.5,20 20,20 16.5,20" fill="#dc2626" />
+              <polygon points="20,34 16.5,20 20,20 23.5,20" fill="#94a3b8" />
+              <circle cx="20" cy="20" r="2" fill="currentColor" />
+              <text x="20" y="5" textAnchor="middle" fontSize="6" fontWeight="700" fill="#dc2626">
+                N
+              </text>
+            </g>
+          </svg>
+          <span className="text-[10px] font-medium tabular-nums text-muted-foreground">
+            {Math.round(normalizeBearing(displayBearing))}°
+          </span>
+        </button>
+      </div>
 
       <div className="pointer-events-none absolute inset-x-0 top-3 flex justify-center px-3">
         <div className="pointer-events-auto w-full max-w-sm">

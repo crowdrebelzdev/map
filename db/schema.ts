@@ -86,6 +86,13 @@ export const eventMap = pgTable("event_map", {
   // own warp, producing a confusing double-rotation. Defaults true since nothing before this
   // column existed ever relied on visitors being able to rotate the map.
   lockOrientation: boolean("lock_orientation").notNull().default(true),
+  // The base map's fixed compass heading (degrees, 0 = north-up) — set by freely rotating the
+  // OpenFreeMap layer in the editor (always rotatable there regardless of lockOrientation,
+  // which only governs visitor-facing gestures) and captured on save. This is what
+  // lockOrientation actually locks the map *to* everywhere it's rendered; without this column,
+  // "locked" always meant "locked to north" specifically, with no way to lock to whatever
+  // angle an organizer's plattegrond happens to be oriented at.
+  bearing: doublePrecision("bearing").notNull().default(0),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -125,6 +132,8 @@ export const eventMapVersion = pgTable(
     // Mirrors eventMap.lockOrientation (see the comment there) — snapshotted/restored
     // alongside the corners so restoring an old version also restores its rotation-lock setting.
     lockOrientation: boolean("lock_orientation").notNull().default(true),
+    // Mirrors eventMap.bearing (see the comment there).
+    bearing: doublePrecision("bearing").notNull().default(0),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [index("event_map_version_event_idx").on(table.eventId, table.createdAt)],

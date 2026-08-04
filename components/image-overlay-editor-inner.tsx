@@ -41,10 +41,13 @@ export type ImageOverlayEditorProps = {
   corners: CornerSet | null;
   onCornersChange: (corners: CornerSet) => void;
   opacity: number;
-  /** Disables rotate/tilt gestures on the base OpenFreeMap map (drag-rotate, touch
-   * pinch-rotate, keyboard shift+arrows, and the compass control) — see eventMap.lockOrientation
-   * in db/schema.ts for why. Previewed live in the editor so it matches what visitors see. */
-  lockOrientation: boolean;
+  /** The base map's saved compass heading in degrees (see eventMap.bearing). The editor's map
+   * always allows free rotation (unlike the read-only views in event-map-view-inner.tsx, which
+   * enforce eventMap.lockOrientation) since that's how this value gets set in the first place:
+   * the initial view opens at this angle, and `onBearingChange` reports back whenever the admin
+   * rotates it further, so "Plaatsing opslaan" always captures whatever's currently on screen. */
+  bearing: number;
+  onBearingChange: (bearing: number) => void;
 
   gridCorners: CornerSet | null;
   onGridCornersChange: (corners: CornerSet) => void;
@@ -110,7 +113,8 @@ export default function ImageOverlayEditor({
   corners,
   onCornersChange,
   opacity,
-  lockOrientation,
+  bearing,
+  onBearingChange,
   gridCorners,
   onGridCornersChange,
   gridColumns,
@@ -128,25 +132,10 @@ export default function ImageOverlayEditor({
 }: ImageOverlayEditorProps) {
   const mapRef = useRef<MapRef | null>(null);
   const [loaded, setLoaded] = useState(false);
-
-  // dragRotate (a whole gesture handler) and maxPitch are applied reactively by react-map-gl
-  // itself whenever those props change (see Mapbox._updateHandlers/_updateSettings) — but
-  // touchZoomRotate and keyboard are also whole-handler toggles in react-map-gl, and disabling
-  // either entirely would take touch pinch-zoom / keyboard pan down with it. Those two only
-  // expose a rotation-only toggle imperatively (map.touchZoomRotate.disableRotation(),
-  // map.keyboard.disableRotation()), so this effect drives them directly instead of via props.
-  useEffect(() => {
-    if (!loaded) return;
-    const map = mapRef.current?.getMap();
-    if (!map) return;
-    if (lockOrientation) {
-      map.touchZoomRotate.disableRotation();
-      map.keyboard.disableRotation();
-    } else {
-      map.touchZoomRotate.enableRotation();
-      map.keyboard.enableRotation();
-    }
-  }, [loaded, lockOrientation]);
+  const onBearingChangeRef = useRef(onBearingChange);
+  useLayoutEffect(() => {
+    onBearingChangeRef.current = onBearingChange;
+  }, [onBearingChange]);
 
   const activeCorners = mode === "image" ? corners : gridCorners;
 
@@ -437,10 +426,13 @@ export default function ImageOverlayEditor({
       <Map
         ref={mapRef}
         mapStyle={BASEMAP_STYLE}
-        initialViewState={{ longitude: 5.2913, latitude: 52.1326, zoom: 14 }}
+        initialViewState={{ longitude: 5.2913, latitude: 52.1326, zoom: 14, bearing }}
         style={{ width: "100%", height: "100%" }}
-        dragRotate={!lockOrientation}
-        maxPitch={lockOrientation ? 0 : undefined}
+        // No dragRotate restriction here — the editor always allows free rotation, since
+        // that's how `bearing` gets set. maxPitch stays locked at 0 regardless: tilt isn't
+        // part of what this feature captures, and it'd only make corner-placement harder.
+        maxPitch={0}
+        onMoveEnd={(e) => onBearingChangeRef.current(e.viewState.bearing)}
         onLoad={() => {
           setLoaded(true);
           const map = mapRef.current?.getMap();
@@ -468,7 +460,7 @@ export default function ImageOverlayEditor({
           }
         }}
       >
-        <NavigationControl position="top-right" showCompass={!lockOrientation} />
+        <NavigationControl position="top-right" />
 
         {loaded && corners && (
           <Source

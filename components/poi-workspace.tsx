@@ -524,6 +524,7 @@ export function PoiWorkspace({
                     bl: { lat: map.cornerBlLat, lng: map.cornerBlLng },
                   },
                   lockOrientation: map.lockOrientation,
+                  bearing: map.bearing,
                   tiles:
                     tileUrlTemplate && map.tileMinZoom != null && map.tileMaxZoom != null
                       ? {

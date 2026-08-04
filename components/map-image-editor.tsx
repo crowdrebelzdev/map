@@ -125,6 +125,7 @@ export function MapImageEditor({
   );
   const [corners, setCorners] = useState<CornerSet | null>(cornersFromExisting(existingMap));
   const [lockOrientation, setLockOrientation] = useState(existingMap?.lockOrientation ?? true);
+  const [bearing, setBearing] = useState(existingMap?.bearing ?? 0);
   const [opacity, setOpacity] = useState(0.85);
   const [quality, setQuality] = useState<MapQualityPreset>("hoog");
   const [uploading, setUploading] = useState(false);
@@ -272,6 +273,7 @@ export function MapImageEditor({
           imageHeight: result.imageHeight,
           corners,
           lockOrientation,
+          bearing,
         });
         router.refresh();
         toast.success(t("updatedPlacementUnchangedToast"), { id: UPLOAD_TOAST_ID });
@@ -302,6 +304,7 @@ export function MapImageEditor({
         imageHeight: image.imageHeight,
         corners,
         lockOrientation,
+        bearing,
       });
       toast.success(t("placementSavedToast"));
       router.refresh();
@@ -660,7 +663,8 @@ export function MapImageEditor({
           corners={corners}
           onCornersChange={setCorners}
           opacity={opacity}
-          lockOrientation={lockOrientation}
+          bearing={bearing}
+          onBearingChange={setBearing}
           gridCorners={gridCorners}
           onGridCornersChange={setGridCorners}
           gridColumns={columns}

@@ -92,6 +92,9 @@ export type EventMapImage = {
   /** Mirrors eventMap.lockOrientation (see db/schema.ts) — undefined/missing (older data
    * shapes) defaults to locked, same as the column's own default. */
   lockOrientation?: boolean;
+  /** Mirrors eventMap.bearing (see db/schema.ts) — the compass heading the map opens at (and,
+   * when lockOrientation is true, is held to). Undefined/missing defaults to 0 (north-up). */
+  bearing?: number;
   /** Present once the plattegrond has a generated tile pyramid (see lib/map-tiling.ts) —
    * rendered instead of the single `imageUrl` overlay below when set, since it's the same
    * plattegrond at every zoom level without the multi-megabyte single-image download. Absent
@@ -286,6 +289,7 @@ export default function EventMapView({
   const { loaded, handleMapLoad, handleMapSourceData } = useMapLoadState(mapRef, mapImage, onMapReady);
   const viewport = useMapViewport(mapRef, loaded);
   const lockOrientation = mapImage?.lockOrientation ?? true;
+  const bearing = mapImage?.bearing ?? 0;
 
   // See the identical effect in image-overlay-editor-inner.tsx for why touchZoomRotate/keyboard
   // are driven imperatively instead of via a react-map-gl prop (both are whole-handler toggles
@@ -403,8 +407,8 @@ export default function EventMapView({
       mapStyle={BASEMAP_STYLE}
       initialViewState={
         initialBounds
-          ? { bounds: initialBounds, fitBoundsOptions: { padding: 40 } }
-          : { longitude: 5.2913, latitude: 52.1326, zoom: 6 }
+          ? { bounds: initialBounds, fitBoundsOptions: { padding: 40 }, bearing }
+          : { longitude: 5.2913, latitude: 52.1326, zoom: 6, bearing }
       }
       style={{ width: "100%", height: "100%" }}
       onClick={handleClick}

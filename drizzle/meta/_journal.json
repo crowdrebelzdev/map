@@ -183,6 +183,13 @@
       "when": 1785855460581,
       "tag": "0025_peaceful_thing",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1785868455933,
+      "tag": "0026_military_steel_serpent",
+      "breakpoints": true
     }
   ]
 }

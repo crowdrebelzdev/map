@@ -14,7 +14,10 @@ export function useFlyToTarget(
   useEffect(() => {
     if (!loaded || !flyToTarget || !mapRef.current) return;
     if (flyToTarget.type === "bounds") {
-      mapRef.current.fitBounds(flyToTarget.bounds, { padding: 60, duration: 800 });
+      // fitBounds defaults bearing to 0 unless told otherwise — without this, flying to a
+      // search/grid/POI result would silently straighten out a rotated/locked map.
+      const map = mapRef.current.getMap();
+      mapRef.current.fitBounds(flyToTarget.bounds, { padding: 60, duration: 800, bearing: map.getBearing() });
     } else {
       mapRef.current.flyTo({
         center: [flyToTarget.center.lng, flyToTarget.center.lat],

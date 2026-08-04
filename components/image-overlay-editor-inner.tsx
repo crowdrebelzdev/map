@@ -492,7 +492,12 @@ export default function ImageOverlayEditor({
                 [Math.min(...lngs), Math.min(...lats)],
                 [Math.max(...lngs), Math.max(...lats)],
               ],
-              { padding: 80, duration: 0 },
+              // MapLibre's fitBounds defaults bearing to 0 unless told otherwise — without
+              // this, opening the editor on an already-rotated plattegrond would silently
+              // snap the base map back to north on load. map.getBearing() is already correct
+              // here (set via initialViewState.bearing above; this initialViewState has no
+              // `bounds` of its own, so nothing has fitBounds-reset it yet at this point).
+              { padding: 80, duration: 0, bearing: map.getBearing() },
             );
           } else if ("geolocation" in navigator) {
             navigator.geolocation.getCurrentPosition(

@@ -11,6 +11,7 @@ import {
   type MapRef,
   type MapLayerMouseEvent,
 } from "react-map-gl/maplibre";
+import type { FitBoundsOptions } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { X } from "lucide-react";
 import type { CornerSet, GridCell, LatLng } from "@/lib/geo";
@@ -407,7 +408,16 @@ export default function EventMapView({
       mapStyle={BASEMAP_STYLE}
       initialViewState={
         initialBounds
-          ? { bounds: initialBounds, fitBoundsOptions: { padding: 40 }, bearing }
+          ? {
+              bounds: initialBounds,
+              // MapLibre's own cameraForBounds defaults bearing to 0 when it's not inside
+              // *these* options specifically — a top-level `bearing` alongside `bounds` gets
+              // applied first (via jumpTo) and then immediately clobbered back to 0 by the
+              // fitBounds call bounds triggers, so it has to live here instead. react-map-gl's
+              // fitBoundsOptions type is narrower than MapLibre's real (and honored) one, hence
+              // the cast.
+              fitBoundsOptions: { padding: 40, bearing } as FitBoundsOptions,
+            }
           : { longitude: 5.2913, latitude: 52.1326, zoom: 6, bearing }
       }
       style={{ width: "100%", height: "100%" }}

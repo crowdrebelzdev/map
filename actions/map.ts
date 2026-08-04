@@ -90,6 +90,7 @@ export async function saveMapCorners(input: {
   imageWidth: number;
   imageHeight: number;
   corners: CornerSet;
+  lockOrientation: boolean;
 }) {
   const { session } = await requireEventPermission(input.eventId, "edit_map");
 
@@ -109,6 +110,7 @@ export async function saveMapCorners(input: {
     cornerBrLng: corners.br.lng,
     cornerBlLat: corners.bl.lat,
     cornerBlLng: corners.bl.lng,
+    lockOrientation: input.lockOrientation,
     updatedAt: new Date(),
   };
 

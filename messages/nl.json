@@ -634,6 +634,8 @@
     "placementTitle": "Plaatsing plattegrond",
     "placementHint": "Sleep de hoeken om uit te rekken, de rand-punten om één zijde te schalen, de blauwe knop om te draaien, het groene blokje om uniform te vergroten/verkleinen, of het zwarte pijltjes-icoon om te verplaatsen.",
     "opacityLabel": "Doorzichtigheid",
+    "lockOrientationLabel": "Kaartrichting vergrendelen",
+    "lockOrientationHint": "Voorkomt dat bezoekers de onderliggende kaart kunnen draaien of kantelen — voorkomt dat de plattegrond (die vaak al op een specifieke richting staat) er nog schever bij komt te liggen.",
     "savePlacement": "Plaatsing opslaan",
     "gridTitle": "Grid",
     "gridHint": "Sleep het grid net als de plattegrond passend — onafhankelijk van de plattegrond zelf. Handig als het grid net niet precies uitlijnt.",

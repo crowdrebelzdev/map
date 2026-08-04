@@ -77,6 +77,15 @@ export const eventMap = pgTable("event_map", {
   // tileSize — a mismatch means a blank/broken map, not just lower quality). Null means 512,
   // the only size ever used before this column existed.
   tileSize: integer("tile_size"),
+  // When true, the base OpenFreeMap map can't be rotated or tilted by the visitor (drag-rotate,
+  // touch pinch-rotate, keyboard shift+arrows, and the NavigationControl compass are all
+  // disabled) — everywhere this eventMap is rendered, editor included. Without this, an
+  // organizer's plattegrond graphic (often warped to a specific bearing to line up with the
+  // real venue, and frequently containing non-cartographic chrome like a legend or ticket
+  // panel baked into the same image) can end up rotated further by the viewer, on top of its
+  // own warp, producing a confusing double-rotation. Defaults true since nothing before this
+  // column existed ever relied on visitors being able to rotate the map.
+  lockOrientation: boolean("lock_orientation").notNull().default(true),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
@@ -113,6 +122,9 @@ export const eventMapVersion = pgTable(
     tileMinZoom: integer("tile_min_zoom"),
     tileMaxZoom: integer("tile_max_zoom"),
     tileSize: integer("tile_size"),
+    // Mirrors eventMap.lockOrientation (see the comment there) — snapshotted/restored
+    // alongside the corners so restoring an old version also restores its rotation-lock setting.
+    lockOrientation: boolean("lock_orientation").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [index("event_map_version_event_idx").on(table.eventId, table.createdAt)],

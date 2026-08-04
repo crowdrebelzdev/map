@@ -262,6 +262,7 @@ export function OperationalMap({
             br: { lat: map.cornerBrLat, lng: map.cornerBrLng },
             bl: { lat: map.cornerBlLat, lng: map.cornerBlLng },
           },
+          lockOrientation: map.lockOrientation,
           tiles:
             tileUrlTemplate && map.tileMinZoom != null && map.tileMaxZoom != null
               ? {

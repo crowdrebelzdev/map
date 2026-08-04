@@ -634,6 +634,8 @@
     "placementTitle": "Map placement",
     "placementHint": "Drag the corners to stretch, the edge points to scale one side, the blue button to rotate, the green square to scale uniformly, or the black arrows icon to move.",
     "opacityLabel": "Opacity",
+    "lockOrientationLabel": "Lock map orientation",
+    "lockOrientationHint": "Prevents visitors from rotating or tilting the underlying map — keeps the plattegrond (which is often already placed at a specific bearing) from getting skewed further.",
     "savePlacement": "Save placement",
     "gridTitle": "Grid",
     "gridHint": "Drag the grid to fit, just like the map — independently of the map itself. Handy when the grid doesn't quite line up.",

@@ -1,0 +1,2 @@
+ALTER TABLE "event_map" ADD COLUMN "lock_orientation" boolean DEFAULT true NOT NULL;--> statement-breakpoint
+ALTER TABLE "event_map_version" ADD COLUMN "lock_orientation" boolean DEFAULT true NOT NULL;

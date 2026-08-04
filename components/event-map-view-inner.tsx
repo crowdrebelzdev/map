@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import {
   Map,
   Source,
@@ -89,6 +89,9 @@ export type EventMapImage = {
    * `imageUrl` when absent (maps saved before this field existed). */
   displayImageUrl?: string | null;
   corners: { tl: LatLng; tr: LatLng; br: LatLng; bl: LatLng };
+  /** Mirrors eventMap.lockOrientation (see db/schema.ts) — undefined/missing (older data
+   * shapes) defaults to locked, same as the column's own default. */
+  lockOrientation?: boolean;
   /** Present once the plattegrond has a generated tile pyramid (see lib/map-tiling.ts) —
    * rendered instead of the single `imageUrl` overlay below when set, since it's the same
    * plattegrond at every zoom level without the multi-megabyte single-image download. Absent
@@ -282,6 +285,23 @@ export default function EventMapView({
   const mapRef = useRef<MapRef | null>(null);
   const { loaded, handleMapLoad, handleMapSourceData } = useMapLoadState(mapRef, mapImage, onMapReady);
   const viewport = useMapViewport(mapRef, loaded);
+  const lockOrientation = mapImage?.lockOrientation ?? true;
+
+  // See the identical effect in image-overlay-editor-inner.tsx for why touchZoomRotate/keyboard
+  // are driven imperatively instead of via a react-map-gl prop (both are whole-handler toggles
+  // there, and disabling either fully would take touch pinch-zoom / keyboard pan down with it).
+  useEffect(() => {
+    if (!loaded) return;
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    if (lockOrientation) {
+      map.touchZoomRotate.disableRotation();
+      map.keyboard.disableRotation();
+    } else {
+      map.touchZoomRotate.enableRotation();
+      map.keyboard.enableRotation();
+    }
+  }, [loaded, lockOrientation]);
   useFlyToTarget(mapRef, loaded, flyToTarget);
 
   const {
@@ -392,11 +412,13 @@ export default function EventMapView({
       cursor={onMapClick || drawingVertices ? "crosshair" : "grab"}
       onLoad={handleMapLoad}
       onSourceData={handleMapSourceData}
+      dragRotate={!lockOrientation}
+      maxPitch={lockOrientation ? 0 : undefined}
       // Required by OpenStreetMap's ODbL license and OpenFreeMap's terms — can't be removed,
       // but `compact` collapses it to a small "i" icon instead of the full credit line.
       attributionControl={{ compact: true }}
     >
-      <NavigationControl position="bottom-right" />
+      <NavigationControl position="bottom-right" showCompass={!lockOrientation} />
       {geolocate && (
         <GeolocateControl
           position="bottom-right"

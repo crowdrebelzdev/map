@@ -41,6 +41,10 @@ export type ImageOverlayEditorProps = {
   corners: CornerSet | null;
   onCornersChange: (corners: CornerSet) => void;
   opacity: number;
+  /** Disables rotate/tilt gestures on the base OpenFreeMap map (drag-rotate, touch
+   * pinch-rotate, keyboard shift+arrows, and the compass control) — see eventMap.lockOrientation
+   * in db/schema.ts for why. Previewed live in the editor so it matches what visitors see. */
+  lockOrientation: boolean;
 
   gridCorners: CornerSet | null;
   onGridCornersChange: (corners: CornerSet) => void;
@@ -106,6 +110,7 @@ export default function ImageOverlayEditor({
   corners,
   onCornersChange,
   opacity,
+  lockOrientation,
   gridCorners,
   onGridCornersChange,
   gridColumns,
@@ -123,6 +128,25 @@ export default function ImageOverlayEditor({
 }: ImageOverlayEditorProps) {
   const mapRef = useRef<MapRef | null>(null);
   const [loaded, setLoaded] = useState(false);
+
+  // dragRotate (a whole gesture handler) and maxPitch are applied reactively by react-map-gl
+  // itself whenever those props change (see Mapbox._updateHandlers/_updateSettings) — but
+  // touchZoomRotate and keyboard are also whole-handler toggles in react-map-gl, and disabling
+  // either entirely would take touch pinch-zoom / keyboard pan down with it. Those two only
+  // expose a rotation-only toggle imperatively (map.touchZoomRotate.disableRotation(),
+  // map.keyboard.disableRotation()), so this effect drives them directly instead of via props.
+  useEffect(() => {
+    if (!loaded) return;
+    const map = mapRef.current?.getMap();
+    if (!map) return;
+    if (lockOrientation) {
+      map.touchZoomRotate.disableRotation();
+      map.keyboard.disableRotation();
+    } else {
+      map.touchZoomRotate.enableRotation();
+      map.keyboard.enableRotation();
+    }
+  }, [loaded, lockOrientation]);
 
   const activeCorners = mode === "image" ? corners : gridCorners;
 
@@ -415,6 +439,8 @@ export default function ImageOverlayEditor({
         mapStyle={BASEMAP_STYLE}
         initialViewState={{ longitude: 5.2913, latitude: 52.1326, zoom: 14 }}
         style={{ width: "100%", height: "100%" }}
+        dragRotate={!lockOrientation}
+        maxPitch={lockOrientation ? 0 : undefined}
         onLoad={() => {
           setLoaded(true);
           const map = mapRef.current?.getMap();
@@ -442,7 +468,7 @@ export default function ImageOverlayEditor({
           }
         }}
       >
-        <NavigationControl position="top-right" />
+        <NavigationControl position="top-right" showCompass={!lockOrientation} />
 
         {loaded && corners && (
           <Source

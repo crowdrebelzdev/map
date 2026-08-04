@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -123,6 +124,7 @@ export function MapImageEditor({
       : null,
   );
   const [corners, setCorners] = useState<CornerSet | null>(cornersFromExisting(existingMap));
+  const [lockOrientation, setLockOrientation] = useState(existingMap?.lockOrientation ?? true);
   const [opacity, setOpacity] = useState(0.85);
   const [quality, setQuality] = useState<MapQualityPreset>("hoog");
   const [uploading, setUploading] = useState(false);
@@ -269,6 +271,7 @@ export function MapImageEditor({
           imageWidth: result.imageWidth,
           imageHeight: result.imageHeight,
           corners,
+          lockOrientation,
         });
         router.refresh();
         toast.success(t("updatedPlacementUnchangedToast"), { id: UPLOAD_TOAST_ID });
@@ -298,6 +301,7 @@ export function MapImageEditor({
         imageWidth: image.imageWidth,
         imageHeight: image.imageHeight,
         corners,
+        lockOrientation,
       });
       toast.success(t("placementSavedToast"));
       router.refresh();
@@ -443,6 +447,19 @@ export function MapImageEditor({
                       value={[opacity]}
                       onValueChange={(v) => setOpacity(Array.isArray(v) ? v[0] : v)}
                     />
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2.5">
+                      <Switch
+                        id="lock-orientation"
+                        checked={lockOrientation}
+                        onCheckedChange={setLockOrientation}
+                      />
+                      <Label htmlFor="lock-orientation" className="cursor-pointer font-normal">
+                        {t("lockOrientationLabel")}
+                      </Label>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{t("lockOrientationHint")}</p>
                   </div>
                   <Button
                     onClick={handleSavePlacement}
@@ -643,6 +660,7 @@ export function MapImageEditor({
           corners={corners}
           onCornersChange={setCorners}
           opacity={opacity}
+          lockOrientation={lockOrientation}
           gridCorners={gridCorners}
           onGridCornersChange={setGridCorners}
           gridColumns={columns}

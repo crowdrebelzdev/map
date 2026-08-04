@@ -157,6 +157,13 @@ export default function ImageOverlayEditor({
   // `bearing`/`onBearingChange` which only need the settled value once a rotate ends.
   const [displayBearing, setDisplayBearing] = useState(bearing);
 
+  // True while the compass widget itself (not the base map) is being dragged — two-finger
+  // trackpad rotate is fiddly, so the compass doubles as a direct, single-pointer rotate
+  // handle. Suppresses the snap-to-right-angle animation on every intermediate frame of that
+  // drag (it would otherwise fight the user's own pointer movement each time it crosses a
+  // snap zone); the final pointer-up still runs the normal snap/commit path.
+  const isCompassDraggingRef = useRef(false);
+
   function handleMoveEnd(rawBearing: number) {
     // MapLibre reports bearing in its own range (e.g. -40 for a counter-clockwise turn, not
     // 320) while `snappedBearing` normalizes into [0, 360). Comparing those two forms directly
@@ -167,6 +174,11 @@ export default function ImageOverlayEditor({
     // synchronously, using normalized numbers throughout; the easeTo below is purely cosmetic
     // (settling the last visual degree or two into place) and never gates the actual save state.
     const normalized = normalizeBearing(rawBearing);
+    if (isCompassDraggingRef.current) {
+      setDisplayBearing(normalized);
+      onBearingChangeRef.current(normalized);
+      return;
+    }
     const snapped = snappedBearing(rawBearing);
     setDisplayBearing(snapped);
     onBearingChangeRef.current(snapped);
@@ -177,6 +189,54 @@ export default function ImageOverlayEditor({
 
   function handleResetBearing() {
     mapRef.current?.getMap().easeTo({ bearing: 0, duration: 300 });
+  }
+
+  // Drag-to-rotate on the compass dial itself: the angle between the pointer and the widget's
+  // center IS the bearing that puts the "N" tip (which renders at rotate(-bearing), see the
+  // dial below) right under the cursor — i.e. wherever you drag the tip, that's where north
+  // ends up pointing. A plain click (no real movement) resets to north instead, preserving the
+  // original tap-to-straighten behavior.
+  function handleCompassPointerDown(e: React.PointerEvent<HTMLButtonElement>) {
+    if (e.button !== 0 && e.pointerType === "mouse") return;
+    const target = e.currentTarget;
+    target.setPointerCapture(e.pointerId);
+    const rect = target.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let dragged = false;
+
+    function bearingForPointer(clientX: number, clientY: number): number {
+      const dx = clientX - centerX;
+      const dy = clientY - centerY;
+      const angleFromUp = Math.atan2(dx, -dy) * (180 / Math.PI);
+      return -angleFromUp;
+    }
+
+    function handlePointerMove(ev: PointerEvent) {
+      if (!dragged && Math.hypot(ev.clientX - startX, ev.clientY - startY) < 3) return;
+      dragged = true;
+      isCompassDraggingRef.current = true;
+      mapRef.current?.getMap().jumpTo({ bearing: bearingForPointer(ev.clientX, ev.clientY) });
+    }
+
+    function handlePointerUp() {
+      target.removeEventListener("pointermove", handlePointerMove);
+      target.removeEventListener("pointerup", handlePointerUp);
+      target.removeEventListener("pointercancel", handlePointerUp);
+      isCompassDraggingRef.current = false;
+      if (dragged) {
+        const map = mapRef.current?.getMap();
+        if (map) handleMoveEnd(map.getBearing());
+      } else {
+        handleResetBearing();
+      }
+    }
+
+    target.addEventListener("pointermove", handlePointerMove);
+    target.addEventListener("pointerup", handlePointerUp);
+    target.addEventListener("pointercancel", handlePointerUp);
   }
 
   const activeCorners = mode === "image" ? corners : gridCorners;
@@ -759,9 +819,10 @@ export default function ImageOverlayEditor({
       <div className="absolute bottom-3 left-3">
         <button
           type="button"
-          onClick={handleResetBearing}
-          title="Klik om de kaart weer recht naar het noorden te draaien"
-          className="flex flex-col items-center gap-0.5 rounded-full border bg-background/95 p-1.5 shadow-md backdrop-blur-sm transition hover:bg-muted"
+          onPointerDown={handleCompassPointerDown}
+          title="Sleep om te draaien — klik om recht naar het noorden te zetten"
+          className="flex cursor-grab flex-col items-center gap-0.5 rounded-full border bg-background/95 p-1.5 shadow-md backdrop-blur-sm transition hover:bg-muted active:cursor-grabbing"
+          style={{ touchAction: "none" }}
         >
           <svg width="36" height="36" viewBox="0 0 40 40">
             <circle cx="20" cy="20" r="17" fill="none" stroke="currentColor" strokeOpacity="0.2" strokeWidth="1.5" />

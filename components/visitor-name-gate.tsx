@@ -7,14 +7,30 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 
-function storageKey(eventId: string) {
+function nameStorageKey(eventId: string) {
   return `visitor-name-${eventId}`;
 }
 
-/** One-time-per-tab-session gate for "publiek met naam" events — the name is purely a
- * threshold to get past (never sent to the server, see `db/schema.ts`'s `publicAccessMode`
- * comment), kept in `sessionStorage` so a refresh doesn't ask again but a fresh tab/visit
- * does. */
+function visitorIdStorageKey(eventId: string) {
+  return `visitor-id-${eventId}`;
+}
+
+/** The name + a random per-tab id this visitor was last seen under, if they've already
+ * passed the gate this tab session — read by `useVisitorLocationSharing` so it can report
+ * a position under the same identity `VisitorNameGate` established. Returns null before the
+ * gate's been passed (nothing stored yet) or outside the browser (SSR). */
+export function getVisitorIdentity(eventId: string): { name: string; visitorId: string } | null {
+  if (typeof window === "undefined") return null;
+  const name = sessionStorage.getItem(nameStorageKey(eventId));
+  const visitorId = sessionStorage.getItem(visitorIdStorageKey(eventId));
+  return name && visitorId ? { name, visitorId } : null;
+}
+
+/** One-time-per-tab-session gate for "publiek met naam" events — kept in `sessionStorage` so
+ * a refresh doesn't ask again but a fresh tab/visit does. The name itself is never sent to
+ * the server on its own (see `db/schema.ts`'s `publicAccessMode` comment); it's only reported
+ * alongside a location update once the visitor is through, same as any staff member's name
+ * on the live-ops view — see `getVisitorIdentity` above. */
 export function VisitorNameGate({ eventId, children }: { eventId: string; children: React.ReactNode }) {
   const [unlocked, setUnlocked] = useState<boolean | null>(null);
   const [name, setName] = useState("");
@@ -23,14 +39,17 @@ export function VisitorNameGate({ eventId, children }: { eventId: string; childr
   useEffect(() => {
     // sessionStorage isn't available during SSR render — has to be an effect.
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setUnlocked(sessionStorage.getItem(storageKey(eventId)) !== null);
+    setUnlocked(sessionStorage.getItem(nameStorageKey(eventId)) !== null);
   }, [eventId]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
-    sessionStorage.setItem(storageKey(eventId), trimmed);
+    sessionStorage.setItem(nameStorageKey(eventId), trimmed);
+    if (!sessionStorage.getItem(visitorIdStorageKey(eventId))) {
+      sessionStorage.setItem(visitorIdStorageKey(eventId), crypto.randomUUID());
+    }
     setUnlocked(true);
   }
 
@@ -58,6 +77,7 @@ export function VisitorNameGate({ eventId, children }: { eventId: string; childr
                 required
               />
             </div>
+            <p className="text-xs text-muted-foreground">{t("locationNotice")}</p>
             <Button type="submit" className="w-full" disabled={!name.trim()}>
               {t("continue")}
             </Button>

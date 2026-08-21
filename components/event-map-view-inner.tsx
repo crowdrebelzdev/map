@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Map,
   Source,
@@ -63,6 +63,8 @@ export type EventMapLiveUser = {
   userName: string;
   lat: number;
   lng: number;
+  /** When this position was last reported — shown in the detail panel on tap. */
+  updatedAt: Date;
   /** Which area this user currently falls inside, if any — computed by the caller. */
   areaLabel?: string | null;
 };
@@ -361,6 +363,9 @@ export default function EventMapView({
     gridTransformInput,
   });
 
+  const [selectedLiveUserId, setSelectedLiveUserId] = useState<string | null>(null);
+  const selectedLiveUser = selectedLiveUserId ? liveUsers.find((u) => u.userId === selectedLiveUserId) ?? null : null;
+
   const initialBounds = mapImage ? cornersToBounds(mapImage.corners) : undefined;
 
   function handleClick(e: MapLayerMouseEvent) {
@@ -378,6 +383,7 @@ export default function EventMapView({
     if (onMapClick) {
       setSelectedPoiId(null);
       setSelectedAreaId(null);
+      setSelectedLiveUserId(null);
       onMapClick(latLng);
       return;
     }
@@ -390,6 +396,7 @@ export default function EventMapView({
         onAreaClick(area);
       } else {
         setSelectedPoiId(null);
+        setSelectedLiveUserId(null);
         setSelectedAreaId(area.id);
       }
       return;
@@ -399,6 +406,7 @@ export default function EventMapView({
     // everything else "comes back" as soon as you click anywhere on the map background.
     setSelectedPoiId(null);
     setSelectedAreaId(null);
+    setSelectedLiveUserId(null);
   }
 
   return (
@@ -705,6 +713,7 @@ export default function EventMapView({
                 onPoiClick(p);
               } else {
                 setSelectedAreaId(null);
+                setSelectedLiveUserId(null);
                 setSelectedPoiId(p.id);
               }
             }}
@@ -741,7 +750,19 @@ export default function EventMapView({
       })}
 
       {liveUsers.map((u) => (
-        <Marker key={u.userId} longitude={u.lng} latitude={u.lat} anchor="bottom">
+        <Marker
+          key={u.userId}
+          longitude={u.lng}
+          latitude={u.lat}
+          anchor="bottom"
+          onClick={(e) => {
+            // See the cluster marker's onClick above — same bubbling gotcha applies here.
+            e.originalEvent.stopPropagation();
+            setSelectedPoiId(null);
+            setSelectedAreaId(null);
+            setSelectedLiveUserId(u.userId);
+          }}
+        >
           <div
             title={u.userName}
             style={{
@@ -749,6 +770,7 @@ export default function EventMapView({
               flexDirection: "column",
               alignItems: "center",
               gap: 2,
+              cursor: "pointer",
             }}
           >
             <span
@@ -992,6 +1014,34 @@ export default function EventMapView({
               </ul>
             </div>
           )}
+        </div>
+      </div>
+    )}
+    {selectedLiveUser && (
+      <div className={DETAIL_PANEL_CLASSNAME}>
+        <button
+          type="button"
+          onClick={() => setSelectedLiveUserId(null)}
+          className="absolute right-3 top-3 rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+        >
+          <X className="size-4" />
+          <span className="sr-only">Sluiten</span>
+        </button>
+        <div className="pr-8">
+          <p className="break-words font-semibold">{selectedLiveUser.userName}</p>
+          {selectedLiveUser.areaLabel && (
+            <p className="truncate text-xs text-muted-foreground">{selectedLiveUser.areaLabel}</p>
+          )}
+          <p className="mt-2 text-xs font-medium text-muted-foreground">
+            Laatst binnengehaald om{" "}
+            <span className="font-mono text-foreground">
+              {selectedLiveUser.updatedAt.toLocaleTimeString("nl-NL", {
+                hour: "2-digit",
+                minute: "2-digit",
+                second: "2-digit",
+              })}
+            </span>
+          </p>
         </div>
       </div>
     )}

@@ -37,6 +37,7 @@
     "welcome": "Welcome",
     "description": "Enter your name to view the map.",
     "nameLabel": "Name",
+    "locationNotice": "By continuing, your location is shared with the organizers for as long as you keep this page open.",
     "continue": "Continue"
   },
   "poiFilter": {

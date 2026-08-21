@@ -37,6 +37,7 @@
     "welcome": "Welkom",
     "description": "Vul je naam in om de kaart te bekijken.",
     "nameLabel": "Naam",
+    "locationNotice": "Als je verdergaat, deel je je locatie met de organisatie zolang je deze pagina open hebt staan.",
     "continue": "Verder"
   },
   "poiFilter": {

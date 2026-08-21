@@ -28,6 +28,7 @@ import { useGpsPosition, type GpsStatus } from "@/hooks/use-gps-position";
 import { useOfflineMap } from "@/hooks/use-offline-map";
 import { useAddToHomeScreen } from "@/hooks/use-add-to-home-screen";
 import { useLiveLocationSharing } from "@/hooks/use-live-location-sharing";
+import { useVisitorLocationSharing } from "@/hooks/use-visitor-location-sharing";
 import { useGridData } from "@/hooks/use-grid-data";
 import { useMapSearch } from "@/hooks/use-map-search";
 import type { listMyMessages } from "@/actions/broadcasts";
@@ -57,6 +58,7 @@ export function OperationalMap({
   currentUserId,
   isStaff,
   publicAccessMode,
+  liveLocationEnabled,
   map,
   tileUrlTemplate,
   grid,
@@ -74,6 +76,9 @@ export function OperationalMap({
    * gates live-ops features (live locatie delen, broadcasts, push) that need a real account. */
   isStaff: boolean;
   publicAccessMode: PublicAccessMode;
+  /** Org-wide kill switch (see `event.liveLocationEnabled`) — independent of `isStaff`/the
+   * naam-only gate below, both of which stay true regardless of this flag. */
+  liveLocationEnabled: boolean;
   map: MapRow | null;
   /** Resolved (S3 or local) tile URL template for `map.tileVersion` — computed server-side in
    * the page component, since it depends on env vars (S3 bucket/region) not available to
@@ -88,6 +93,7 @@ export function OperationalMap({
   initialMessages: Awaited<ReturnType<typeof listMyMessages>>;
 }) {
   const t = useTranslations("publicMap");
+  const needsNameGate = !isStaff && publicAccessMode === "public_named";
   const categoryIds = useMemo(() => categories.map((c) => c.id), [categories]);
   const areaCategoryIds = useMemo(() => areaCategories.map((c) => c.id), [areaCategories]);
   const { visibleIds: visibleCategories, toggle: toggleCategory } = useVisibilityFilter(
@@ -132,7 +138,8 @@ export function OperationalMap({
     handleStopUsingManualLocation,
   } = useGpsPosition();
 
-  useLiveLocationSharing(eventId, isStaff, latestGpsRef);
+  useLiveLocationSharing(eventId, isStaff && liveLocationEnabled, latestGpsRef);
+  useVisitorLocationSharing(eventId, needsNameGate && liveLocationEnabled, latestGpsRef);
 
   const { isOnline, offlineStatus, offlineProgress, handleDownloadOffline, showOfflineTip, dismissOfflineTip } =
     useOfflineMap(map, tileUrlTemplate);
@@ -233,7 +240,6 @@ export function OperationalMap({
     userPosition,
   });
 
-  const needsNameGate = !isStaff && publicAccessMode === "public_named";
   // NavBar (see app/events/layout.tsx) renders exactly when there's a session — same
   // condition `currentUserId` is derived from server-side. Used below to hide the
   // locale/theme/notification buttons that would otherwise be duplicated (once here, once

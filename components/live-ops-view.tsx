@@ -75,7 +75,9 @@ export function LiveOpsView({
     const id = setInterval(async () => {
       try {
         const rows = await getLiveLocations(eventId);
-        setRawLiveUsers(rows.map((r) => ({ userId: r.userId, userName: r.userName, lat: r.lat, lng: r.lng })));
+        setRawLiveUsers(
+          rows.map((r) => ({ userId: r.userId, userName: r.userName, lat: r.lat, lng: r.lng, updatedAt: r.updatedAt })),
+        );
       } catch {
         // Best-effort polling — a transient failure just skips this refresh.
       }

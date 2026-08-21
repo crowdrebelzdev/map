@@ -30,6 +30,11 @@ export const event = pgTable("event", {
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   publicAccessMode: text("public_access_mode").$type<PublicAccessMode>().notNull().default("members_only"),
+  /** Org-wide kill switch for the live-location feature (staff GPS sharing, naam-only
+   * visitor GPS sharing, and the `/live` who's-where view) — independent of any individual
+   * member's `view_live_locations` permission, which stays irrelevant while this is off.
+   * Defaults to on so existing events keep their current behavior. */
+  liveLocationEnabled: boolean("live_location_enabled").notNull().default(true),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   archivedAt: timestamp("archived_at"),
 });
@@ -687,6 +692,29 @@ export const liveLocation = pgTable(
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => [uniqueIndex("live_location_event_user_idx").on(table.eventId, table.userId)],
+);
+
+/** Same idea as `liveLocation`, but for anonymous "naam-only" visitors on a `public_named`
+ * event (see `publicAccessMode` above) — no `user` row to reference, since these visitors
+ * never get a real account. `visitorId` is a random id the client generates once and keeps
+ * for the browser tab session (see `components/visitor-name-gate.tsx`), not an authenticated
+ * identity. Deliberately has no FK/cascade to `user` — rows just age out via the same
+ * staleness window `getLiveLocations` already applies to `liveLocation`. */
+export const visitorLiveLocation = pgTable(
+  "visitor_live_location",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => event.id, { onDelete: "cascade" }),
+    visitorId: text("visitor_id").notNull(),
+    name: text("name").notNull(),
+    lat: doublePrecision("lat").notNull(),
+    lng: doublePrecision("lng").notNull(),
+    accuracy: doublePrecision("accuracy"),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("visitor_live_location_event_visitor_idx").on(table.eventId, table.visitorId)],
 );
 
 // --- Web Push subscriptions (per event, so opting in on one event's map doesn't push

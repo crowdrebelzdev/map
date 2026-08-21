@@ -96,6 +96,7 @@ export default async function StaffEventMapPage({
       currentUserId={session?.user.id ?? null}
       isStaff={isStaff}
       publicAccessMode={ev.publicAccessMode}
+      liveLocationEnabled={ev.liveLocationEnabled}
       map={map ?? null}
       tileUrlTemplate={map?.tileVersion ? mapTileUrlTemplate(ev.id, map.tileVersion) : null}
       grid={grid ?? null}

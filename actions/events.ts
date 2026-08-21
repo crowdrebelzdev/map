@@ -301,6 +301,23 @@ export async function updatePublicAccessMode(eventId: string, eventSlug: string,
   revalidatePath(`/events/${eventSlug}/map`);
 }
 
+export async function setLiveLocationEnabled(eventId: string, eventSlug: string, enabled: boolean) {
+  const session = await requireOrgAdminForEvent(eventId);
+
+  await db.update(event).set({ liveLocationEnabled: enabled }).where(eq(event.id, eventId));
+
+  logActivity(
+    eventId,
+    session.user.id,
+    "event.live_location_enabled_update",
+    `${session.user.name} heeft live locatie ${enabled ? "aangezet" : "uitgezet"}.`,
+  );
+
+  revalidatePath(`/org/events/${eventSlug}/settings`);
+  revalidatePath(`/org/events/${eventSlug}/live`);
+  revalidatePath(`/events/${eventSlug}/map`);
+}
+
 export async function deleteEvent(eventId: string) {
   await requireOrgAdminForEvent(eventId);
 

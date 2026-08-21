@@ -22,7 +22,7 @@ export default async function EventLivePage({
   const session = await getServerSession();
   const access = await getEventAccess(ev.id, { id: session!.user.id, role: session!.user.role ?? null });
 
-  const canViewLive = hasEventPermission(access, "view_live_locations");
+  const canViewLive = hasEventPermission(access, "view_live_locations") && ev.liveLocationEnabled;
   const canManageIncidents = hasEventPermission(access, "manage_incidents");
   if (!canViewLive && !canManageIncidents) {
     redirect("/org/events");
@@ -92,6 +92,7 @@ export default async function EventLivePage({
         userName: r.userName,
         lat: r.lat,
         lng: r.lng,
+        updatedAt: r.updatedAt,
       }))}
       initialIncidents={incidents}
       topSearches={topSearches}

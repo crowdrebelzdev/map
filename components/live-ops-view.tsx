@@ -15,11 +15,20 @@ import {
 import { IncidentsSheet } from "@/components/incidents-sheet";
 import { BroadcastDialog } from "@/components/broadcast-dialog";
 import { TopSearchesSheet } from "@/components/top-searches-sheet";
+import { PoiFilterSheet } from "@/components/poi-filter-sheet";
+import { PoiSizeControl } from "@/components/poi-size-control";
 import { Badge } from "@/components/ui/badge";
 import { buttonVariants } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { useVisibilityFilter } from "@/hooks/use-visibility-filter";
+import { useMapSearch } from "@/hooks/use-map-search";
 import type { listIncidents } from "@/actions/incidents";
 import type { eventMap, gridConfig, poi } from "@/db/schema";
 import { isPointInPolygon, type GridCell } from "@/lib/geo";
+
+const visibleCategoriesKey = (eventId: string) => `live-visible-categories-${eventId}`;
+const visibleAreaCategoriesKey = (eventId: string) => `live-visible-area-categories-${eventId}`;
 
 type MapRow = typeof eventMap.$inferSelect;
 type GridRow = typeof gridConfig.$inferSelect;
@@ -35,6 +44,7 @@ export function LiveOpsView({
   eventName,
   map,
   tileUrlTemplate,
+  grid,
   gridCells,
   pois,
   categories,
@@ -54,6 +64,9 @@ export function LiveOpsView({
   /** Resolved (S3 or local) tile URL template for `map.tileVersion` — see the same prop on
    * OperationalMap for why this is computed server-side instead of derived here. */
   tileUrlTemplate: string | null;
+  /** Raw grid config row — used only to parse grid-code search queries (see useMapSearch);
+   * `gridCells` below is the already-computed cell list used for rendering/highlighting. */
+  grid: GridRow | null;
   gridCells: GridCell[];
   pois: PoiRow[];
   categories: EventMapPoiCategory[];
@@ -69,6 +82,56 @@ export function LiveOpsView({
   const t = useTranslations("liveOpsView");
   const tPublicMap = useTranslations("publicMap");
   const [rawLiveUsers, setRawLiveUsers] = useState<EventMapLiveUser[]>(initialLiveUsers);
+  const [poiSizeMultiplier, setPoiSizeMultiplier] = useState(1);
+
+  const categoryIds = useMemo(() => categories.map((c) => c.id), [categories]);
+  const areaCategoryIds = useMemo(() => areaCategories.map((c) => c.id), [areaCategories]);
+  const { visibleIds: visibleCategories, toggle: toggleCategory } = useVisibilityFilter(
+    visibleCategoriesKey(eventId),
+    categoryIds,
+  );
+  const { visibleIds: visibleAreaCategoryIds, toggle: toggleAreaCategory } = useVisibilityFilter(
+    visibleAreaCategoriesKey(eventId),
+    areaCategoryIds,
+  );
+
+  const gridLabelOptions = useMemo(
+    () =>
+      grid
+        ? {
+            prefix: grid.labelPrefix,
+            letterStart: grid.labelLetterStart,
+            numberStart: grid.labelNumberStart,
+            letterGroupSize: grid.labelLetterGroupSize,
+          }
+        : undefined,
+    [grid],
+  );
+
+  const {
+    query,
+    handleQueryChange,
+    flyToTarget,
+    selectPoiSignal,
+    tempRevealedPoiId,
+    highlightedCell,
+    gridMatch,
+    poiMatches,
+    handleSelectedPoiIdChange,
+    selectGridCell,
+    selectPoi,
+  } = useMapSearch({
+    eventId,
+    isStaff: true,
+    grid,
+    gridCells,
+    gridLabelOptions,
+    visiblePois: pois,
+    visibleCategories,
+    userPosition: null,
+  });
+  const showResults = query.trim().length > 0 && (gridMatch || poiMatches.length > 0);
+  const categoryById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
   useEffect(() => {
     if (!canViewLive) return;
@@ -113,6 +176,17 @@ export function LiveOpsView({
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
+          <PoiFilterSheet
+            categories={categories}
+            visibleCategories={visibleCategories}
+            onToggle={toggleCategory}
+            pois={pois}
+            areaCategories={areaCategories}
+            visibleAreaCategoryIds={visibleAreaCategoryIds}
+            onToggleArea={toggleAreaCategory}
+            areas={areas}
+          />
+          <PoiSizeControl sizeMultiplier={poiSizeMultiplier} onChange={setPoiSizeMultiplier} />
           <TopSearchesSheet topSearches={topSearches} />
           {canManageIncidents && (
             <>
@@ -149,15 +223,70 @@ export function LiveOpsView({
                   : null,
             }}
             gridCells={gridCells}
+            highlightedCell={highlightedCell}
             pois={pois}
             categories={categories}
+            visibleCategories={visibleCategories}
+            extraVisiblePoiId={tempRevealedPoiId}
             areas={areas}
             areaCategories={areaCategories}
+            visibleAreaCategoryIds={visibleAreaCategoryIds}
             liveUsers={canViewLive ? liveUsers : []}
+            poiSizeMultiplier={poiSizeMultiplier}
+            flyToTarget={flyToTarget}
+            externalSelectPoi={selectPoiSignal}
+            onSelectedPoiIdChange={handleSelectedPoiIdChange}
           />
         ) : (
           <div className="p-4 text-sm text-muted-foreground">
             {tPublicMap("noMapConfigured")}
+          </div>
+        )}
+        {map && (
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-10 flex justify-center p-3"
+            style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+          >
+            <div className="pointer-events-auto w-full max-w-sm">
+              {showResults && (
+                <Card className="mb-1 max-h-64 overflow-y-auto py-2">
+                  <CardContent className="space-y-1 px-2">
+                    {gridMatch && (
+                      <button
+                        onClick={selectGridCell}
+                        className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
+                      >
+                        <span>{tPublicMap("gridCell")}</span>
+                        <Badge>{gridMatch.code}</Badge>
+                      </button>
+                    )}
+                    {poiMatches.map((p) => {
+                      const cat = categoryById.get(p.categoryId ?? "");
+                      return (
+                        <button
+                          key={p.id}
+                          onClick={() => selectPoi(p)}
+                          className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-muted"
+                        >
+                          <span
+                            className="h-2.5 w-2.5 shrink-0 rounded-full"
+                            style={{ backgroundColor: cat?.color ?? "#64748b" }}
+                          />
+                          <span className="flex-1">{p.name}</span>
+                          <span className="text-xs text-muted-foreground">{cat?.label ?? ""}</span>
+                        </button>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              )}
+              <Input
+                placeholder={tPublicMap("searchPlaceholder")}
+                value={query}
+                onChange={(e) => handleQueryChange(e.target.value)}
+                className="h-12 bg-background text-base shadow-md dark:bg-background"
+              />
+            </div>
           </div>
         )}
       </div>

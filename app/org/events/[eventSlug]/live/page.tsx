@@ -80,6 +80,7 @@ export default async function EventLivePage({
       eventName={ev.name}
       map={map ?? null}
       tileUrlTemplate={map?.tileVersion ? mapTileUrlTemplate(ev.id, map.tileVersion) : null}
+      grid={grid ?? null}
       gridCells={gridCells}
       pois={pois}
       categories={categories}

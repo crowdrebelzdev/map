@@ -24,7 +24,23 @@ function readStoredIds(key: string, fallback: string[]): string[] {
  * not against the current visibility state), so an id the visitor deliberately hid isn't
  * mistaken for a brand-new one and silently re-shown on every render/reload. */
 export function useVisibilityFilter(storageKey: string, allIds: string[]) {
-  const [visibleIds, setVisibleIds] = useState<string[]>(() => readStoredIds(storageKey, allIds));
+  // Starts as "everyone visible" (not the stored value) so this matches the server-rendered
+  // markup exactly — localStorage isn't available during SSR, so reading it straight into the
+  // initial state here would make the client's first hydration pass disagree with the server
+  // and trigger a hydration-mismatch error. The real, persisted value is applied a moment
+  // later by the mount effect below instead (same reasoning as the sessionStorage read in
+  // visitor-name-gate.tsx).
+  const [visibleIds, setVisibleIds] = useState<string[]>(allIds);
+
+  useEffect(() => {
+    // localStorage read can't happen during render (SSR has no `window`) — has to be an
+    // effect, same as the sessionStorage read in visitor-name-gate.tsx. Deliberately
+    // mount-only: the "newly appeared id" effect below is what reacts to `allIds` changing
+    // after this.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setVisibleIds(readStoredIds(storageKey, allIds));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const knownIdsRef = useRef<Set<string>>(new Set(allIds));
   useEffect(() => {

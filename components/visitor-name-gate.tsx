@@ -15,14 +15,20 @@ function visitorIdStorageKey(eventId: string) {
   return `visitor-id-${eventId}`;
 }
 
-/** The name + a random per-tab id this visitor was last seen under, if they've already
- * passed the gate this tab session — read by `useVisitorLocationSharing` so it can report
- * a position under the same identity `VisitorNameGate` established. Returns null before the
- * gate's been passed (nothing stored yet) or outside the browser (SSR). */
+/** The name this visitor last entered (per tab session) + their visitor id, if they've
+ * already passed the gate — read by `useVisitorLocationSharing` so it can report a position
+ * under the same identity `VisitorNameGate` established. Returns null before the gate's been
+ * passed (nothing stored yet) or outside the browser (SSR).
+ *
+ * The id is deliberately in `localStorage` (survives closing the tab/app), unlike the name
+ * gate itself which re-prompts every fresh visit (sessionStorage) — otherwise every reconnect
+ * (phone locked, app closed and reopened) would mint a new id and leave the previous one
+ * behind as a permanent "laatst gezien" ghost on the live map instead of updating in place,
+ * since live-location rows are never deleted (see actions/live-location.ts). */
 export function getVisitorIdentity(eventId: string): { name: string; visitorId: string } | null {
   if (typeof window === "undefined") return null;
   const name = sessionStorage.getItem(nameStorageKey(eventId));
-  const visitorId = sessionStorage.getItem(visitorIdStorageKey(eventId));
+  const visitorId = localStorage.getItem(visitorIdStorageKey(eventId));
   return name && visitorId ? { name, visitorId } : null;
 }
 
@@ -47,8 +53,8 @@ export function VisitorNameGate({ eventId, children }: { eventId: string; childr
     const trimmed = name.trim();
     if (!trimmed) return;
     sessionStorage.setItem(nameStorageKey(eventId), trimmed);
-    if (!sessionStorage.getItem(visitorIdStorageKey(eventId))) {
-      sessionStorage.setItem(visitorIdStorageKey(eventId), crypto.randomUUID());
+    if (!localStorage.getItem(visitorIdStorageKey(eventId))) {
+      localStorage.setItem(visitorIdStorageKey(eventId), crypto.randomUUID());
     }
     setUnlocked(true);
   }

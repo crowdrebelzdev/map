@@ -26,9 +26,11 @@ import { useMapSearch } from "@/hooks/use-map-search";
 import type { listIncidents } from "@/actions/incidents";
 import type { eventMap, gridConfig, poi } from "@/db/schema";
 import { isPointInPolygon, type GridCell } from "@/lib/geo";
+import { isLiveLocation } from "@/lib/live-location";
 
 const visibleCategoriesKey = (eventId: string) => `live-visible-categories-${eventId}`;
 const visibleAreaCategoriesKey = (eventId: string) => `live-visible-area-categories-${eventId}`;
+const visibleLiveUsersKey = (eventId: string) => `live-visible-users-${eventId}`;
 
 type MapRow = typeof eventMap.$inferSelect;
 type GridRow = typeof gridConfig.$inferSelect;
@@ -157,6 +159,21 @@ export function LiveOpsView({
     [rawLiveUsers, areas],
   );
 
+  // A per-viewer preference (this browser only, see useVisibilityFilter), separate from the
+  // POI/area category filters above — someone hidden here stays hidden across their own
+  // live/last-known transitions, since `liveUsers` never drops a person once seen (see
+  // getLiveLocations).
+  const liveUserIds = useMemo(() => liveUsers.map((u) => u.userId), [liveUsers]);
+  const { visibleIds: visibleLiveUserIds, toggle: toggleLiveUser } = useVisibilityFilter(
+    visibleLiveUsersKey(eventId),
+    liveUserIds,
+  );
+  const shownLiveUsers = useMemo(
+    () => liveUsers.filter((u) => visibleLiveUserIds.includes(u.userId)),
+    [liveUsers, visibleLiveUserIds],
+  );
+  const activeLiveUserCount = shownLiveUsers.filter((u) => isLiveLocation(u.updatedAt)).length;
+
   return (
     <div className="fixed inset-0 z-50 flex flex-col bg-background">
       <header className="flex items-center justify-between gap-2 border-b px-3 py-2">
@@ -171,7 +188,7 @@ export function LiveOpsView({
           <span className="truncate font-semibold">{eventName}</span>
           {canViewLive && (
             <Badge variant="secondary" className="shrink-0">
-              {t("activeCount", { count: liveUsers.length })}
+              {t("activeCount", { count: activeLiveUserCount })}
             </Badge>
           )}
         </div>
@@ -185,6 +202,9 @@ export function LiveOpsView({
             visibleAreaCategoryIds={visibleAreaCategoryIds}
             onToggleArea={toggleAreaCategory}
             areas={areas}
+            liveUsers={canViewLive ? liveUsers.map((u) => ({ id: u.userId, label: u.userName })) : undefined}
+            visibleLiveUserIds={visibleLiveUserIds}
+            onToggleLiveUser={toggleLiveUser}
           />
           <PoiSizeControl sizeMultiplier={poiSizeMultiplier} onChange={setPoiSizeMultiplier} />
           <TopSearchesSheet topSearches={topSearches} />
@@ -231,7 +251,8 @@ export function LiveOpsView({
             areas={areas}
             areaCategories={areaCategories}
             visibleAreaCategoryIds={visibleAreaCategoryIds}
-            liveUsers={canViewLive ? liveUsers : []}
+            liveUsers={canViewLive ? shownLiveUsers : []}
+            onHideLiveUser={toggleLiveUser}
             poiSizeMultiplier={poiSizeMultiplier}
             flyToTarget={flyToTarget}
             externalSelectPoi={selectPoiSignal}

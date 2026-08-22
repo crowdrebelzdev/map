@@ -122,6 +122,9 @@ export function PoiFilterSheet({
   visibleAreaCategoryIds,
   onToggleArea,
   areas,
+  liveUsers,
+  visibleLiveUserIds,
+  onToggleLiveUser,
 }: {
   categories: EventMapPoiCategory[];
   visibleCategories: string[];
@@ -131,16 +134,30 @@ export function PoiFilterSheet({
   visibleAreaCategoryIds?: string[];
   onToggleArea?: (categoryId: string) => void;
   areas?: { categoryId: string | null }[];
+  /** Live-ops-only "wie is zichtbaar" section — a per-viewer preference (see live-ops-view's
+   * own localStorage-backed visibility filter), not a map-wide setting. Omitted entirely
+   * (no section rendered) wherever this sheet is used without a live view, e.g. the field map. */
+  liveUsers?: { id: string; label: string }[];
+  visibleLiveUserIds?: string[];
+  onToggleLiveUser?: (id: string) => void;
 }) {
   const t = useTranslations("poiFilter");
   const poiCounts = useMemo(() => countByCategory(pois), [pois]);
   const areaCounts = useMemo(() => countByCategory(areas), [areas]);
+  const emptyCounts = useMemo(() => new Map<string, number>(), []);
+  const liveUserItems = useMemo(
+    () => (liveUsers ?? []).map((u) => ({ id: u.id, label: u.label, color: "#6b7280" })),
+    [liveUsers],
+  );
 
   const hiddenPoiCount = categories.filter((c) => !visibleCategories.includes(c.id)).length;
   const hiddenAreaCount = (areaCategories ?? []).filter(
     (c) => !(visibleAreaCategoryIds ?? []).includes(c.id),
   ).length;
-  const activeFilterCount = hiddenPoiCount + hiddenAreaCount;
+  const hiddenLiveUserCount = (liveUsers ?? []).filter(
+    (u) => !(visibleLiveUserIds ?? []).includes(u.id),
+  ).length;
+  const activeFilterCount = hiddenPoiCount + hiddenAreaCount + hiddenLiveUserCount;
 
   function resetAll() {
     for (const c of categories) {
@@ -148,6 +165,9 @@ export function PoiFilterSheet({
     }
     for (const c of areaCategories ?? []) {
       if (!(visibleAreaCategoryIds ?? []).includes(c.id)) onToggleArea?.(c.id);
+    }
+    for (const u of liveUsers ?? []) {
+      if (!(visibleLiveUserIds ?? []).includes(u.id)) onToggleLiveUser?.(u.id);
     }
   }
 
@@ -186,7 +206,7 @@ export function PoiFilterSheet({
           {categories.length === 0 && (!areaCategories || areaCategories.length === 0) && (
             <p className="text-sm text-muted-foreground">{t("noCategories")}</p>
           )}
-          <Accordion multiple defaultValue={["poi-categories", "areas"]} className="gap-3">
+          <Accordion multiple defaultValue={["poi-categories", "areas", "live-users"]} className="gap-3">
             {categories.length > 0 && (
               <FilterSection
                 id="poi-categories"
@@ -207,6 +227,17 @@ export function PoiFilterSheet({
                 visibleIds={visibleAreaCategoryIds ?? []}
                 counts={areaCounts}
                 onToggle={(id) => onToggleArea?.(id)}
+              />
+            )}
+            {liveUserItems.length > 0 && (
+              <FilterSection
+                id="live-users"
+                title="Live gebruikers"
+                shape="circle"
+                categories={liveUserItems}
+                visibleIds={visibleLiveUserIds ?? []}
+                counts={emptyCounts}
+                onToggle={(id) => onToggleLiveUser?.(id)}
               />
             )}
           </Accordion>

@@ -13,10 +13,11 @@ import {
 } from "react-map-gl/maplibre";
 import type { FitBoundsOptions } from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
-import { X } from "lucide-react";
+import { X, EyeOff } from "lucide-react";
 import type { CornerSet, GridCell, LatLng } from "@/lib/geo";
 import { cn } from "@/lib/utils";
 import { getPoiIcon, getShapeContainerStyle } from "@/lib/poi-icons";
+import { isLiveLocation } from "@/lib/live-location";
 import { useMapLoadState } from "@/hooks/use-map-load-state";
 import { useMapViewport } from "@/hooks/use-map-viewport";
 import { useFlyToTarget } from "@/hooks/use-fly-to-target";
@@ -33,6 +34,10 @@ const POI_SIZE_PX: Record<string, number> = { small: 16, medium: 22, large: 30 }
 const DETAIL_PANEL_CLASSNAME =
   "fixed inset-x-0 bottom-0 z-50 max-h-[70vh] overflow-y-auto rounded-t-xl border bg-background p-4 shadow-lg " +
   "sm:absolute sm:inset-x-auto sm:inset-y-auto sm:bottom-auto sm:left-auto sm:right-3 sm:top-3 sm:z-10 sm:w-80 sm:max-h-[calc(100%-1.5rem)] sm:rounded-lg sm:border sm:border-t";
+
+function formatLastSeen(updatedAt: Date) {
+  return updatedAt.toLocaleTimeString("nl-NL", { hour: "2-digit", minute: "2-digit" });
+}
 
 export type EventMapPoiCategory = {
   id: string;
@@ -159,6 +164,10 @@ export type EventMapViewProps = {
   onDrawingVertexDrag?: (index: number, latLng: LatLng) => void;
   onDrawingVertexRemove?: (index: number) => void;
   liveUsers?: EventMapLiveUser[];
+  /** Lets the viewer hide one live-location marker from their own view (see the detail
+   * panel's "Verbergen" button) — the actual filtering happens in the caller, which owns
+   * that per-viewer preference; this just fires the request. */
+  onHideLiveUser?: (userId: string) => void;
   geolocate?: boolean;
   onMapClick?: (latLng: LatLng) => void;
   /** When provided, a POI-marker click calls this instead of opening the built-in detail popup —
@@ -274,6 +283,7 @@ export default function EventMapView({
   onDrawingVertexDrag,
   onDrawingVertexRemove,
   liveUsers = [],
+  onHideLiveUser,
   geolocate = false,
   onMapClick,
   onPoiClick,
@@ -749,7 +759,9 @@ export default function EventMapView({
         );
       })}
 
-      {liveUsers.map((u) => (
+      {liveUsers.map((u) => {
+        const isLive = isLiveLocation(u.updatedAt);
+        return (
         <Marker
           key={u.userId}
           longitude={u.lng}
@@ -771,6 +783,7 @@ export default function EventMapView({
               alignItems: "center",
               gap: 2,
               cursor: "pointer",
+              opacity: isLive ? 1 : 0.6,
             }}
           >
             <span
@@ -778,7 +791,7 @@ export default function EventMapView({
                 fontSize: 11,
                 fontWeight: 600,
                 color: "white",
-                background: "#111827",
+                background: isLive ? "#111827" : "#6b7280",
                 borderRadius: 4,
                 padding: "1px 5px",
                 whiteSpace: "nowrap",
@@ -786,6 +799,7 @@ export default function EventMapView({
               }}
             >
               {u.userName}
+              {!isLive && ` · ${formatLastSeen(u.updatedAt)}`}
             </span>
             {u.areaLabel && (
               <span
@@ -808,14 +822,15 @@ export default function EventMapView({
                 width: 16,
                 height: 16,
                 borderRadius: "50%",
-                background: "#f59e0b",
+                background: isLive ? "#f59e0b" : "#9ca3af",
                 border: "2px solid white",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.4)",
               }}
             />
           </div>
         </Marker>
-      ))}
+        );
+      })}
 
       {previewMarker && (() => {
         const cat = categoryById[previewMarker.categoryId];
@@ -1042,6 +1057,19 @@ export default function EventMapView({
               })}
             </span>
           </p>
+          {onHideLiveUser && (
+            <button
+              type="button"
+              onClick={() => {
+                onHideLiveUser(selectedLiveUser.userId);
+                setSelectedLiveUserId(null);
+              }}
+              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-md border px-3 py-1.5 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+            >
+              <EyeOff className="size-4" />
+              Verbergen
+            </button>
+          )}
         </div>
       </div>
     )}

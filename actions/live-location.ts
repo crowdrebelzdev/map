@@ -1,6 +1,6 @@
 "use server";
 
-import { and, eq, gt } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
 import { event, liveLocation, user, visitorLiveLocation } from "@/db/schema";
@@ -8,7 +8,6 @@ import { requireSession } from "@/lib/get-session";
 import { getEventAccess, hasAnyEventAccess, hasEventPermission } from "@/lib/event-access";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 
-const STALE_MS = 3 * 60 * 1000;
 const VISITOR_NAME_MAX_LENGTH = 80;
 
 /** Called periodically by the operational map while it's open. Any authenticated user
@@ -89,8 +88,10 @@ export async function getLiveLocations(eventId: string) {
   });
   if (!ev?.liveLocationEnabled) return [];
 
-  const since = new Date(Date.now() - STALE_MS);
-
+  // No staleness cutoff here on purpose — a position is kept and shown until the same
+  // person/visitor reports a new one, so a dropped connection shows a "last known" spot
+  // instead of vanishing. Whether that's rendered as live vs. last-known (and any per-viewer
+  // hide) is a display concern handled client-side, see event-map-view-inner.tsx.
   const [staffRows, visitorRows] = await Promise.all([
     db
       .select({
@@ -102,7 +103,7 @@ export async function getLiveLocations(eventId: string) {
       })
       .from(liveLocation)
       .innerJoin(user, eq(user.id, liveLocation.userId))
-      .where(and(eq(liveLocation.eventId, eventId), gt(liveLocation.updatedAt, since))),
+      .where(eq(liveLocation.eventId, eventId)),
     db
       .select({
         userId: visitorLiveLocation.visitorId,
@@ -112,7 +113,7 @@ export async function getLiveLocations(eventId: string) {
         updatedAt: visitorLiveLocation.updatedAt,
       })
       .from(visitorLiveLocation)
-      .where(and(eq(visitorLiveLocation.eventId, eventId), gt(visitorLiveLocation.updatedAt, since))),
+      .where(eq(visitorLiveLocation.eventId, eventId)),
   ]);
 
   return [...staffRows, ...visitorRows];

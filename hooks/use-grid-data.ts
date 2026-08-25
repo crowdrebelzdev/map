@@ -27,6 +27,7 @@ export function useGridData(grid: GridRow | null, userPosition: LatLng | null) {
             letterStart: grid.labelLetterStart,
             numberStart: grid.labelNumberStart,
             letterGroupSize: grid.labelLetterGroupSize,
+            order: grid.labelOrder,
           }
         : undefined,
     [grid],

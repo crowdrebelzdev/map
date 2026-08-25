@@ -166,6 +166,14 @@ export const gridConfig = pgTable("grid_config", {
     .$type<GridLabelOrientation>()
     .notNull()
     .default("row-column"),
+  // Display order of the letter and number within a code — independent of labelOrientation
+  // (which axis *is* the letter) and independent of labelLetterGroupSize (which only kicks
+  // in once subcells are on). "letter-number" -> "R38", "number-letter" -> "38R". Default
+  // reproduces the old always-letter-first behavior exactly.
+  labelOrder: text("label_order")
+    .$type<GridLabelOrder>()
+    .notNull()
+    .default("letter-number"),
   // Lets a grid that only covers part of a venue's larger, pre-printed grid line up with
   // it: e.g. a plattegrond labelled "10E1".."10E3" needs labelPrefix "10" and
   // labelLetterStart pointing at "E" instead of "A", even though this grid itself only has
@@ -186,6 +194,10 @@ export const gridConfig = pgTable("grid_config", {
 /** "column-row": code = column-letter + row-number (e.g. "C2"). "row-column": code = row-letter + column-number (e.g. "B3"). */
 export const gridLabelOrientationValues = ["column-row", "row-column"] as const;
 export type GridLabelOrientation = (typeof gridLabelOrientationValues)[number];
+
+/** "letter-number": code = letter then number (e.g. "R38"). "number-letter": code = number then letter (e.g. "38R"). */
+export const gridLabelOrderValues = ["letter-number", "number-letter"] as const;
+export type GridLabelOrder = (typeof gridLabelOrderValues)[number];
 
 export const poiCategoryShapeValues = ["circle", "square", "pin", "diamond", "triangle"] as const;
 export type PoiCategoryShape = (typeof poiCategoryShapeValues)[number];
@@ -551,6 +563,12 @@ export const platformSettings = pgTable("platform_settings", {
   platformName: text("platform_name").notNull().default("Eventkaart"),
   logoInitial: text("logo_initial").notNull().default("K"),
   brandColor: text("brand_color").notNull().default("#2563eb"),
+  // Full-color logo image — null falls back to logoInitial+brandColor everywhere a brand
+  // icon is rendered (see lib/brand-icon.tsx).
+  logoUrl: text("logo_url"),
+  // Used as the site description in generateMetadata (app/layout.tsx) and as the
+  // og:description/twitter:description for link-share previews.
+  metaDescription: text("meta_description"),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 

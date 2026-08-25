@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
-import { updatePlatformSettings } from "@/actions/platform-settings";
+import { updatePlatformSettings, prepareLogoUpload, uploadPlatformLogo } from "@/actions/platform-settings";
+import { resizeImageFile } from "@/lib/resize-image";
 import type { PlatformSettings } from "@/lib/platform-settings";
 import type { PublicAccessMode } from "@/db/schema";
 import { Button } from "@/components/ui/button";
@@ -15,12 +16,47 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 
+// A logo is only ever rendered at icon size (favicon/PWA icon/OG preview) — 512px comfortably
+// covers all of those, no reason to keep anything sharper client-side.
+const LOGO_MAX_DIMENSION = 512;
+
 export function PlatformSettingsForm({ settings }: { settings: PlatformSettings }) {
   const router = useRouter();
   const t = useTranslations("platformSettingsForm");
   const tc = useTranslations("common");
   const [form, setForm] = useState(settings);
   const [saving, setSaving] = useState(false);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
+  async function handleLogoChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const rawFile = e.target.files?.[0];
+    e.target.value = "";
+    if (!rawFile) return;
+
+    setUploadingLogo(true);
+    try {
+      const file = await resizeImageFile(rawFile, LOGO_MAX_DIMENSION);
+      // Same S3-direct-PUT-vs-local-FormData split as the plattegrond upload (see
+      // map-image-editor.tsx) — a presigned URL when S3 is configured, otherwise the file
+      // travels through the server action itself.
+      const plan = await prepareLogoUpload(file.type);
+      let logoUrl: string;
+      if (plan.mode === "s3") {
+        const putRes = await fetch(plan.url, { method: "PUT", headers: { "Content-Type": file.type }, body: file });
+        if (!putRes.ok) throw new Error(t("logoUploadError"));
+        logoUrl = plan.publicUrl;
+      } else {
+        const formData = new FormData();
+        formData.set("file", file);
+        ({ logoUrl } = await uploadPlatformLogo(formData));
+      }
+      setForm((f) => ({ ...f, logoUrl }));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : t("logoUploadError"));
+    } finally {
+      setUploadingLogo(false);
+    }
+  }
 
   const EVENT_ACCESS_OPTIONS: { value: PublicAccessMode; label: string }[] = [
     { value: "members_only", label: t("accessMembersOnly") },
@@ -128,6 +164,44 @@ export function PlatformSettingsForm({ settings }: { settings: PlatformSettings 
               />
             </div>
           </div>
+          <div className="space-y-1 sm:col-span-3">
+            <Label htmlFor="logo-upload">{t("logoLabel")}</Label>
+            <div className="flex items-center gap-3">
+              <div
+                className="flex size-12 shrink-0 items-center justify-center overflow-hidden rounded-md border text-sm font-semibold text-white"
+                style={{ background: form.logoUrl ? undefined : form.brandColor }}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- logoUrl can point at S3 or a local /uploads path, next/image isn't configured for either */}
+                {form.logoUrl ? <img src={form.logoUrl} alt="" className="size-full object-contain" /> : form.logoInitial}
+              </div>
+              <Input id="logo-upload" type="file" accept="image/png,image/jpeg,image/webp" onChange={handleLogoChange} disabled={uploadingLogo} className="max-w-xs" />
+              {form.logoUrl && (
+                <Button type="button" variant="ghost" size="sm" onClick={() => setForm((f) => ({ ...f, logoUrl: null }))}>
+                  {t("logoRemove")}
+                </Button>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground">{t("logoHint")}</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>{t("seoTitle")}</CardTitle>
+          <CardDescription>{t("seoDescription")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-1">
+            <Label htmlFor="meta-description">{t("metaDescriptionLabel")}</Label>
+            <Textarea
+              id="meta-description"
+              value={form.metaDescription}
+              onChange={(e) => setForm((f) => ({ ...f, metaDescription: e.target.value }))}
+              placeholder={t("metaDescriptionPlaceholder")}
+              rows={2}
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -155,7 +229,7 @@ export function PlatformSettingsForm({ settings }: { settings: PlatformSettings 
       </Card>
 
       <div className="flex justify-end">
-        <Button type="submit" disabled={saving}>
+        <Button type="submit" disabled={saving || uploadingLogo}>
           {saving ? tc("saving") : t("submit")}
         </Button>
       </div>

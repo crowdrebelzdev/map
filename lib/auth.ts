@@ -4,6 +4,7 @@ import { admin, organization } from "better-auth/plugins";
 import { db } from "@/db";
 import { ac, authRoles } from "@/lib/auth-roles";
 import { sendEmail } from "@/lib/email";
+import { wrapBrandedEmail } from "@/lib/email-template";
 import { getPlatformSettings } from "@/lib/platform-settings";
 
 // Extra origins to trust besides BETTER_AUTH_URL — needed when testing over the LAN
@@ -21,15 +22,19 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     sendResetPassword: async ({ user, url }) => {
+      const settings = await getPlatformSettings();
       await sendEmail({
         to: user.email,
         subject: "Wachtwoord resetten",
-        html: `
-          <p>Hoi ${user.name},</p>
-          <p>Klik op onderstaande link om een nieuw wachtwoord in te stellen. Deze link is een uur geldig.</p>
-          <p><a href="${url}">Wachtwoord resetten</a></p>
-          <p>Heb je dit niet aangevraagd? Dan kun je deze e-mail negeren.</p>
-        `,
+        html: wrapBrandedEmail(
+          settings,
+          `
+            <p>Hoi ${user.name},</p>
+            <p>Klik op onderstaande link om een nieuw wachtwoord in te stellen. Deze link is een uur geldig.</p>
+            <p><a href="${url}">Wachtwoord resetten</a></p>
+            <p>Heb je dit niet aangevraagd? Dan kun je deze e-mail negeren.</p>
+          `,
+        ),
       });
     },
   },

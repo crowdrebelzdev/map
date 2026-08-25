@@ -1,0 +1,1 @@
+ALTER TABLE "grid_config" ADD COLUMN "label_order" text DEFAULT 'letter-number' NOT NULL;

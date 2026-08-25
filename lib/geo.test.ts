@@ -82,6 +82,31 @@ describe("formatGridCode / parseGridCode", () => {
     expect(parseGridCode("12", "column-row")).toBeNull();
     expect(parseGridCode("AB", "column-row")).toBeNull();
   });
+
+  it("defaults to letter-then-number, unaffected by orientation", () => {
+    expect(formatGridCode(1, 37, "column-row")).toBe("B38");
+    expect(formatGridCode(37, 1, "row-column")).toBe("B38");
+  });
+
+  it("puts the number first when order is number-letter", () => {
+    expect(formatGridCode(1, 37, "column-row", { order: "number-letter" })).toBe("38B");
+    expect(formatGridCode(37, 1, "row-column", { order: "number-letter" })).toBe("38B");
+  });
+
+  it("round-trips number-letter codes", () => {
+    for (const [col, row] of [[0, 0], [2, 4], [25, 0], [26, 3]] as const) {
+      const opts = { order: "number-letter" as const };
+      const code = formatGridCode(col, row, "column-row", opts);
+      expect(parseGridCode(code, "column-row", opts)).toEqual({ col, row });
+    }
+  });
+
+  it("does not cross-parse letter-number and number-letter codes", () => {
+    const letterFirst = formatGridCode(1, 37, "column-row");
+    expect(parseGridCode(letterFirst, "column-row", { order: "number-letter" })).toBeNull();
+    const numberFirst = formatGridCode(1, 37, "column-row", { order: "number-letter" });
+    expect(parseGridCode(numberFirst, "column-row")).toBeNull();
+  });
 });
 
 describe("computeGridCells / findGridCellInQuad", () => {

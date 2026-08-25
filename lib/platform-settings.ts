@@ -12,6 +12,8 @@ export type PlatformSettings = {
   platformName: string;
   logoInitial: string;
   brandColor: string;
+  logoUrl: string | null;
+  metaDescription: string;
 };
 
 export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
@@ -22,6 +24,8 @@ export const DEFAULT_PLATFORM_SETTINGS: PlatformSettings = {
   platformName: "Eventkaart",
   logoInitial: "K",
   brandColor: "#2563eb",
+  logoUrl: null,
+  metaDescription: "Kaart, grid en POI-beheer voor evenementen",
 };
 
 /** Reads the single platform-config row (see db/schema.ts's `platformSettings`) — falls
@@ -41,5 +45,7 @@ export const getPlatformSettings = cache(async (): Promise<PlatformSettings> => 
     platformName: row.platformName,
     logoInitial: row.logoInitial,
     brandColor: row.brandColor,
+    logoUrl: row.logoUrl,
+    metaDescription: row.metaDescription ?? DEFAULT_PLATFORM_SETTINGS.metaDescription,
   };
 });

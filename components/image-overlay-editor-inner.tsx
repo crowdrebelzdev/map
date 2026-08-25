@@ -19,6 +19,7 @@ import {
   type CornerSet,
   type LatLng,
   type GridLabelOrientation,
+  type GridLabelOrder,
   latLngToLocalMeters,
   localMetersToLatLng,
   quadCentroid,
@@ -70,6 +71,7 @@ export type ImageOverlayEditorProps = {
   gridColumns: number;
   gridRows: number;
   gridLabelOrientation: GridLabelOrientation;
+  gridLabelOrder?: GridLabelOrder;
   gridLabelPrefix?: string;
   gridLabelLetterStart?: number;
   gridLabelNumberStart?: number;
@@ -136,6 +138,7 @@ export default function ImageOverlayEditor({
   gridColumns,
   gridRows,
   gridLabelOrientation,
+  gridLabelOrder,
   gridLabelPrefix,
   gridLabelLetterStart,
   gridLabelNumberStart,
@@ -282,12 +285,14 @@ export default function ImageOverlayEditor({
       letterStart: gridLabelLetterStart,
       numberStart: gridLabelNumberStart,
       letterGroupSize: gridLabelLetterGroupSize,
+      order: gridLabelOrder,
     });
   }, [
     gridCorners,
     gridColumns,
     gridRows,
     gridLabelOrientation,
+    gridLabelOrder,
     gridLabelPrefix,
     gridLabelLetterStart,
     gridLabelNumberStart,

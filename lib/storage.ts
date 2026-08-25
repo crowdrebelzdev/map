@@ -175,6 +175,75 @@ export async function deleteMapImage(eventId: string, imageUrl: string): Promise
   await rm(path.join(UPLOADS_DIR, eventId), { recursive: true, force: true });
 }
 
+// --- Platform-logo (Branding, /admin/settings) ---
+//
+// Same dual-mode approach as the plattegrond image above, at a much smaller size — a logo
+// is well under any payload ceiling, but reusing the established S3-vs-local pattern (rather
+// than inventing a third upload mechanism) keeps this predictable in both environments.
+
+const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+
+export type LogoUploadPlan = { mode: "s3"; url: string; publicUrl: string } | { mode: "local" };
+
+/** Prepares a direct browser-to-S3 upload for the platform logo — same shape as
+ * getMapImageUploadPlan, scoped platform-wide instead of per-event. */
+export async function getPlatformLogoUploadPlan(contentType: string): Promise<LogoUploadPlan> {
+  const ext = ALLOWED_MAP_IMAGE_TYPES[contentType];
+  if (!ext) {
+    throw new Error("Ongeldig bestandstype. Toegestaan: PNG, JPEG of WebP.");
+  }
+
+  if (!s3Client || !s3Bucket) {
+    return { mode: "local" };
+  }
+
+  const key = `uploads/platform/logo-${Date.now()}.${ext}`;
+  const url = await getSignedUrl(
+    s3Client,
+    new PutObjectCommand({ Bucket: s3Bucket, Key: key, ContentType: contentType }),
+    { expiresIn: 15 * 60 },
+  );
+
+  return { mode: "s3", url, publicUrl: `https://${s3Bucket}.s3.${s3Region}.amazonaws.com/${key}` };
+}
+
+/** Local-filesystem fallback for getPlatformLogoUploadPlan's "local" mode — mirrors
+ * saveMapImage. */
+export async function savePlatformLogo(file: File): Promise<string> {
+  const ext = ALLOWED_MAP_IMAGE_TYPES[file.type];
+  if (!ext) {
+    throw new Error("Ongeldig bestandstype. Toegestaan: PNG, JPEG of WebP.");
+  }
+  if (file.size > MAX_LOGO_BYTES) {
+    throw new Error("Bestand is te groot (max. 2 MB).");
+  }
+
+  const filename = `logo-${Date.now()}.${ext}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const dir = path.join(UPLOADS_DIR, "platform");
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, filename), buffer);
+  return `/uploads/platform/${filename}`;
+}
+
+/** Best-effort cleanup of a replaced/removed platform logo — never blocks the settings
+ * update if it fails (the old file just becomes orphaned). */
+export async function deletePlatformLogo(logoUrl: string): Promise<void> {
+  const filename = logoUrl.split("/").pop();
+  if (!filename) return;
+
+  try {
+    if (s3Client && s3Bucket) {
+      await s3Client.send(new DeleteObjectCommand({ Bucket: s3Bucket, Key: `uploads/platform/${filename}` }));
+      return;
+    }
+    await rm(path.join(UPLOADS_DIR, "platform", filename), { force: true });
+  } catch {
+    // best-effort — see doc comment
+  }
+}
+
 // --- Plattegrond tegels (raster tile pyramid) ---
 //
 // Same S3-vs-local dual mode as the plain map image above, but tile sets can run into the

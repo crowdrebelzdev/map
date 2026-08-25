@@ -105,6 +105,7 @@ export function LiveOpsView({
             letterStart: grid.labelLetterStart,
             numberStart: grid.labelNumberStart,
             letterGroupSize: grid.labelLetterGroupSize,
+            order: grid.labelOrder,
           }
         : undefined,
     [grid],

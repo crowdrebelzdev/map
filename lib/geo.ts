@@ -227,6 +227,11 @@ export function defaultQuadAt(
 
 export type GridLabelOrientation = "column-row" | "row-column";
 
+/** Display order of the letter and number within a code, when there are no subcells
+ * (letterGroupSize 0) — see GridLabelOptions.order. Independent of GridLabelOrientation,
+ * which only decides *which axis* is the letter. */
+export type GridLabelOrder = "letter-number" | "number-letter";
+
 /** Lets a grid that only covers part of a venue's larger, pre-printed grid line up with it
  * (e.g. a plattegrond labelled "10E1".."10E3" needs prefix "10" and letterStart pointing at
  * "E"). Omitting this reproduces the old always-starts-at-A1 behavior exactly.
@@ -234,12 +239,14 @@ export type GridLabelOrientation = "column-row" | "row-column";
  * `letterGroupSize`, when set (>0), subdivides the letter axis into groups of that size and
  * switches the code shape to "{number}{letter}{subnumber}" (e.g. "10E1".."10E4", "10F1"..) —
  * how many real venues print their own master grid, with a coarse lettered zone further split
- * into a handful of numbered sub-cells. */
+ * into a handful of numbered sub-cells. `order` is ignored in that case — the shape is
+ * already number-then-letter(-then-subnumber). */
 export type GridLabelOptions = {
   prefix?: string;
   letterStart?: number;
   numberStart?: number;
   letterGroupSize?: number;
+  order?: GridLabelOrder;
 };
 
 export type GridConfigInput = {
@@ -290,6 +297,7 @@ export function formatGridCode(
   const letterStart = labelOptions?.letterStart ?? 0;
   const numberStart = labelOptions?.numberStart ?? 1;
   const groupSize = labelOptions?.letterGroupSize ?? 0;
+  const order = labelOptions?.order ?? "letter-number";
 
   const letterAxis = orientation === "row-column" ? row : col;
   const numberAxis = orientation === "row-column" ? col : row;
@@ -300,7 +308,9 @@ export function formatGridCode(
     return `${prefix}${numberAxis + numberStart}${columnLabel(groupIndex + letterStart)}${subNumber}`;
   }
 
-  return `${prefix}${columnLabel(letterAxis + letterStart)}${numberAxis + numberStart}`;
+  const letter = columnLabel(letterAxis + letterStart);
+  const number = numberAxis + numberStart;
+  return order === "number-letter" ? `${prefix}${number}${letter}` : `${prefix}${letter}${number}`;
 }
 
 export function computeGridCells(t: Transform, grid: GridConfigInput): GridCell[] {
@@ -417,6 +427,7 @@ export function parseGridCode(
   const letterStart = labelOptions?.letterStart ?? 0;
   const numberStart = labelOptions?.numberStart ?? 1;
   const groupSize = labelOptions?.letterGroupSize ?? 0;
+  const order = labelOptions?.order ?? "letter-number";
 
   let input = code.trim().toUpperCase();
   if (prefix) {
@@ -437,6 +448,12 @@ export function parseGridCode(
     if (groupIndex < 0 || subIndex < 0 || subIndex >= groupSize) return null;
     letterAxis = groupIndex * groupSize + subIndex;
     numberAxis = parseInt(numberDigits, 10) - numberStart;
+  } else if (order === "number-letter") {
+    const match = input.match(/^(\d+)([A-Z]+)$/);
+    if (!match) return null;
+    const [, digits, letters] = match;
+    letterAxis = letterToIndex(letters) - letterStart;
+    numberAxis = parseInt(digits, 10) - numberStart;
   } else {
     const match = input.match(/^([A-Z]+)(\d+)$/);
     if (!match) return null;

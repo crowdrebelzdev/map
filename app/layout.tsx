@@ -12,10 +12,24 @@ import { getPlatformSettings } from "@/lib/platform-settings";
 import "./globals.css";
 
 export async function generateMetadata(): Promise<Metadata> {
-  const { platformName } = await getPlatformSettings();
+  const { platformName, metaDescription } = await getPlatformSettings();
+  const baseUrl = process.env.BETTER_AUTH_URL;
+
   return {
-    title: platformName,
-    description: "Kaart, grid en POI-beheer voor evenementen",
+    ...(baseUrl && { metadataBase: new URL(baseUrl) }),
+    title: { default: platformName, template: `%s | ${platformName}` },
+    description: metaDescription,
+    openGraph: {
+      title: platformName,
+      description: metaDescription,
+      siteName: platformName,
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: platformName,
+      description: metaDescription,
+    },
   };
 }
 

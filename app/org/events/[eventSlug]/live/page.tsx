@@ -69,6 +69,7 @@ export default async function EventLivePage({
           letterStart: grid.labelLetterStart,
           numberStart: grid.labelNumberStart,
           letterGroupSize: grid.labelLetterGroupSize,
+          order: grid.labelOrder,
         },
       )
     : [];

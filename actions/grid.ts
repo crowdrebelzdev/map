@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { getTranslations } from "next-intl/server";
 import { db } from "@/db";
-import { gridConfig, type GridLabelOrientation } from "@/db/schema";
+import { gridConfig, type GridLabelOrientation, type GridLabelOrder } from "@/db/schema";
 import { requireEventPermission } from "@/lib/event-access";
 import { logActivity } from "@/lib/activity-log";
 import type { CornerSet } from "@/lib/geo";
@@ -16,6 +16,7 @@ export async function saveGridConfig(input: {
   columns: number;
   rows: number;
   labelOrientation: GridLabelOrientation;
+  labelOrder: GridLabelOrder;
   labelPrefix: string;
   labelLetterStart: number;
   labelNumberStart: number;
@@ -30,6 +31,9 @@ export async function saveGridConfig(input: {
 
   if (input.columns <= 0 || input.rows <= 0) {
     throw new Error(t("rowsColumnsPositive"));
+  }
+  if (input.labelOrder !== "letter-number" && input.labelOrder !== "number-letter") {
+    throw new Error(t("invalidLabelOrder"));
   }
   if (!/^#[0-9a-fA-F]{6}$/.test(input.lineColor) || !/^#[0-9a-fA-F]{6}$/.test(input.casingColor)) {
     throw new Error(t("invalidColor"));
@@ -65,6 +69,7 @@ export async function saveGridConfig(input: {
     columns: input.columns,
     rows: input.rows,
     labelOrientation: input.labelOrientation,
+    labelOrder: input.labelOrder,
     labelPrefix: input.labelPrefix,
     labelLetterStart: input.labelLetterStart,
     labelNumberStart: input.labelNumberStart,

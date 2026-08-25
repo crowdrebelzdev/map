@@ -59,6 +59,7 @@ export default async function EventPoisPage({
           letterStart: grid.labelLetterStart,
           numberStart: grid.labelNumberStart,
           letterGroupSize: grid.labelLetterGroupSize,
+          order: grid.labelOrder,
         },
       )
     : [];

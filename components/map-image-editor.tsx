@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { toast } from "sonner";
+import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -17,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { ImageOverlayEditor, type EditMode } from "@/components/image-overlay-editor";
 import { EventFullscreenHeader } from "@/components/event-fullscreen-header";
 import { MapVersionHistoryDialog } from "@/components/map-version-history-dialog";
@@ -26,7 +28,12 @@ import { rasterizePdfToImageFile } from "@/lib/pdf-to-image";
 import { resizeImageFile } from "@/lib/resize-image";
 import { getContrastCasingColor } from "@/lib/grid-style";
 import { useMapTileGeneration } from "@/hooks/use-map-tile-generation";
-import { formatGridCode, type CornerSet, type GridLabelOrientation } from "@/lib/geo";
+import {
+  formatGridCode,
+  type CornerSet,
+  type GridLabelOrder,
+  type GridLabelOrientation,
+} from "@/lib/geo";
 import type { eventMap, gridConfig } from "@/db/schema";
 
 type ExistingMap = typeof eventMap.$inferSelect;
@@ -87,6 +94,12 @@ function gridCornersFromExisting(existing: ExistingGrid | null): CornerSet | nul
   };
 }
 
+/** The three code shapes the admin picks between — each is fully determined by labelOrder and
+ * whether subcells (labelLetterGroupSize) are on, so it's derived rather than its own bit of
+ * state (see the `codeShape` const below). Prefix/start-letter/start-number apply to all three
+ * and stay visible regardless of which is picked — only "subcells" is shape-specific. */
+type CodeShape = "letter-number" | "number-letter" | "subcells";
+
 export function MapImageEditor({
   eventId,
   eventSlug,
@@ -146,12 +159,16 @@ export function MapImageEditor({
   const [labelOrientation, setLabelOrientation] = useState<GridLabelOrientation>(
     existingGrid?.labelOrientation ?? "row-column",
   );
+  const [labelOrder, setLabelOrder] = useState<GridLabelOrder>(
+    existingGrid?.labelOrder ?? "letter-number",
+  );
   const [labelPrefix, setLabelPrefix] = useState(existingGrid?.labelPrefix ?? "");
   const [labelLetterStart, setLabelLetterStart] = useState(existingGrid?.labelLetterStart ?? 0);
   const [labelNumberStart, setLabelNumberStart] = useState(existingGrid?.labelNumberStart ?? 1);
   const [labelLetterGroupSize, setLabelLetterGroupSize] = useState(
     existingGrid?.labelLetterGroupSize ?? 0,
   );
+  const codeShape: CodeShape = labelLetterGroupSize > 0 ? "subcells" : labelOrder;
 
   const labelExampleCodes = useMemo(() => {
     const opts = {
@@ -159,6 +176,7 @@ export function MapImageEditor({
       letterStart: labelLetterStart,
       numberStart: labelNumberStart,
       letterGroupSize: labelLetterGroupSize,
+      order: labelOrder,
     };
     const toColRow = (letterAxis: number, numberAxis: number) =>
       labelOrientation === "row-column"
@@ -173,7 +191,44 @@ export function MapImageEditor({
       formatGridCode(first.col, first.row, labelOrientation, opts),
       formatGridCode(second.col, second.row, labelOrientation, opts),
     ].join(", ");
-  }, [labelPrefix, labelLetterStart, labelNumberStart, labelLetterGroupSize, labelOrientation]);
+  }, [
+    labelPrefix,
+    labelLetterStart,
+    labelNumberStart,
+    labelLetterGroupSize,
+    labelOrientation,
+    labelOrder,
+  ]);
+  // The three shape buttons' example codes, shown directly on the buttons so picking one is
+  // "click the code that matches your printed grid" rather than parsing wording like
+  // "letter-first" — reflects the admin's current prefix/start settings (which stay live across
+  // all three shapes), not a fixed/reset example.
+  const shapeExampleCodes = useMemo(() => {
+    const opts = {
+      prefix: labelPrefix,
+      letterStart: labelLetterStart,
+      numberStart: labelNumberStart,
+    };
+    return {
+      "letter-number": formatGridCode(0, 0, labelOrientation, { ...opts, order: "letter-number" }),
+      "number-letter": formatGridCode(0, 0, labelOrientation, { ...opts, order: "number-letter" }),
+      subcells: formatGridCode(0, 0, labelOrientation, {
+        ...opts,
+        letterGroupSize: labelLetterGroupSize > 0 ? labelLetterGroupSize : 4,
+      }),
+    } satisfies Record<CodeShape, string>;
+  }, [labelPrefix, labelLetterStart, labelNumberStart, labelOrientation, labelLetterGroupSize]);
+
+  // Switching shape only ever touches order + whether subcells are on — prefix/start-letter/
+  // start-number are independent of shape and are left exactly as the admin set them.
+  function handleSelectShape(shape: CodeShape) {
+    if (shape === "subcells") {
+      setLabelLetterGroupSize((prev) => (prev > 0 ? prev : 4));
+      return;
+    }
+    setLabelOrder(shape);
+    setLabelLetterGroupSize(0);
+  }
   const [lineColor, setLineColor] = useState(existingGrid?.lineColor ?? "#111827");
   const [lineWidth, setLineWidth] = useState(existingGrid?.lineWidth ?? 3);
   const [casingColor, setCasingColor] = useState(
@@ -330,6 +385,7 @@ export function MapImageEditor({
         columns,
         rows,
         labelOrientation,
+        labelOrder,
         labelPrefix,
         labelLetterStart,
         labelNumberStart,
@@ -520,126 +576,174 @@ export function MapImageEditor({
                     </Select>
                     <p className="text-xs text-muted-foreground">{t("orientationHint")}</p>
                   </div>
-                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                    <div className="space-y-1">
-                      <Label htmlFor="labelPrefix">{t("labelPrefixLabel")}</Label>
-                      <Input
-                        id="labelPrefix"
-                        value={labelPrefix}
-                        onChange={(e) => setLabelPrefix(e.target.value)}
-                        placeholder={t("labelPrefixPlaceholder")}
-                        maxLength={12}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="labelLetterStart">{t("startLetterLabel")}</Label>
-                      <Select
-                        value={String.fromCharCode(65 + labelLetterStart)}
-                        onValueChange={(v) => setLabelLetterStart((v ?? "A").charCodeAt(0) - 65)}
+                  <div className="space-y-1.5">
+                    <Label>{t("codeShapeLabel")}</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      <Button
+                        type="button"
+                        variant={codeShape === "letter-number" ? "default" : "outline"}
+                        className="font-mono"
+                        onClick={() => handleSelectShape("letter-number")}
                       >
-                        <SelectTrigger id="labelLetterStart" className="w-full">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)).map(
-                            (letter) => (
-                              <SelectItem key={letter} value={letter}>
-                                {letter}
-                              </SelectItem>
-                            ),
-                          )}
-                        </SelectContent>
-                      </Select>
+                        {shapeExampleCodes["letter-number"]}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={codeShape === "number-letter" ? "default" : "outline"}
+                        className="font-mono"
+                        onClick={() => handleSelectShape("number-letter")}
+                      >
+                        {shapeExampleCodes["number-letter"]}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant={codeShape === "subcells" ? "default" : "outline"}
+                        className="font-mono"
+                        onClick={() => handleSelectShape("subcells")}
+                      >
+                        {shapeExampleCodes.subcells}
+                      </Button>
                     </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="labelNumberStart">{t("startNumberLabel")}</Label>
-                      <Input
-                        id="labelNumberStart"
-                        type="number"
-                        value={labelNumberStart}
-                        onChange={(e) => setLabelNumberStart(Number(e.target.value))}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="labelLetterGroupSize">{t("subcellsLabel")}</Label>
-                      <Input
-                        id="labelLetterGroupSize"
-                        type="number"
-                        min={0}
-                        value={labelLetterGroupSize}
-                        onChange={(e) => setLabelLetterGroupSize(Number(e.target.value))}
-                        placeholder={t("subcellsPlaceholder")}
-                      />
-                    </div>
+                    <p className="text-xs text-muted-foreground">{t("codeShapeHint")}</p>
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    {t("subcellsHintBefore")}{" "}
-                    <span className="font-mono font-medium text-foreground">
-                      {labelExampleCodes}
-                    </span>
-                    {t("subcellsHintAfter")}
-                  </p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label htmlFor="lineColor">{t("lineColorLabel")}</Label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          id="lineColor"
-                          type="color"
-                          value={lineColor}
-                          onChange={(e) => setLineColor(e.target.value)}
-                          className="h-8 w-10 shrink-0 cursor-pointer rounded-md border border-input p-0.5"
-                        />
+
+                  <div className="space-y-3">
+                    <div
+                      className={`grid grid-cols-2 gap-3 ${codeShape === "subcells" ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}
+                    >
+                      <div className="space-y-1">
+                        <Label htmlFor="labelPrefix">{t("labelPrefixLabel")}</Label>
                         <Input
-                          value={lineColor}
-                          onChange={(e) => setLineColor(e.target.value)}
-                          className="font-mono text-xs"
+                          id="labelPrefix"
+                          value={labelPrefix}
+                          onChange={(e) => setLabelPrefix(e.target.value)}
+                          placeholder={t("labelPrefixPlaceholder")}
+                          maxLength={12}
                         />
                       </div>
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="lineWidth">{t("lineWidthLabel")}</Label>
-                      <Input
-                        id="lineWidth"
-                        type="number"
-                        min={0.5}
-                        step={0.5}
-                        value={lineWidth}
-                        onChange={(e) => setLineWidth(Number(e.target.value))}
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="space-y-1">
-                      <Label htmlFor="casingColor">{t("casingColorLabel")}</Label>
-                      <div className="flex items-center gap-2">
-                        <input
-                          id="casingColor"
-                          type="color"
-                          value={casingColor}
-                          onChange={(e) => setCasingColor(e.target.value)}
-                          className="h-8 w-10 shrink-0 cursor-pointer rounded-md border border-input p-0.5"
-                        />
+                      <div className="space-y-1">
+                        <Label htmlFor="labelLetterStart">{t("startLetterLabel")}</Label>
+                        <Select
+                          value={String.fromCharCode(65 + labelLetterStart)}
+                          onValueChange={(v) => setLabelLetterStart((v ?? "A").charCodeAt(0) - 65)}
+                        >
+                          <SelectTrigger id="labelLetterStart" className="w-full">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i)).map(
+                              (letter) => (
+                                <SelectItem key={letter} value={letter}>
+                                  {letter}
+                                </SelectItem>
+                              ),
+                            )}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="labelNumberStart">{t("startNumberLabel")}</Label>
                         <Input
-                          value={casingColor}
-                          onChange={(e) => setCasingColor(e.target.value)}
-                          className="font-mono text-xs"
+                          id="labelNumberStart"
+                          type="number"
+                          value={labelNumberStart}
+                          onChange={(e) => setLabelNumberStart(Number(e.target.value))}
                         />
                       </div>
+                      {codeShape === "subcells" && (
+                        <div className="space-y-1">
+                          <Label htmlFor="labelLetterGroupSize">{t("subcellsLabel")}</Label>
+                          <Input
+                            id="labelLetterGroupSize"
+                            type="number"
+                            min={1}
+                            value={labelLetterGroupSize}
+                            onChange={(e) =>
+                              setLabelLetterGroupSize(Math.max(1, Number(e.target.value)))
+                            }
+                          />
+                        </div>
+                      )}
                     </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="casingWidth">{t("casingWidthLabel")}</Label>
-                      <Input
-                        id="casingWidth"
-                        type="number"
-                        min={0}
-                        step={0.5}
-                        value={casingWidth}
-                        onChange={(e) => setCasingWidth(Number(e.target.value))}
-                      />
-                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {t("fieldsHintBefore")}{" "}
+                      <span className="font-mono font-medium text-foreground">
+                        {labelExampleCodes}
+                      </span>
+                      {t("fieldsHintAfter")}
+                    </p>
                   </div>
-                  <p className="-mt-2 text-xs text-muted-foreground">{t("casingHint")}</p>
+
+                  <Collapsible>
+                    <CollapsibleTrigger className="flex w-full items-center justify-between text-sm font-medium [&[data-panel-open]>svg]:rotate-180">
+                      {t("appearanceTitle")}
+                      <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-4 pt-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label htmlFor="lineColor">{t("lineColorLabel")}</Label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              id="lineColor"
+                              type="color"
+                              value={lineColor}
+                              onChange={(e) => setLineColor(e.target.value)}
+                              className="h-8 w-10 shrink-0 cursor-pointer rounded-md border border-input p-0.5"
+                            />
+                            <Input
+                              value={lineColor}
+                              onChange={(e) => setLineColor(e.target.value)}
+                              className="font-mono text-xs"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="lineWidth">{t("lineWidthLabel")}</Label>
+                          <Input
+                            id="lineWidth"
+                            type="number"
+                            min={0.5}
+                            step={0.5}
+                            value={lineWidth}
+                            onChange={(e) => setLineWidth(Number(e.target.value))}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="space-y-1">
+                          <Label htmlFor="casingColor">{t("casingColorLabel")}</Label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              id="casingColor"
+                              type="color"
+                              value={casingColor}
+                              onChange={(e) => setCasingColor(e.target.value)}
+                              className="h-8 w-10 shrink-0 cursor-pointer rounded-md border border-input p-0.5"
+                            />
+                            <Input
+                              value={casingColor}
+                              onChange={(e) => setCasingColor(e.target.value)}
+                              className="font-mono text-xs"
+                            />
+                          </div>
+                        </div>
+                        <div className="space-y-1">
+                          <Label htmlFor="casingWidth">{t("casingWidthLabel")}</Label>
+                          <Input
+                            id="casingWidth"
+                            type="number"
+                            min={0}
+                            step={0.5}
+                            value={casingWidth}
+                            onChange={(e) => setCasingWidth(Number(e.target.value))}
+                          />
+                        </div>
+                      </div>
+                      <p className="-mt-2 text-xs text-muted-foreground">{t("casingHint")}</p>
+                    </CollapsibleContent>
+                  </Collapsible>
+
                   <Button
                     onClick={handleSaveGrid}
                     disabled={!gridCorners || savingGrid}
@@ -670,6 +774,7 @@ export function MapImageEditor({
           gridColumns={columns}
           gridRows={rows}
           gridLabelOrientation={labelOrientation}
+          gridLabelOrder={labelOrder}
           gridLabelPrefix={labelPrefix}
           gridLabelLetterStart={labelLetterStart}
           gridLabelNumberStart={labelNumberStart}
